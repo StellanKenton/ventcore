@@ -1,0 +1,7 @@
+{
+	"InstallScripts" : 
+	[
+		"D:/Space/Cosmos/ventcore/build/arm-gcc/cmake_install.cmake"
+	],
+	"Parallel" : false
+}

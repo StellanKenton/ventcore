@@ -1,0 +1,3 @@
+D:/Space/Cosmos/ventcore/build/arm-gcc/CMakeFiles/ventcore.dir
+D:/Space/Cosmos/ventcore/build/arm-gcc/CMakeFiles/edit_cache.dir
+D:/Space/Cosmos/ventcore/build/arm-gcc/CMakeFiles/rebuild_cache.dir
