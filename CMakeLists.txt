@@ -28,6 +28,8 @@ add_executable(ventcore
     User/main.c
     User/app/taskmanager.c
     User/bsp/adc/adc.c
+    User/bsp/dvalve/dvalve.c
+    User/bsp/valve/valve.c
     User/module/log/console.c
     User/module/log/consoleRegisted/sysdebug.c
     User/module/log/log.c
@@ -42,12 +44,15 @@ add_executable(ventcore
     Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_dma.c
     Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_gpio.c
     Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_rcu.c
+    Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_timer.c
     ${FREERTOS_SOURCES})
 
 target_include_directories(ventcore PRIVATE
     User
     User/app
     User/bsp/adc
+    User/bsp/dvalve
+    User/bsp/valve
     User/module/log
     User/module/log/consoleRegisted
     User/module/log/SEGGER

@@ -7,6 +7,8 @@
 | `main.c` | 初始化日志和控制台、注册 worker tasks 并启动调度器 |
 | `app/taskmanager.*` | 通过 `WorkerTasksRegister()` 创建 defaultTask、VentTask、SensorTask、HMITask、AlarmTask；defaultTask 周期处理日志和控制台 |
 | `bsp/adc/adc.*` | 使用 ADC1 规则组扫描、连续转换和 DMA1 循环模式持续采集 14 路板级模拟量 |
+| `bsp/dvalve/dvalve.*` | 以枚举选择氧气阀、泄压阀或呼气阀，提供统一的 20 kHz、0～100% PWM 占空比控制接口 |
+| `bsp/valve/valve.*` | 初始化 4 路零点阀控制输出和状态反馈输入，并提供按阀门枚举访问的接口 |
 | `module/log/` | RTT 日志、ringbuffer 输出队列和 `help/time/reboot` 控制台命令 |
 | `module/rtos/rtos.*` | 项目层任务、调度、tick 和临界区接口 |
 | `module/rtos/portrtos.*` | FreeRTOS 原生接口绑定 |

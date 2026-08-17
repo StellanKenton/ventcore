@@ -12,6 +12,8 @@
 #include "sysdebug.h"
 #include "taskmanager.h"
 #include "adc.h"
+#include "dvalve.h"
+#include "valve.h"
 
 int main(void)
 {
@@ -33,6 +35,8 @@ int main(void)
     LOG_R("*****************************************");
     /* Bsp initialization */
     adcInit();
+    dvalveInit();
+    valveInit();
 
     /* Register project tasks before handing control to the scheduler. */
     if (!WorkerTasksRegister()) {

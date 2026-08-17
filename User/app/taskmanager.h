@@ -16,11 +16,11 @@
 extern "C" {
 #endif
 
-#define DEFAULT_TASK_STACK_SIZE          256U
+#define DEFAULT_TASK_STACK_SIZE          1024U
 #define DEFAULT_TASK_PRIORITY            1U
 #define DEFAULT_TASK_INTERVAL_MS         10U
 
-#define VENT_TASK_STACK_SIZE             256U
+#define VENT_TASK_STACK_SIZE             512U
 #define VENT_TASK_PRIORITY               3U
 #define VENT_TASK_INTERVAL_MS            10U
 
@@ -32,7 +32,7 @@ extern "C" {
 #define HMI_TASK_PRIORITY                2U
 #define HMI_TASK_INTERVAL_MS             20U
 
-#define ALARM_TASK_STACK_SIZE            256U
+#define ALARM_TASK_STACK_SIZE            512U
 #define ALARM_TASK_PRIORITY              3U
 #define ALARM_TASK_INTERVAL_MS           10U
 
