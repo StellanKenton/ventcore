@@ -8,7 +8,7 @@
       "binaryDir": "${sourceDir}/build/arm-gcc",
       "toolchainFile": "${sourceDir}/cmake/arm-none-eabi-gcc.cmake",
       "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_BUILD_TYPE": "Debug",
         "CMAKE_MAKE_PROGRAM": "C:/Qt/Tools/mingw1310_64/bin/mingw32-make.exe"
       }
     }

@@ -25,6 +25,8 @@ UsartClass Debug={
 int main(void)
 {
     /* configure systick */
+    __enable_irq();
+
     delay_init(240);
     UsartInit(&Debug);
     setvbuf(stdout, NULL, _IONBF, 0);
