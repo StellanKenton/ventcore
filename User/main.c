@@ -11,6 +11,7 @@
 #include "rtos.h"
 #include "sysdebug.h"
 #include "taskmanager.h"
+#include "adc.h"
 
 int main(void)
 {
@@ -30,7 +31,8 @@ int main(void)
     LOG_R("*****************************************");
     LOG_R("             system boot");
     LOG_R("*****************************************");
-    // bsp init on here
+    /* Bsp initialization */
+    adcInit();
 
     /* Register project tasks before handing control to the scheduler. */
     if (!WorkerTasksRegister()) {

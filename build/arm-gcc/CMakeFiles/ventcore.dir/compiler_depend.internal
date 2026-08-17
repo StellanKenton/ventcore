@@ -322,6 +322,242 @@ CMakeFiles/ventcore.dir/Firmware/FreeRTOS/timers.c.obj
  D:/Space/Cosmos/ventcore/Firmware/FreeRTOS/portable/GCC/ARM_CM4F/portmacro.h
  D:/Space/Cosmos/ventcore/User/FreeRTOSConfig.h
 
+CMakeFiles/ventcore.dir/Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_adc.c.obj
+ D:/Space/Cosmos/ventcore/Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_adc.c
+ C:/Program Files (x86)/Arm/GNU Toolchain mingw-w64-i686-arm-none-eabi/arm-none-eabi/include/_ansi.h
+ C:/Program Files (x86)/Arm/GNU Toolchain mingw-w64-i686-arm-none-eabi/arm-none-eabi/include/_newlib_version.h
+ C:/Program Files (x86)/Arm/GNU Toolchain mingw-w64-i686-arm-none-eabi/arm-none-eabi/include/alloca.h
+ C:/Program Files (x86)/Arm/GNU Toolchain mingw-w64-i686-arm-none-eabi/arm-none-eabi/include/machine/_default_types.h
+ C:/Program Files (x86)/Arm/GNU Toolchain mingw-w64-i686-arm-none-eabi/arm-none-eabi/include/machine/_types.h
+ C:/Program Files (x86)/Arm/GNU Toolchain mingw-w64-i686-arm-none-eabi/arm-none-eabi/include/machine/ieeefp.h
+ C:/Program Files (x86)/Arm/GNU Toolchain mingw-w64-i686-arm-none-eabi/arm-none-eabi/include/machine/stdlib.h
+ C:/Program Files (x86)/Arm/GNU Toolchain mingw-w64-i686-arm-none-eabi/arm-none-eabi/include/newlib.h
+ C:/Program Files (x86)/Arm/GNU Toolchain mingw-w64-i686-arm-none-eabi/arm-none-eabi/include/stdint.h
+ C:/Program Files (x86)/Arm/GNU Toolchain mingw-w64-i686-arm-none-eabi/arm-none-eabi/include/stdlib.h
+ C:/Program Files (x86)/Arm/GNU Toolchain mingw-w64-i686-arm-none-eabi/arm-none-eabi/include/sys/_intsup.h
+ C:/Program Files (x86)/Arm/GNU Toolchain mingw-w64-i686-arm-none-eabi/arm-none-eabi/include/sys/_stdint.h
+ C:/Program Files (x86)/Arm/GNU Toolchain mingw-w64-i686-arm-none-eabi/arm-none-eabi/include/sys/_types.h
+ C:/Program Files (x86)/Arm/GNU Toolchain mingw-w64-i686-arm-none-eabi/arm-none-eabi/include/sys/cdefs.h
+ C:/Program Files (x86)/Arm/GNU Toolchain mingw-w64-i686-arm-none-eabi/arm-none-eabi/include/sys/config.h
+ C:/Program Files (x86)/Arm/GNU Toolchain mingw-w64-i686-arm-none-eabi/arm-none-eabi/include/sys/features.h
+ C:/Program Files (x86)/Arm/GNU Toolchain mingw-w64-i686-arm-none-eabi/arm-none-eabi/include/sys/lock.h
+ C:/Program Files (x86)/Arm/GNU Toolchain mingw-w64-i686-arm-none-eabi/arm-none-eabi/include/sys/reent.h
+ C:/Program Files (x86)/Arm/GNU Toolchain mingw-w64-i686-arm-none-eabi/lib/gcc/arm-none-eabi/15.2.1/include/stddef.h
+ C:/Program Files (x86)/Arm/GNU Toolchain mingw-w64-i686-arm-none-eabi/lib/gcc/arm-none-eabi/15.2.1/include/stdint.h
+ D:/Space/Cosmos/ventcore/Firmware/CMSIS/core_cm4.h
+ D:/Space/Cosmos/ventcore/Firmware/CMSIS/core_cm4_simd.h
+ D:/Space/Cosmos/ventcore/Firmware/CMSIS/core_cmFunc.h
+ D:/Space/Cosmos/ventcore/Firmware/CMSIS/core_cmInstr.h
+ D:/Space/Cosmos/ventcore/Firmware/CMSIS/GD/GD32F4xx/Include/gd32f4xx.h
+ D:/Space/Cosmos/ventcore/Firmware/CMSIS/GD/GD32F4xx/Include/system_gd32f4xx.h
+ D:/Space/Cosmos/ventcore/Firmware/GD32F4xx_standard_peripheral/Include/gd32f4xx_adc.h
+ D:/Space/Cosmos/ventcore/Firmware/GD32F4xx_standard_peripheral/Include/gd32f4xx_can.h
+ D:/Space/Cosmos/ventcore/Firmware/GD32F4xx_standard_peripheral/Include/gd32f4xx_crc.h
+ D:/Space/Cosmos/ventcore/Firmware/GD32F4xx_standard_peripheral/Include/gd32f4xx_ctc.h
+ D:/Space/Cosmos/ventcore/Firmware/GD32F4xx_standard_peripheral/Include/gd32f4xx_dac.h
+ D:/Space/Cosmos/ventcore/Firmware/GD32F4xx_standard_peripheral/Include/gd32f4xx_dbg.h
+ D:/Space/Cosmos/ventcore/Firmware/GD32F4xx_standard_peripheral/Include/gd32f4xx_dci.h
+ D:/Space/Cosmos/ventcore/Firmware/GD32F4xx_standard_peripheral/Include/gd32f4xx_dma.h
+ D:/Space/Cosmos/ventcore/Firmware/GD32F4xx_standard_peripheral/Include/gd32f4xx_enet.h
+ D:/Space/Cosmos/ventcore/Firmware/GD32F4xx_standard_peripheral/Include/gd32f4xx_exmc.h
+ D:/Space/Cosmos/ventcore/Firmware/GD32F4xx_standard_peripheral/Include/gd32f4xx_exti.h
+ D:/Space/Cosmos/ventcore/Firmware/GD32F4xx_standard_peripheral/Include/gd32f4xx_fmc.h
+ D:/Space/Cosmos/ventcore/Firmware/GD32F4xx_standard_peripheral/Include/gd32f4xx_fwdgt.h
+ D:/Space/Cosmos/ventcore/Firmware/GD32F4xx_standard_peripheral/Include/gd32f4xx_gpio.h
+ D:/Space/Cosmos/ventcore/Firmware/GD32F4xx_standard_peripheral/Include/gd32f4xx_i2c.h
+ D:/Space/Cosmos/ventcore/Firmware/GD32F4xx_standard_peripheral/Include/gd32f4xx_ipa.h
+ D:/Space/Cosmos/ventcore/Firmware/GD32F4xx_standard_peripheral/Include/gd32f4xx_iref.h
+ D:/Space/Cosmos/ventcore/Firmware/GD32F4xx_standard_peripheral/Include/gd32f4xx_misc.h
+ D:/Space/Cosmos/ventcore/Firmware/GD32F4xx_standard_peripheral/Include/gd32f4xx_pmu.h
+ D:/Space/Cosmos/ventcore/Firmware/GD32F4xx_standard_peripheral/Include/gd32f4xx_rcu.h
+ D:/Space/Cosmos/ventcore/Firmware/GD32F4xx_standard_peripheral/Include/gd32f4xx_rtc.h
+ D:/Space/Cosmos/ventcore/Firmware/GD32F4xx_standard_peripheral/Include/gd32f4xx_sdio.h
+ D:/Space/Cosmos/ventcore/Firmware/GD32F4xx_standard_peripheral/Include/gd32f4xx_spi.h
+ D:/Space/Cosmos/ventcore/Firmware/GD32F4xx_standard_peripheral/Include/gd32f4xx_syscfg.h
+ D:/Space/Cosmos/ventcore/Firmware/GD32F4xx_standard_peripheral/Include/gd32f4xx_timer.h
+ D:/Space/Cosmos/ventcore/Firmware/GD32F4xx_standard_peripheral/Include/gd32f4xx_tli.h
+ D:/Space/Cosmos/ventcore/Firmware/GD32F4xx_standard_peripheral/Include/gd32f4xx_trng.h
+ D:/Space/Cosmos/ventcore/Firmware/GD32F4xx_standard_peripheral/Include/gd32f4xx_usart.h
+ D:/Space/Cosmos/ventcore/Firmware/GD32F4xx_standard_peripheral/Include/gd32f4xx_wwdgt.h
+ D:/Space/Cosmos/ventcore/User/gd32f4xx_libopt.h
+
+CMakeFiles/ventcore.dir/Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_dma.c.obj
+ D:/Space/Cosmos/ventcore/Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_dma.c
+ C:/Program Files (x86)/Arm/GNU Toolchain mingw-w64-i686-arm-none-eabi/arm-none-eabi/include/_ansi.h
+ C:/Program Files (x86)/Arm/GNU Toolchain mingw-w64-i686-arm-none-eabi/arm-none-eabi/include/_newlib_version.h
+ C:/Program Files (x86)/Arm/GNU Toolchain mingw-w64-i686-arm-none-eabi/arm-none-eabi/include/alloca.h
+ C:/Program Files (x86)/Arm/GNU Toolchain mingw-w64-i686-arm-none-eabi/arm-none-eabi/include/machine/_default_types.h
+ C:/Program Files (x86)/Arm/GNU Toolchain mingw-w64-i686-arm-none-eabi/arm-none-eabi/include/machine/_types.h
+ C:/Program Files (x86)/Arm/GNU Toolchain mingw-w64-i686-arm-none-eabi/arm-none-eabi/include/machine/ieeefp.h
+ C:/Program Files (x86)/Arm/GNU Toolchain mingw-w64-i686-arm-none-eabi/arm-none-eabi/include/machine/stdlib.h
+ C:/Program Files (x86)/Arm/GNU Toolchain mingw-w64-i686-arm-none-eabi/arm-none-eabi/include/newlib.h
+ C:/Program Files (x86)/Arm/GNU Toolchain mingw-w64-i686-arm-none-eabi/arm-none-eabi/include/stdint.h
+ C:/Program Files (x86)/Arm/GNU Toolchain mingw-w64-i686-arm-none-eabi/arm-none-eabi/include/stdlib.h
+ C:/Program Files (x86)/Arm/GNU Toolchain mingw-w64-i686-arm-none-eabi/arm-none-eabi/include/sys/_intsup.h
+ C:/Program Files (x86)/Arm/GNU Toolchain mingw-w64-i686-arm-none-eabi/arm-none-eabi/include/sys/_stdint.h
+ C:/Program Files (x86)/Arm/GNU Toolchain mingw-w64-i686-arm-none-eabi/arm-none-eabi/include/sys/_types.h
+ C:/Program Files (x86)/Arm/GNU Toolchain mingw-w64-i686-arm-none-eabi/arm-none-eabi/include/sys/cdefs.h
+ C:/Program Files (x86)/Arm/GNU Toolchain mingw-w64-i686-arm-none-eabi/arm-none-eabi/include/sys/config.h
+ C:/Program Files (x86)/Arm/GNU Toolchain mingw-w64-i686-arm-none-eabi/arm-none-eabi/include/sys/features.h
+ C:/Program Files (x86)/Arm/GNU Toolchain mingw-w64-i686-arm-none-eabi/arm-none-eabi/include/sys/lock.h
+ C:/Program Files (x86)/Arm/GNU Toolchain mingw-w64-i686-arm-none-eabi/arm-none-eabi/include/sys/reent.h
+ C:/Program Files (x86)/Arm/GNU Toolchain mingw-w64-i686-arm-none-eabi/lib/gcc/arm-none-eabi/15.2.1/include/stddef.h
+ C:/Program Files (x86)/Arm/GNU Toolchain mingw-w64-i686-arm-none-eabi/lib/gcc/arm-none-eabi/15.2.1/include/stdint.h
+ D:/Space/Cosmos/ventcore/Firmware/CMSIS/core_cm4.h
+ D:/Space/Cosmos/ventcore/Firmware/CMSIS/core_cm4_simd.h
+ D:/Space/Cosmos/ventcore/Firmware/CMSIS/core_cmFunc.h
+ D:/Space/Cosmos/ventcore/Firmware/CMSIS/core_cmInstr.h
+ D:/Space/Cosmos/ventcore/Firmware/CMSIS/GD/GD32F4xx/Include/gd32f4xx.h
+ D:/Space/Cosmos/ventcore/Firmware/CMSIS/GD/GD32F4xx/Include/system_gd32f4xx.h
+ D:/Space/Cosmos/ventcore/Firmware/GD32F4xx_standard_peripheral/Include/gd32f4xx_adc.h
+ D:/Space/Cosmos/ventcore/Firmware/GD32F4xx_standard_peripheral/Include/gd32f4xx_can.h
+ D:/Space/Cosmos/ventcore/Firmware/GD32F4xx_standard_peripheral/Include/gd32f4xx_crc.h
+ D:/Space/Cosmos/ventcore/Firmware/GD32F4xx_standard_peripheral/Include/gd32f4xx_ctc.h
+ D:/Space/Cosmos/ventcore/Firmware/GD32F4xx_standard_peripheral/Include/gd32f4xx_dac.h
+ D:/Space/Cosmos/ventcore/Firmware/GD32F4xx_standard_peripheral/Include/gd32f4xx_dbg.h
+ D:/Space/Cosmos/ventcore/Firmware/GD32F4xx_standard_peripheral/Include/gd32f4xx_dci.h
+ D:/Space/Cosmos/ventcore/Firmware/GD32F4xx_standard_peripheral/Include/gd32f4xx_dma.h
+ D:/Space/Cosmos/ventcore/Firmware/GD32F4xx_standard_peripheral/Include/gd32f4xx_enet.h
+ D:/Space/Cosmos/ventcore/Firmware/GD32F4xx_standard_peripheral/Include/gd32f4xx_exmc.h
+ D:/Space/Cosmos/ventcore/Firmware/GD32F4xx_standard_peripheral/Include/gd32f4xx_exti.h
+ D:/Space/Cosmos/ventcore/Firmware/GD32F4xx_standard_peripheral/Include/gd32f4xx_fmc.h
+ D:/Space/Cosmos/ventcore/Firmware/GD32F4xx_standard_peripheral/Include/gd32f4xx_fwdgt.h
+ D:/Space/Cosmos/ventcore/Firmware/GD32F4xx_standard_peripheral/Include/gd32f4xx_gpio.h
+ D:/Space/Cosmos/ventcore/Firmware/GD32F4xx_standard_peripheral/Include/gd32f4xx_i2c.h
+ D:/Space/Cosmos/ventcore/Firmware/GD32F4xx_standard_peripheral/Include/gd32f4xx_ipa.h
+ D:/Space/Cosmos/ventcore/Firmware/GD32F4xx_standard_peripheral/Include/gd32f4xx_iref.h
+ D:/Space/Cosmos/ventcore/Firmware/GD32F4xx_standard_peripheral/Include/gd32f4xx_misc.h
+ D:/Space/Cosmos/ventcore/Firmware/GD32F4xx_standard_peripheral/Include/gd32f4xx_pmu.h
+ D:/Space/Cosmos/ventcore/Firmware/GD32F4xx_standard_peripheral/Include/gd32f4xx_rcu.h
+ D:/Space/Cosmos/ventcore/Firmware/GD32F4xx_standard_peripheral/Include/gd32f4xx_rtc.h
+ D:/Space/Cosmos/ventcore/Firmware/GD32F4xx_standard_peripheral/Include/gd32f4xx_sdio.h
+ D:/Space/Cosmos/ventcore/Firmware/GD32F4xx_standard_peripheral/Include/gd32f4xx_spi.h
+ D:/Space/Cosmos/ventcore/Firmware/GD32F4xx_standard_peripheral/Include/gd32f4xx_syscfg.h
+ D:/Space/Cosmos/ventcore/Firmware/GD32F4xx_standard_peripheral/Include/gd32f4xx_timer.h
+ D:/Space/Cosmos/ventcore/Firmware/GD32F4xx_standard_peripheral/Include/gd32f4xx_tli.h
+ D:/Space/Cosmos/ventcore/Firmware/GD32F4xx_standard_peripheral/Include/gd32f4xx_trng.h
+ D:/Space/Cosmos/ventcore/Firmware/GD32F4xx_standard_peripheral/Include/gd32f4xx_usart.h
+ D:/Space/Cosmos/ventcore/Firmware/GD32F4xx_standard_peripheral/Include/gd32f4xx_wwdgt.h
+ D:/Space/Cosmos/ventcore/User/gd32f4xx_libopt.h
+
+CMakeFiles/ventcore.dir/Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_gpio.c.obj
+ D:/Space/Cosmos/ventcore/Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_gpio.c
+ C:/Program Files (x86)/Arm/GNU Toolchain mingw-w64-i686-arm-none-eabi/arm-none-eabi/include/_ansi.h
+ C:/Program Files (x86)/Arm/GNU Toolchain mingw-w64-i686-arm-none-eabi/arm-none-eabi/include/_newlib_version.h
+ C:/Program Files (x86)/Arm/GNU Toolchain mingw-w64-i686-arm-none-eabi/arm-none-eabi/include/alloca.h
+ C:/Program Files (x86)/Arm/GNU Toolchain mingw-w64-i686-arm-none-eabi/arm-none-eabi/include/machine/_default_types.h
+ C:/Program Files (x86)/Arm/GNU Toolchain mingw-w64-i686-arm-none-eabi/arm-none-eabi/include/machine/_types.h
+ C:/Program Files (x86)/Arm/GNU Toolchain mingw-w64-i686-arm-none-eabi/arm-none-eabi/include/machine/ieeefp.h
+ C:/Program Files (x86)/Arm/GNU Toolchain mingw-w64-i686-arm-none-eabi/arm-none-eabi/include/machine/stdlib.h
+ C:/Program Files (x86)/Arm/GNU Toolchain mingw-w64-i686-arm-none-eabi/arm-none-eabi/include/newlib.h
+ C:/Program Files (x86)/Arm/GNU Toolchain mingw-w64-i686-arm-none-eabi/arm-none-eabi/include/stdint.h
+ C:/Program Files (x86)/Arm/GNU Toolchain mingw-w64-i686-arm-none-eabi/arm-none-eabi/include/stdlib.h
+ C:/Program Files (x86)/Arm/GNU Toolchain mingw-w64-i686-arm-none-eabi/arm-none-eabi/include/sys/_intsup.h
+ C:/Program Files (x86)/Arm/GNU Toolchain mingw-w64-i686-arm-none-eabi/arm-none-eabi/include/sys/_stdint.h
+ C:/Program Files (x86)/Arm/GNU Toolchain mingw-w64-i686-arm-none-eabi/arm-none-eabi/include/sys/_types.h
+ C:/Program Files (x86)/Arm/GNU Toolchain mingw-w64-i686-arm-none-eabi/arm-none-eabi/include/sys/cdefs.h
+ C:/Program Files (x86)/Arm/GNU Toolchain mingw-w64-i686-arm-none-eabi/arm-none-eabi/include/sys/config.h
+ C:/Program Files (x86)/Arm/GNU Toolchain mingw-w64-i686-arm-none-eabi/arm-none-eabi/include/sys/features.h
+ C:/Program Files (x86)/Arm/GNU Toolchain mingw-w64-i686-arm-none-eabi/arm-none-eabi/include/sys/lock.h
+ C:/Program Files (x86)/Arm/GNU Toolchain mingw-w64-i686-arm-none-eabi/arm-none-eabi/include/sys/reent.h
+ C:/Program Files (x86)/Arm/GNU Toolchain mingw-w64-i686-arm-none-eabi/lib/gcc/arm-none-eabi/15.2.1/include/stddef.h
+ C:/Program Files (x86)/Arm/GNU Toolchain mingw-w64-i686-arm-none-eabi/lib/gcc/arm-none-eabi/15.2.1/include/stdint.h
+ D:/Space/Cosmos/ventcore/Firmware/CMSIS/core_cm4.h
+ D:/Space/Cosmos/ventcore/Firmware/CMSIS/core_cm4_simd.h
+ D:/Space/Cosmos/ventcore/Firmware/CMSIS/core_cmFunc.h
+ D:/Space/Cosmos/ventcore/Firmware/CMSIS/core_cmInstr.h
+ D:/Space/Cosmos/ventcore/Firmware/CMSIS/GD/GD32F4xx/Include/gd32f4xx.h
+ D:/Space/Cosmos/ventcore/Firmware/CMSIS/GD/GD32F4xx/Include/system_gd32f4xx.h
+ D:/Space/Cosmos/ventcore/Firmware/GD32F4xx_standard_peripheral/Include/gd32f4xx_adc.h
+ D:/Space/Cosmos/ventcore/Firmware/GD32F4xx_standard_peripheral/Include/gd32f4xx_can.h
+ D:/Space/Cosmos/ventcore/Firmware/GD32F4xx_standard_peripheral/Include/gd32f4xx_crc.h
+ D:/Space/Cosmos/ventcore/Firmware/GD32F4xx_standard_peripheral/Include/gd32f4xx_ctc.h
+ D:/Space/Cosmos/ventcore/Firmware/GD32F4xx_standard_peripheral/Include/gd32f4xx_dac.h
+ D:/Space/Cosmos/ventcore/Firmware/GD32F4xx_standard_peripheral/Include/gd32f4xx_dbg.h
+ D:/Space/Cosmos/ventcore/Firmware/GD32F4xx_standard_peripheral/Include/gd32f4xx_dci.h
+ D:/Space/Cosmos/ventcore/Firmware/GD32F4xx_standard_peripheral/Include/gd32f4xx_dma.h
+ D:/Space/Cosmos/ventcore/Firmware/GD32F4xx_standard_peripheral/Include/gd32f4xx_enet.h
+ D:/Space/Cosmos/ventcore/Firmware/GD32F4xx_standard_peripheral/Include/gd32f4xx_exmc.h
+ D:/Space/Cosmos/ventcore/Firmware/GD32F4xx_standard_peripheral/Include/gd32f4xx_exti.h
+ D:/Space/Cosmos/ventcore/Firmware/GD32F4xx_standard_peripheral/Include/gd32f4xx_fmc.h
+ D:/Space/Cosmos/ventcore/Firmware/GD32F4xx_standard_peripheral/Include/gd32f4xx_fwdgt.h
+ D:/Space/Cosmos/ventcore/Firmware/GD32F4xx_standard_peripheral/Include/gd32f4xx_gpio.h
+ D:/Space/Cosmos/ventcore/Firmware/GD32F4xx_standard_peripheral/Include/gd32f4xx_i2c.h
+ D:/Space/Cosmos/ventcore/Firmware/GD32F4xx_standard_peripheral/Include/gd32f4xx_ipa.h
+ D:/Space/Cosmos/ventcore/Firmware/GD32F4xx_standard_peripheral/Include/gd32f4xx_iref.h
+ D:/Space/Cosmos/ventcore/Firmware/GD32F4xx_standard_peripheral/Include/gd32f4xx_misc.h
+ D:/Space/Cosmos/ventcore/Firmware/GD32F4xx_standard_peripheral/Include/gd32f4xx_pmu.h
+ D:/Space/Cosmos/ventcore/Firmware/GD32F4xx_standard_peripheral/Include/gd32f4xx_rcu.h
+ D:/Space/Cosmos/ventcore/Firmware/GD32F4xx_standard_peripheral/Include/gd32f4xx_rtc.h
+ D:/Space/Cosmos/ventcore/Firmware/GD32F4xx_standard_peripheral/Include/gd32f4xx_sdio.h
+ D:/Space/Cosmos/ventcore/Firmware/GD32F4xx_standard_peripheral/Include/gd32f4xx_spi.h
+ D:/Space/Cosmos/ventcore/Firmware/GD32F4xx_standard_peripheral/Include/gd32f4xx_syscfg.h
+ D:/Space/Cosmos/ventcore/Firmware/GD32F4xx_standard_peripheral/Include/gd32f4xx_timer.h
+ D:/Space/Cosmos/ventcore/Firmware/GD32F4xx_standard_peripheral/Include/gd32f4xx_tli.h
+ D:/Space/Cosmos/ventcore/Firmware/GD32F4xx_standard_peripheral/Include/gd32f4xx_trng.h
+ D:/Space/Cosmos/ventcore/Firmware/GD32F4xx_standard_peripheral/Include/gd32f4xx_usart.h
+ D:/Space/Cosmos/ventcore/Firmware/GD32F4xx_standard_peripheral/Include/gd32f4xx_wwdgt.h
+ D:/Space/Cosmos/ventcore/User/gd32f4xx_libopt.h
+
+CMakeFiles/ventcore.dir/Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_rcu.c.obj
+ D:/Space/Cosmos/ventcore/Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_rcu.c
+ C:/Program Files (x86)/Arm/GNU Toolchain mingw-w64-i686-arm-none-eabi/arm-none-eabi/include/_ansi.h
+ C:/Program Files (x86)/Arm/GNU Toolchain mingw-w64-i686-arm-none-eabi/arm-none-eabi/include/_newlib_version.h
+ C:/Program Files (x86)/Arm/GNU Toolchain mingw-w64-i686-arm-none-eabi/arm-none-eabi/include/alloca.h
+ C:/Program Files (x86)/Arm/GNU Toolchain mingw-w64-i686-arm-none-eabi/arm-none-eabi/include/machine/_default_types.h
+ C:/Program Files (x86)/Arm/GNU Toolchain mingw-w64-i686-arm-none-eabi/arm-none-eabi/include/machine/_types.h
+ C:/Program Files (x86)/Arm/GNU Toolchain mingw-w64-i686-arm-none-eabi/arm-none-eabi/include/machine/ieeefp.h
+ C:/Program Files (x86)/Arm/GNU Toolchain mingw-w64-i686-arm-none-eabi/arm-none-eabi/include/machine/stdlib.h
+ C:/Program Files (x86)/Arm/GNU Toolchain mingw-w64-i686-arm-none-eabi/arm-none-eabi/include/newlib.h
+ C:/Program Files (x86)/Arm/GNU Toolchain mingw-w64-i686-arm-none-eabi/arm-none-eabi/include/stdint.h
+ C:/Program Files (x86)/Arm/GNU Toolchain mingw-w64-i686-arm-none-eabi/arm-none-eabi/include/stdlib.h
+ C:/Program Files (x86)/Arm/GNU Toolchain mingw-w64-i686-arm-none-eabi/arm-none-eabi/include/sys/_intsup.h
+ C:/Program Files (x86)/Arm/GNU Toolchain mingw-w64-i686-arm-none-eabi/arm-none-eabi/include/sys/_stdint.h
+ C:/Program Files (x86)/Arm/GNU Toolchain mingw-w64-i686-arm-none-eabi/arm-none-eabi/include/sys/_types.h
+ C:/Program Files (x86)/Arm/GNU Toolchain mingw-w64-i686-arm-none-eabi/arm-none-eabi/include/sys/cdefs.h
+ C:/Program Files (x86)/Arm/GNU Toolchain mingw-w64-i686-arm-none-eabi/arm-none-eabi/include/sys/config.h
+ C:/Program Files (x86)/Arm/GNU Toolchain mingw-w64-i686-arm-none-eabi/arm-none-eabi/include/sys/features.h
+ C:/Program Files (x86)/Arm/GNU Toolchain mingw-w64-i686-arm-none-eabi/arm-none-eabi/include/sys/lock.h
+ C:/Program Files (x86)/Arm/GNU Toolchain mingw-w64-i686-arm-none-eabi/arm-none-eabi/include/sys/reent.h
+ C:/Program Files (x86)/Arm/GNU Toolchain mingw-w64-i686-arm-none-eabi/lib/gcc/arm-none-eabi/15.2.1/include/stddef.h
+ C:/Program Files (x86)/Arm/GNU Toolchain mingw-w64-i686-arm-none-eabi/lib/gcc/arm-none-eabi/15.2.1/include/stdint.h
+ D:/Space/Cosmos/ventcore/Firmware/CMSIS/core_cm4.h
+ D:/Space/Cosmos/ventcore/Firmware/CMSIS/core_cm4_simd.h
+ D:/Space/Cosmos/ventcore/Firmware/CMSIS/core_cmFunc.h
+ D:/Space/Cosmos/ventcore/Firmware/CMSIS/core_cmInstr.h
+ D:/Space/Cosmos/ventcore/Firmware/CMSIS/GD/GD32F4xx/Include/gd32f4xx.h
+ D:/Space/Cosmos/ventcore/Firmware/CMSIS/GD/GD32F4xx/Include/system_gd32f4xx.h
+ D:/Space/Cosmos/ventcore/Firmware/GD32F4xx_standard_peripheral/Include/gd32f4xx_adc.h
+ D:/Space/Cosmos/ventcore/Firmware/GD32F4xx_standard_peripheral/Include/gd32f4xx_can.h
+ D:/Space/Cosmos/ventcore/Firmware/GD32F4xx_standard_peripheral/Include/gd32f4xx_crc.h
+ D:/Space/Cosmos/ventcore/Firmware/GD32F4xx_standard_peripheral/Include/gd32f4xx_ctc.h
+ D:/Space/Cosmos/ventcore/Firmware/GD32F4xx_standard_peripheral/Include/gd32f4xx_dac.h
+ D:/Space/Cosmos/ventcore/Firmware/GD32F4xx_standard_peripheral/Include/gd32f4xx_dbg.h
+ D:/Space/Cosmos/ventcore/Firmware/GD32F4xx_standard_peripheral/Include/gd32f4xx_dci.h
+ D:/Space/Cosmos/ventcore/Firmware/GD32F4xx_standard_peripheral/Include/gd32f4xx_dma.h
+ D:/Space/Cosmos/ventcore/Firmware/GD32F4xx_standard_peripheral/Include/gd32f4xx_enet.h
+ D:/Space/Cosmos/ventcore/Firmware/GD32F4xx_standard_peripheral/Include/gd32f4xx_exmc.h
+ D:/Space/Cosmos/ventcore/Firmware/GD32F4xx_standard_peripheral/Include/gd32f4xx_exti.h
+ D:/Space/Cosmos/ventcore/Firmware/GD32F4xx_standard_peripheral/Include/gd32f4xx_fmc.h
+ D:/Space/Cosmos/ventcore/Firmware/GD32F4xx_standard_peripheral/Include/gd32f4xx_fwdgt.h
+ D:/Space/Cosmos/ventcore/Firmware/GD32F4xx_standard_peripheral/Include/gd32f4xx_gpio.h
+ D:/Space/Cosmos/ventcore/Firmware/GD32F4xx_standard_peripheral/Include/gd32f4xx_i2c.h
+ D:/Space/Cosmos/ventcore/Firmware/GD32F4xx_standard_peripheral/Include/gd32f4xx_ipa.h
+ D:/Space/Cosmos/ventcore/Firmware/GD32F4xx_standard_peripheral/Include/gd32f4xx_iref.h
+ D:/Space/Cosmos/ventcore/Firmware/GD32F4xx_standard_peripheral/Include/gd32f4xx_misc.h
+ D:/Space/Cosmos/ventcore/Firmware/GD32F4xx_standard_peripheral/Include/gd32f4xx_pmu.h
+ D:/Space/Cosmos/ventcore/Firmware/GD32F4xx_standard_peripheral/Include/gd32f4xx_rcu.h
+ D:/Space/Cosmos/ventcore/Firmware/GD32F4xx_standard_peripheral/Include/gd32f4xx_rtc.h
+ D:/Space/Cosmos/ventcore/Firmware/GD32F4xx_standard_peripheral/Include/gd32f4xx_sdio.h
+ D:/Space/Cosmos/ventcore/Firmware/GD32F4xx_standard_peripheral/Include/gd32f4xx_spi.h
+ D:/Space/Cosmos/ventcore/Firmware/GD32F4xx_standard_peripheral/Include/gd32f4xx_syscfg.h
+ D:/Space/Cosmos/ventcore/Firmware/GD32F4xx_standard_peripheral/Include/gd32f4xx_timer.h
+ D:/Space/Cosmos/ventcore/Firmware/GD32F4xx_standard_peripheral/Include/gd32f4xx_tli.h
+ D:/Space/Cosmos/ventcore/Firmware/GD32F4xx_standard_peripheral/Include/gd32f4xx_trng.h
+ D:/Space/Cosmos/ventcore/Firmware/GD32F4xx_standard_peripheral/Include/gd32f4xx_usart.h
+ D:/Space/Cosmos/ventcore/Firmware/GD32F4xx_standard_peripheral/Include/gd32f4xx_wwdgt.h
+ D:/Space/Cosmos/ventcore/User/gd32f4xx_libopt.h
+
 CMakeFiles/ventcore.dir/User/app/taskmanager.c.obj
  D:/Space/Cosmos/ventcore/User/app/taskmanager.c
  C:/Program Files (x86)/Arm/GNU Toolchain mingw-w64-i686-arm-none-eabi/arm-none-eabi/include/_newlib_version.h
