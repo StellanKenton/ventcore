@@ -13,8 +13,6 @@ set(MCU_FLAGS
     -mfpu=fpv4-sp-d16
     -mfloat-abi=hard)
 
-file(GLOB GD32_SOURCES CONFIGURE_DEPENDS
-    "Firmware/GD32F4xx_standard_peripheral/Source/*.c")
 set(FREERTOS_SOURCES
     Firmware/FreeRTOS/croutine.c
     Firmware/FreeRTOS/event_groups.c
@@ -24,32 +22,28 @@ set(FREERTOS_SOURCES
     Firmware/FreeRTOS/tasks.c
     Firmware/FreeRTOS/timers.c
     Firmware/FreeRTOS/portable/GCC/ARM_CM4F/port.c
-    Firmware/FreeRTOS/portable/MemMang/heap_5.c)
+    Firmware/FreeRTOS/portable/MemMang/heap_4.c)
 
 add_executable(ventcore
     User/main.c
-    User/gd32f4xx_it.c
-    User/Drive/src/Air780EG.c
-    User/Drive/src/delay.c
-    User/Drive/src/SdRam.c
-    User/Drive/src/Usart.c
+    User/app/taskmanager.c
+    User/module/rtos/rtos.c
+    User/module/rtos/portrtos.c
     Firmware/CMSIS/GD/GD32F4xx/Source/system_gd32f4xx.c
     Firmware/CMSIS/GD/GD32F4xx/Source/GCC/startup_gd32f470zetx.s
-    ${GD32_SOURCES}
     ${FREERTOS_SOURCES})
 
 target_include_directories(ventcore PRIVATE
     User
-    User/Drive/inc
+    User/app
+    User/module/rtos
     Firmware/CMSIS
     Firmware/CMSIS/GD/GD32F4xx/Include
-    Firmware/GD32F4xx_standard_peripheral/Include
     Firmware/FreeRTOS/include
     Firmware/FreeRTOS/portable/GCC/ARM_CM4F)
 
 target_compile_definitions(ventcore PRIVATE
-    GD32F470
-    USE_STDPERIPH_DRIVER)
+    GD32F470)
 
 target_compile_options(ventcore PRIVATE
     ${MCU_FLAGS}
