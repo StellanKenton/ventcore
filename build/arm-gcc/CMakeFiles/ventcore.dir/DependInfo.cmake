@@ -21,7 +21,11 @@ set(CMAKE_TARGET_DEFINITIONS_ASM
 set(CMAKE_ASM_TARGET_INCLUDE_PATH
   "D:/Space/Cosmos/ventcore/User"
   "D:/Space/Cosmos/ventcore/User/app"
+  "D:/Space/Cosmos/ventcore/User/module/log"
+  "D:/Space/Cosmos/ventcore/User/module/log/consoleRegisted"
+  "D:/Space/Cosmos/ventcore/User/module/log/SEGGER"
   "D:/Space/Cosmos/ventcore/User/module/rtos"
+  "D:/Space/Cosmos/ventcore/User/tools/ringbuffer"
   "D:/Space/Cosmos/ventcore/Firmware/CMSIS"
   "D:/Space/Cosmos/ventcore/Firmware/CMSIS/GD/GD32F4xx/Include"
   "D:/Space/Cosmos/ventcore/Firmware/GD32F4xx_standard_peripheral/Include"
@@ -43,8 +47,14 @@ set(CMAKE_DEPENDS_DEPENDENCY_FILES
   "D:/Space/Cosmos/ventcore/Firmware/FreeRTOS/timers.c" "CMakeFiles/ventcore.dir/Firmware/FreeRTOS/timers.c.obj" "gcc" "CMakeFiles/ventcore.dir/Firmware/FreeRTOS/timers.c.obj.d"
   "D:/Space/Cosmos/ventcore/User/app/taskmanager.c" "CMakeFiles/ventcore.dir/User/app/taskmanager.c.obj" "gcc" "CMakeFiles/ventcore.dir/User/app/taskmanager.c.obj.d"
   "D:/Space/Cosmos/ventcore/User/main.c" "CMakeFiles/ventcore.dir/User/main.c.obj" "gcc" "CMakeFiles/ventcore.dir/User/main.c.obj.d"
+  "D:/Space/Cosmos/ventcore/User/module/log/SEGGER/SEGGER_RTT.c" "CMakeFiles/ventcore.dir/User/module/log/SEGGER/SEGGER_RTT.c.obj" "gcc" "CMakeFiles/ventcore.dir/User/module/log/SEGGER/SEGGER_RTT.c.obj.d"
+  "D:/Space/Cosmos/ventcore/User/module/log/console.c" "CMakeFiles/ventcore.dir/User/module/log/console.c.obj" "gcc" "CMakeFiles/ventcore.dir/User/module/log/console.c.obj.d"
+  "D:/Space/Cosmos/ventcore/User/module/log/consoleRegisted/sysdebug.c" "CMakeFiles/ventcore.dir/User/module/log/consoleRegisted/sysdebug.c.obj" "gcc" "CMakeFiles/ventcore.dir/User/module/log/consoleRegisted/sysdebug.c.obj.d"
+  "D:/Space/Cosmos/ventcore/User/module/log/log.c" "CMakeFiles/ventcore.dir/User/module/log/log.c.obj" "gcc" "CMakeFiles/ventcore.dir/User/module/log/log.c.obj.d"
+  "D:/Space/Cosmos/ventcore/User/module/log/portLog.c" "CMakeFiles/ventcore.dir/User/module/log/portLog.c.obj" "gcc" "CMakeFiles/ventcore.dir/User/module/log/portLog.c.obj.d"
   "D:/Space/Cosmos/ventcore/User/module/rtos/portrtos.c" "CMakeFiles/ventcore.dir/User/module/rtos/portrtos.c.obj" "gcc" "CMakeFiles/ventcore.dir/User/module/rtos/portrtos.c.obj.d"
   "D:/Space/Cosmos/ventcore/User/module/rtos/rtos.c" "CMakeFiles/ventcore.dir/User/module/rtos/rtos.c.obj" "gcc" "CMakeFiles/ventcore.dir/User/module/rtos/rtos.c.obj.d"
+  "D:/Space/Cosmos/ventcore/User/tools/ringbuffer/ringbuffer.c" "CMakeFiles/ventcore.dir/User/tools/ringbuffer/ringbuffer.c.obj" "gcc" "CMakeFiles/ventcore.dir/User/tools/ringbuffer/ringbuffer.c.obj.d"
   )
 
 # Targets to which this target links which contain Fortran sources.

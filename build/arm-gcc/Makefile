@@ -424,6 +424,126 @@ User/main.c.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/User/main.c.s
 .PHONY : User/main.c.s
 
+User/module/log/SEGGER/SEGGER_RTT.obj: User/module/log/SEGGER/SEGGER_RTT.c.obj
+.PHONY : User/module/log/SEGGER/SEGGER_RTT.obj
+
+# target to build an object file
+User/module/log/SEGGER/SEGGER_RTT.c.obj:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/User/module/log/SEGGER/SEGGER_RTT.c.obj
+.PHONY : User/module/log/SEGGER/SEGGER_RTT.c.obj
+
+User/module/log/SEGGER/SEGGER_RTT.i: User/module/log/SEGGER/SEGGER_RTT.c.i
+.PHONY : User/module/log/SEGGER/SEGGER_RTT.i
+
+# target to preprocess a source file
+User/module/log/SEGGER/SEGGER_RTT.c.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/User/module/log/SEGGER/SEGGER_RTT.c.i
+.PHONY : User/module/log/SEGGER/SEGGER_RTT.c.i
+
+User/module/log/SEGGER/SEGGER_RTT.s: User/module/log/SEGGER/SEGGER_RTT.c.s
+.PHONY : User/module/log/SEGGER/SEGGER_RTT.s
+
+# target to generate assembly for a file
+User/module/log/SEGGER/SEGGER_RTT.c.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/User/module/log/SEGGER/SEGGER_RTT.c.s
+.PHONY : User/module/log/SEGGER/SEGGER_RTT.c.s
+
+User/module/log/console.obj: User/module/log/console.c.obj
+.PHONY : User/module/log/console.obj
+
+# target to build an object file
+User/module/log/console.c.obj:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/User/module/log/console.c.obj
+.PHONY : User/module/log/console.c.obj
+
+User/module/log/console.i: User/module/log/console.c.i
+.PHONY : User/module/log/console.i
+
+# target to preprocess a source file
+User/module/log/console.c.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/User/module/log/console.c.i
+.PHONY : User/module/log/console.c.i
+
+User/module/log/console.s: User/module/log/console.c.s
+.PHONY : User/module/log/console.s
+
+# target to generate assembly for a file
+User/module/log/console.c.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/User/module/log/console.c.s
+.PHONY : User/module/log/console.c.s
+
+User/module/log/consoleRegisted/sysdebug.obj: User/module/log/consoleRegisted/sysdebug.c.obj
+.PHONY : User/module/log/consoleRegisted/sysdebug.obj
+
+# target to build an object file
+User/module/log/consoleRegisted/sysdebug.c.obj:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/User/module/log/consoleRegisted/sysdebug.c.obj
+.PHONY : User/module/log/consoleRegisted/sysdebug.c.obj
+
+User/module/log/consoleRegisted/sysdebug.i: User/module/log/consoleRegisted/sysdebug.c.i
+.PHONY : User/module/log/consoleRegisted/sysdebug.i
+
+# target to preprocess a source file
+User/module/log/consoleRegisted/sysdebug.c.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/User/module/log/consoleRegisted/sysdebug.c.i
+.PHONY : User/module/log/consoleRegisted/sysdebug.c.i
+
+User/module/log/consoleRegisted/sysdebug.s: User/module/log/consoleRegisted/sysdebug.c.s
+.PHONY : User/module/log/consoleRegisted/sysdebug.s
+
+# target to generate assembly for a file
+User/module/log/consoleRegisted/sysdebug.c.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/User/module/log/consoleRegisted/sysdebug.c.s
+.PHONY : User/module/log/consoleRegisted/sysdebug.c.s
+
+User/module/log/log.obj: User/module/log/log.c.obj
+.PHONY : User/module/log/log.obj
+
+# target to build an object file
+User/module/log/log.c.obj:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/User/module/log/log.c.obj
+.PHONY : User/module/log/log.c.obj
+
+User/module/log/log.i: User/module/log/log.c.i
+.PHONY : User/module/log/log.i
+
+# target to preprocess a source file
+User/module/log/log.c.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/User/module/log/log.c.i
+.PHONY : User/module/log/log.c.i
+
+User/module/log/log.s: User/module/log/log.c.s
+.PHONY : User/module/log/log.s
+
+# target to generate assembly for a file
+User/module/log/log.c.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/User/module/log/log.c.s
+.PHONY : User/module/log/log.c.s
+
+User/module/log/portLog.obj: User/module/log/portLog.c.obj
+.PHONY : User/module/log/portLog.obj
+
+# target to build an object file
+User/module/log/portLog.c.obj:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/User/module/log/portLog.c.obj
+.PHONY : User/module/log/portLog.c.obj
+
+User/module/log/portLog.i: User/module/log/portLog.c.i
+.PHONY : User/module/log/portLog.i
+
+# target to preprocess a source file
+User/module/log/portLog.c.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/User/module/log/portLog.c.i
+.PHONY : User/module/log/portLog.c.i
+
+User/module/log/portLog.s: User/module/log/portLog.c.s
+.PHONY : User/module/log/portLog.s
+
+# target to generate assembly for a file
+User/module/log/portLog.c.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/User/module/log/portLog.c.s
+.PHONY : User/module/log/portLog.c.s
+
 User/module/rtos/portrtos.obj: User/module/rtos/portrtos.c.obj
 .PHONY : User/module/rtos/portrtos.obj
 
@@ -472,6 +592,30 @@ User/module/rtos/rtos.c.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/User/module/rtos/rtos.c.s
 .PHONY : User/module/rtos/rtos.c.s
 
+User/tools/ringbuffer/ringbuffer.obj: User/tools/ringbuffer/ringbuffer.c.obj
+.PHONY : User/tools/ringbuffer/ringbuffer.obj
+
+# target to build an object file
+User/tools/ringbuffer/ringbuffer.c.obj:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/User/tools/ringbuffer/ringbuffer.c.obj
+.PHONY : User/tools/ringbuffer/ringbuffer.c.obj
+
+User/tools/ringbuffer/ringbuffer.i: User/tools/ringbuffer/ringbuffer.c.i
+.PHONY : User/tools/ringbuffer/ringbuffer.i
+
+# target to preprocess a source file
+User/tools/ringbuffer/ringbuffer.c.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/User/tools/ringbuffer/ringbuffer.c.i
+.PHONY : User/tools/ringbuffer/ringbuffer.c.i
+
+User/tools/ringbuffer/ringbuffer.s: User/tools/ringbuffer/ringbuffer.c.s
+.PHONY : User/tools/ringbuffer/ringbuffer.s
+
+# target to generate assembly for a file
+User/tools/ringbuffer/ringbuffer.c.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/User/tools/ringbuffer/ringbuffer.c.s
+.PHONY : User/tools/ringbuffer/ringbuffer.c.s
+
 # Help Target
 help:
 	@echo The following are some of the valid targets for this Makefile:
@@ -518,12 +662,30 @@ help:
 	@echo ... User/main.obj
 	@echo ... User/main.i
 	@echo ... User/main.s
+	@echo ... User/module/log/SEGGER/SEGGER_RTT.obj
+	@echo ... User/module/log/SEGGER/SEGGER_RTT.i
+	@echo ... User/module/log/SEGGER/SEGGER_RTT.s
+	@echo ... User/module/log/console.obj
+	@echo ... User/module/log/console.i
+	@echo ... User/module/log/console.s
+	@echo ... User/module/log/consoleRegisted/sysdebug.obj
+	@echo ... User/module/log/consoleRegisted/sysdebug.i
+	@echo ... User/module/log/consoleRegisted/sysdebug.s
+	@echo ... User/module/log/log.obj
+	@echo ... User/module/log/log.i
+	@echo ... User/module/log/log.s
+	@echo ... User/module/log/portLog.obj
+	@echo ... User/module/log/portLog.i
+	@echo ... User/module/log/portLog.s
 	@echo ... User/module/rtos/portrtos.obj
 	@echo ... User/module/rtos/portrtos.i
 	@echo ... User/module/rtos/portrtos.s
 	@echo ... User/module/rtos/rtos.obj
 	@echo ... User/module/rtos/rtos.i
 	@echo ... User/module/rtos/rtos.s
+	@echo ... User/tools/ringbuffer/ringbuffer.obj
+	@echo ... User/tools/ringbuffer/ringbuffer.i
+	@echo ... User/tools/ringbuffer/ringbuffer.s
 .PHONY : help
 
 

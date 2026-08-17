@@ -18,6 +18,7 @@ from typing import Any, Dict, Iterable, List, Optional
 SCRIPT_PATH = Path(__file__).resolve()
 REPO_ROOT = SCRIPT_PATH.parents[2]
 DEFAULT_CONFIG_PATH = SCRIPT_PATH.with_name("device_tool_config.json")
+CONFIGURE_STATE_NAME = ".device_tool_configure.json"
 
 
 class DeviceToolError(RuntimeError):
@@ -204,7 +205,12 @@ def cmake_cache_value(cache_file: Path, key: str) -> Optional[str]:
 
 def reset_cmake_cache(build_dir: Path) -> None:
     print(f"Removing stale CMake cache: {build_dir}", flush=True)
-    for name in ["CMakeCache.txt", "build.ninja", "cmake_install.cmake"]:
+    for name in [
+        "CMakeCache.txt",
+        "build.ninja",
+        "cmake_install.cmake",
+        CONFIGURE_STATE_NAME,
+    ]:
         path = build_dir / name
         if path.exists():
             path.unlink()
@@ -238,6 +244,28 @@ def reset_cmake_cache_if_needed(
             return
 
 
+def file_identity(path: Path) -> List[Any]:
+    stat = path.stat()
+    return [str(path.resolve()), stat.st_size, stat.st_mtime_ns]
+
+
+def cmake_configure_needed(build_dir: Path, expected_state: Dict[str, Any]) -> bool:
+    if not (build_dir / "CMakeCache.txt").is_file():
+        return True
+    if not (build_dir / "build.ninja").is_file():
+        return True
+
+    state_file = build_dir / CONFIGURE_STATE_NAME
+    if not state_file.is_file():
+        return True
+
+    try:
+        actual_state = json.loads(state_file.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return True
+    return actual_state != expected_state
+
+
 def build_with_cmake(build: Dict[str, Any]) -> None:
     cmake = require_executable(str(build["cmake"]), "cmake")
     ninja = require_executable(str(build["ninja"]), "ninja")
@@ -248,7 +276,8 @@ def build_with_cmake(build: Dict[str, Any]) -> None:
 
     require_file(toolchain_file, "CMake toolchain file")
     compiler_name = "arm-none-eabi-gcc.exe" if normalized_os_name() == "windows" else "arm-none-eabi-gcc"
-    require_file(compiler_bin_dir / compiler_name, "arm-none-eabi-gcc")
+    compiler = compiler_bin_dir / compiler_name
+    require_file(compiler, "arm-none-eabi-gcc")
     reset_cmake_cache_if_needed(build_dir, source_dir, toolchain_file, compiler_bin_dir)
 
     configure_cmd = [
@@ -268,8 +297,22 @@ def build_with_cmake(build: Dict[str, Any]) -> None:
         else "-DCMAKE_EXPORT_COMPILE_COMMANDS=OFF",
     ]
     configure_cmd.extend(str(arg) for arg in build.get("extra_configure_args", []))
+    configure_state = {
+        "version": 1,
+        "command": configure_cmd,
+        "cmake": file_identity(Path(cmake)),
+        "ninja": file_identity(Path(ninja)),
+        "compiler": file_identity(compiler),
+        "toolchain": file_identity(toolchain_file),
+    }
 
-    run_command(configure_cmd)
+    if cmake_configure_needed(build_dir, configure_state):
+        run_command(configure_cmd)
+        (build_dir / CONFIGURE_STATE_NAME).write_text(
+            json.dumps(configure_state, indent=2) + "\n", encoding="utf-8"
+        )
+    else:
+        print("CMake configuration is unchanged; skipping configure.", flush=True)
     run_command([cmake, "--build", str(build_dir)])
 
 

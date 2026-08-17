@@ -30,6 +30,7 @@ int main(void)
     LOG_R("*****************************************");
     LOG_R("             system boot");
     LOG_R("*****************************************");
+    // bsp init on here
 
     /* Register project tasks before handing control to the scheduler. */
     if (!WorkerTasksRegister()) {

@@ -41,7 +41,10 @@ Command behavior:
 
 - `info`: prints the detected computer information and selected profile.
 - `deploy`: writes the VS Code tasks, status-bar commands, and extension recommendation.
-- `build`: builds the firmware with CMake, Ninja, and Arm GNU Toolchain.
+- `build`: builds the firmware with CMake, Ninja, and Arm GNU Toolchain. CMake
+  configure runs only when its cache is missing or the configured tools and
+  build settings change; Ninja still regenerates automatically when project
+  CMake files change.
 - `flash`: downloads the configured firmware image through J-Link.
 - `reset`: resets the target through J-Link and lets it run.
 - `rtt`: stops existing J-Link RTT/GDB server processes, starts this tool's RTT
