@@ -70,6 +70,21 @@ static int8_t portRtosTaskDelayMs(uint32_t delayMs)
     return REP_RTOS_STATUS_OK;
 }
 
+static uint32_t portRtosGetTickMs(void)
+{
+    return (uint32_t)(((uint64_t)xTaskGetTickCount() * 1000ULL) / (uint64_t)configTICK_RATE_HZ);
+}
+
+static void portRtosEnterCritical(void)
+{
+    taskENTER_CRITICAL();
+}
+
+static void portRtosExitCritical(void)
+{
+    taskEXIT_CRITICAL();
+}
+
 static int8_t portRtosSchedulerStart(void)
 {
     vTaskStartScheduler();
@@ -80,6 +95,9 @@ static const stRepRtosOps gRtosOps = {
     .taskCreate = portRtosTaskCreate,
     .taskDelete = portRtosTaskDelete,
     .taskDelayMs = portRtosTaskDelayMs,
+    .getTickMs = portRtosGetTickMs,
+    .enterCritical = portRtosEnterCritical,
+    .exitCritical = portRtosExitCritical,
     .schedulerStart = portRtosSchedulerStart,
 };
 

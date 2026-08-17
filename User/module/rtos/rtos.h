@@ -37,12 +37,18 @@ typedef struct stRepRtosOps {
     int8_t (*taskCreate)(const stRepRtosTaskConfig *config);
     void (*taskDelete)(repRtosTaskHandle handle);
     int8_t (*taskDelayMs)(uint32_t delayMs);
+    uint32_t (*getTickMs)(void);
+    void (*enterCritical)(void);
+    void (*exitCritical)(void);
     int8_t (*schedulerStart)(void);
 } stRepRtosOps;
 
 int8_t repRtosTaskCreate(const stRepRtosTaskConfig *config);
 void repRtosTaskDelete(repRtosTaskHandle handle);
 int8_t repRtosTaskDelayMs(uint32_t delayMs);
+uint32_t repRtosGetTickMs(void);
+void repRtosEnterCritical(void);
+void repRtosExitCritical(void);
 int8_t repRtosSchedulerStart(void);
 
 #ifdef __cplusplus

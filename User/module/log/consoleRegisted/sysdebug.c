@@ -10,9 +10,9 @@
 #include "sysdebug.h"
 
 #include "console.h"
+#include "gd32f4xx.h"
 #include "log.h"
 #include "portLog.h"
-#include "stm32f4xx.h"
 
 static const char *const gSysdebugTag = "sysdebug";
 
@@ -23,7 +23,7 @@ static eConsoleCommandResult sysdebugConsoleReboot(const char *arguments)
     LOG_T(gSysdebugTag, "Received command rebooting mcu");
     LOG_R(" ");
     LOG_R(" ");
-    while(lDelayTick > 0U) {
+    while (lDelayTick > 0U) {
         lDelayTick--;
     }
     NVIC_SystemReset();

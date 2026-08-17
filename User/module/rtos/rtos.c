@@ -51,6 +51,39 @@ int8_t repRtosTaskDelayMs(uint32_t delayMs)
     return lOps->taskDelayMs(delayMs);
 }
 
+uint32_t repRtosGetTickMs(void)
+{
+    const stRepRtosOps *lOps = repRtosGetOps();
+
+    if ((lOps == NULL) || (lOps->getTickMs == NULL)) {
+        return 0U;
+    }
+
+    return lOps->getTickMs();
+}
+
+void repRtosEnterCritical(void)
+{
+    const stRepRtosOps *lOps = repRtosGetOps();
+
+    if ((lOps == NULL) || (lOps->enterCritical == NULL)) {
+        return;
+    }
+
+    lOps->enterCritical();
+}
+
+void repRtosExitCritical(void)
+{
+    const stRepRtosOps *lOps = repRtosGetOps();
+
+    if ((lOps == NULL) || (lOps->exitCritical == NULL)) {
+        return;
+    }
+
+    lOps->exitCritical();
+}
+
 int8_t repRtosSchedulerStart(void)
 {
     const stRepRtosOps *lOps = repRtosGetOps();

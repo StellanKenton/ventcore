@@ -12,12 +12,12 @@
 #include <stddef.h>
 
 #if LOG_USE_RTOS
-#include "delay.h"
+#include "rtos.h"
 #endif
 
 #if LOG_USE_RTOS
 static const stPortLogOps gPortLogRtosOps = {
-    .getRunTimeMs = delay_get_tick_ms,
+    .getRunTimeMs = repRtosGetTickMs,
 };
 #else
 static const stPortLogOps *gPortLogBoardOps = {

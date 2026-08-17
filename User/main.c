@@ -7,19 +7,47 @@
 * @version  :
 * @copyright: Copyright (c) 2050
 ***********************************************************************************/
+#include "log.h"
 #include "rtos.h"
+#include "sysdebug.h"
 #include "taskmanager.h"
 
 int main(void)
 {
-    if (!taskManagerStart()) {
+    int8_t lSchedulerStatus;
+
+    if (!logInit()) {
         for (;;) {
         }
     }
 
-    (void)repRtosSchedulerStart();
+#if LOG_CONSOLE_ENABLE
+    if (!sysdebugConsoleRegister()) {
+        LOG_W("main", "sysdebug console registration failed");
+    }
+#endif
 
-    for (;;) {
+    LOG_R("*****************************************");
+    LOG_R("             system boot");
+    LOG_R("*****************************************");
+
+    /* Register project tasks before handing control to the scheduler. */
+    if (!WorkerTasksRegister()) {
+        LOG_T("main", "worker task registration failed");
+        for (;;) {
+        }
+    }
+
+    lSchedulerStatus = repRtosSchedulerStart();
+    if (lSchedulerStatus != REP_RTOS_STATUS_OK) {
+        LOG_T("main", "scheduler start failed: %d", (int)lSchedulerStatus);
+        for (;;) {
+        }
+    }
+
+    /* A running scheduler never returns to the application entry point. */
+    while(1) {
+        // do nothing, the scheduler is running
     }
 }
 

@@ -11,31 +11,23 @@
 
 #include <stddef.h>
 
+#include "log.h"
 #include "rtos.h"
 
-static repRtosTaskHandle gTaskManagerHandle = NULL;
+static const char *const gTaskManagerTag = "taskManager";
+static bool gWorkerTasksCreated = false;
 static repRtosTaskHandle gDefaultTaskHandle = NULL;
 static repRtosTaskHandle gVentTaskHandle = NULL;
 static repRtosTaskHandle gSensorTaskHandle = NULL;
 static repRtosTaskHandle gHmiTaskHandle = NULL;
 static repRtosTaskHandle gAlarmTaskHandle = NULL;
 
-static void taskManagerTask(void *argument);
 static void defaultTask(void *argument);
 static void ventTask(void *argument);
 static void sensorTask(void *argument);
 static void hmiTask(void *argument);
 static void alarmTask(void *argument);
-static bool taskManagerCreateWorkerTasks(void);
-
-static const stRepRtosTaskConfig gTaskManagerConfig = {
-    .name = "taskManager",
-    .entry = taskManagerTask,
-    .argument = NULL,
-    .stackSize = TASK_MANAGER_STACK_SIZE,
-    .priority = TASK_MANAGER_PRIORITY,
-    .handle = &gTaskManagerHandle,
-};
+static int8_t taskManagerCreateTask(const stRepRtosTaskConfig *config);
 
 static const stRepRtosTaskConfig gWorkerTaskConfigs[] = {
     {
@@ -80,24 +72,12 @@ static const stRepRtosTaskConfig gWorkerTaskConfigs[] = {
     },
 };
 
-static void taskManagerTask(void *argument)
-{
-    (void)argument;
-
-    if (!taskManagerCreateWorkerTasks()) {
-        for (;;) {
-            (void)repRtosTaskDelayMs(DEFAULT_TASK_INTERVAL_MS);
-        }
-    }
-
-    repRtosTaskDelete(NULL);
-}
-
 static void defaultTask(void *argument)
 {
     (void)argument;
 
     for (;;) {
+        (void)logProcess((uint16_t)DEFAULT_TASK_INTERVAL_MS);
         (void)repRtosTaskDelayMs(DEFAULT_TASK_INTERVAL_MS);
     }
 }
@@ -138,22 +118,45 @@ static void alarmTask(void *argument)
     }
 }
 
-static bool taskManagerCreateWorkerTasks(void)
+static int8_t taskManagerCreateTask(const stRepRtosTaskConfig *config)
+{
+    int8_t lStatus = repRtosTaskCreate(config);
+
+    if (lStatus != REP_RTOS_STATUS_OK) {
+        LOG_T(gTaskManagerTag,
+              "task create failed name=%s priority=%lu stack=%lu status=%d",
+              config->name,
+              (unsigned long)config->priority,
+              (unsigned long)config->stackSize,
+              (int)lStatus);
+    }
+
+    return lStatus;
+}
+
+bool WorkerTasksRegister(void)
 {
     uint32_t lIndex;
+    bool lAllCreated = true;
+
+    if (gWorkerTasksCreated) {
+        return true;
+    }
 
     for (lIndex = 0U; lIndex < (sizeof(gWorkerTaskConfigs) / sizeof(gWorkerTaskConfigs[0])); lIndex++) {
-        if (repRtosTaskCreate(&gWorkerTaskConfigs[lIndex]) != REP_RTOS_STATUS_OK) {
-            return false;
+        if (taskManagerCreateTask(&gWorkerTaskConfigs[lIndex]) != REP_RTOS_STATUS_OK) {
+            lAllCreated = false;
         }
     }
 
-    return true;
-}
+    if (!lAllCreated) {
+        LOG_T(gTaskManagerTag, "worker task registration failed");
+        return false;
+    }
 
-bool taskManagerStart(void)
-{
-    return repRtosTaskCreate(&gTaskManagerConfig) == REP_RTOS_STATUS_OK;
+    gWorkerTasksCreated = true;
+    LOG_I(gTaskManagerTag, "worker tasks ready");
+    return true;
 }
 
 /**************************End of file********************************/

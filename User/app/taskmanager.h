@@ -16,12 +16,9 @@
 extern "C" {
 #endif
 
-#define TASK_MANAGER_STACK_SIZE          256U
-#define TASK_MANAGER_PRIORITY            4U
-
 #define DEFAULT_TASK_STACK_SIZE          256U
 #define DEFAULT_TASK_PRIORITY            1U
-#define DEFAULT_TASK_INTERVAL_MS         1000U
+#define DEFAULT_TASK_INTERVAL_MS         10U
 
 #define VENT_TASK_STACK_SIZE             256U
 #define VENT_TASK_PRIORITY               3U
@@ -39,7 +36,7 @@ extern "C" {
 #define ALARM_TASK_PRIORITY              3U
 #define ALARM_TASK_INTERVAL_MS           10U
 
-bool taskManagerStart(void);
+bool WorkerTasksRegister(void);
 
 #ifdef __cplusplus
 }
