@@ -30,7 +30,7 @@ int main(void)
     setvbuf(stdout, NULL, _IONBF, 0);
     Debug.printf("System init...\r\n ");
     xTaskCreate(CrateTask ,"CrateTask" , 1024, NULL, 1, &StartTask_Handler);
-    vTaskStartScheduler();          //�����������
+    vTaskStartScheduler();          
     while(1)
     {
     }
