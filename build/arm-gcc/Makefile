@@ -112,7 +112,6 @@ preinstall/fast:
 
 # clear depends
 depend:
-	$(CMAKE_COMMAND) -P D:\Space\Cosmos\ventcore\build\arm-gcc\CMakeFiles\VerifyGlobs.cmake
 	$(CMAKE_COMMAND) -S$(CMAKE_SOURCE_DIR) -B$(CMAKE_BINARY_DIR) --check-build-system CMakeFiles\Makefile.cmake 1
 .PHONY : depend
 
@@ -257,29 +256,29 @@ Firmware/FreeRTOS/portable/GCC/ARM_CM4F/port.c.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/Firmware/FreeRTOS/portable/GCC/ARM_CM4F/port.c.s
 .PHONY : Firmware/FreeRTOS/portable/GCC/ARM_CM4F/port.c.s
 
-Firmware/FreeRTOS/portable/MemMang/heap_5.obj: Firmware/FreeRTOS/portable/MemMang/heap_5.c.obj
-.PHONY : Firmware/FreeRTOS/portable/MemMang/heap_5.obj
+Firmware/FreeRTOS/portable/MemMang/heap_4.obj: Firmware/FreeRTOS/portable/MemMang/heap_4.c.obj
+.PHONY : Firmware/FreeRTOS/portable/MemMang/heap_4.obj
 
 # target to build an object file
-Firmware/FreeRTOS/portable/MemMang/heap_5.c.obj:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/Firmware/FreeRTOS/portable/MemMang/heap_5.c.obj
-.PHONY : Firmware/FreeRTOS/portable/MemMang/heap_5.c.obj
+Firmware/FreeRTOS/portable/MemMang/heap_4.c.obj:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/Firmware/FreeRTOS/portable/MemMang/heap_4.c.obj
+.PHONY : Firmware/FreeRTOS/portable/MemMang/heap_4.c.obj
 
-Firmware/FreeRTOS/portable/MemMang/heap_5.i: Firmware/FreeRTOS/portable/MemMang/heap_5.c.i
-.PHONY : Firmware/FreeRTOS/portable/MemMang/heap_5.i
+Firmware/FreeRTOS/portable/MemMang/heap_4.i: Firmware/FreeRTOS/portable/MemMang/heap_4.c.i
+.PHONY : Firmware/FreeRTOS/portable/MemMang/heap_4.i
 
 # target to preprocess a source file
-Firmware/FreeRTOS/portable/MemMang/heap_5.c.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/Firmware/FreeRTOS/portable/MemMang/heap_5.c.i
-.PHONY : Firmware/FreeRTOS/portable/MemMang/heap_5.c.i
+Firmware/FreeRTOS/portable/MemMang/heap_4.c.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/Firmware/FreeRTOS/portable/MemMang/heap_4.c.i
+.PHONY : Firmware/FreeRTOS/portable/MemMang/heap_4.c.i
 
-Firmware/FreeRTOS/portable/MemMang/heap_5.s: Firmware/FreeRTOS/portable/MemMang/heap_5.c.s
-.PHONY : Firmware/FreeRTOS/portable/MemMang/heap_5.s
+Firmware/FreeRTOS/portable/MemMang/heap_4.s: Firmware/FreeRTOS/portable/MemMang/heap_4.c.s
+.PHONY : Firmware/FreeRTOS/portable/MemMang/heap_4.s
 
 # target to generate assembly for a file
-Firmware/FreeRTOS/portable/MemMang/heap_5.c.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/Firmware/FreeRTOS/portable/MemMang/heap_5.c.s
-.PHONY : Firmware/FreeRTOS/portable/MemMang/heap_5.c.s
+Firmware/FreeRTOS/portable/MemMang/heap_4.c.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/Firmware/FreeRTOS/portable/MemMang/heap_4.c.s
+.PHONY : Firmware/FreeRTOS/portable/MemMang/heap_4.c.s
 
 Firmware/FreeRTOS/queue.obj: Firmware/FreeRTOS/queue.c.obj
 .PHONY : Firmware/FreeRTOS/queue.obj
@@ -377,821 +376,29 @@ Firmware/FreeRTOS/timers.c.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/Firmware/FreeRTOS/timers.c.s
 .PHONY : Firmware/FreeRTOS/timers.c.s
 
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_adc.obj: Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_adc.c.obj
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_adc.obj
+User/app/taskmanager.obj: User/app/taskmanager.c.obj
+.PHONY : User/app/taskmanager.obj
 
 # target to build an object file
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_adc.c.obj:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_adc.c.obj
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_adc.c.obj
+User/app/taskmanager.c.obj:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/User/app/taskmanager.c.obj
+.PHONY : User/app/taskmanager.c.obj
 
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_adc.i: Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_adc.c.i
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_adc.i
-
-# target to preprocess a source file
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_adc.c.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_adc.c.i
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_adc.c.i
-
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_adc.s: Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_adc.c.s
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_adc.s
-
-# target to generate assembly for a file
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_adc.c.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_adc.c.s
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_adc.c.s
-
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_can.obj: Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_can.c.obj
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_can.obj
-
-# target to build an object file
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_can.c.obj:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_can.c.obj
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_can.c.obj
-
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_can.i: Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_can.c.i
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_can.i
+User/app/taskmanager.i: User/app/taskmanager.c.i
+.PHONY : User/app/taskmanager.i
 
 # target to preprocess a source file
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_can.c.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_can.c.i
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_can.c.i
+User/app/taskmanager.c.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/User/app/taskmanager.c.i
+.PHONY : User/app/taskmanager.c.i
 
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_can.s: Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_can.c.s
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_can.s
-
-# target to generate assembly for a file
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_can.c.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_can.c.s
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_can.c.s
-
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_crc.obj: Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_crc.c.obj
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_crc.obj
-
-# target to build an object file
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_crc.c.obj:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_crc.c.obj
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_crc.c.obj
-
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_crc.i: Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_crc.c.i
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_crc.i
-
-# target to preprocess a source file
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_crc.c.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_crc.c.i
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_crc.c.i
-
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_crc.s: Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_crc.c.s
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_crc.s
+User/app/taskmanager.s: User/app/taskmanager.c.s
+.PHONY : User/app/taskmanager.s
 
 # target to generate assembly for a file
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_crc.c.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_crc.c.s
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_crc.c.s
-
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_ctc.obj: Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_ctc.c.obj
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_ctc.obj
-
-# target to build an object file
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_ctc.c.obj:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_ctc.c.obj
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_ctc.c.obj
-
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_ctc.i: Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_ctc.c.i
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_ctc.i
-
-# target to preprocess a source file
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_ctc.c.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_ctc.c.i
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_ctc.c.i
-
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_ctc.s: Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_ctc.c.s
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_ctc.s
-
-# target to generate assembly for a file
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_ctc.c.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_ctc.c.s
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_ctc.c.s
-
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_dac.obj: Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_dac.c.obj
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_dac.obj
-
-# target to build an object file
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_dac.c.obj:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_dac.c.obj
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_dac.c.obj
-
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_dac.i: Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_dac.c.i
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_dac.i
-
-# target to preprocess a source file
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_dac.c.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_dac.c.i
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_dac.c.i
-
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_dac.s: Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_dac.c.s
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_dac.s
-
-# target to generate assembly for a file
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_dac.c.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_dac.c.s
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_dac.c.s
-
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_dbg.obj: Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_dbg.c.obj
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_dbg.obj
-
-# target to build an object file
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_dbg.c.obj:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_dbg.c.obj
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_dbg.c.obj
-
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_dbg.i: Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_dbg.c.i
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_dbg.i
-
-# target to preprocess a source file
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_dbg.c.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_dbg.c.i
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_dbg.c.i
-
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_dbg.s: Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_dbg.c.s
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_dbg.s
-
-# target to generate assembly for a file
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_dbg.c.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_dbg.c.s
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_dbg.c.s
-
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_dci.obj: Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_dci.c.obj
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_dci.obj
-
-# target to build an object file
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_dci.c.obj:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_dci.c.obj
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_dci.c.obj
-
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_dci.i: Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_dci.c.i
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_dci.i
-
-# target to preprocess a source file
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_dci.c.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_dci.c.i
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_dci.c.i
-
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_dci.s: Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_dci.c.s
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_dci.s
-
-# target to generate assembly for a file
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_dci.c.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_dci.c.s
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_dci.c.s
-
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_dma.obj: Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_dma.c.obj
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_dma.obj
-
-# target to build an object file
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_dma.c.obj:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_dma.c.obj
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_dma.c.obj
-
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_dma.i: Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_dma.c.i
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_dma.i
-
-# target to preprocess a source file
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_dma.c.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_dma.c.i
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_dma.c.i
-
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_dma.s: Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_dma.c.s
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_dma.s
-
-# target to generate assembly for a file
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_dma.c.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_dma.c.s
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_dma.c.s
-
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_enet.obj: Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_enet.c.obj
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_enet.obj
-
-# target to build an object file
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_enet.c.obj:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_enet.c.obj
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_enet.c.obj
-
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_enet.i: Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_enet.c.i
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_enet.i
-
-# target to preprocess a source file
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_enet.c.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_enet.c.i
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_enet.c.i
-
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_enet.s: Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_enet.c.s
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_enet.s
-
-# target to generate assembly for a file
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_enet.c.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_enet.c.s
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_enet.c.s
-
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_exmc.obj: Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_exmc.c.obj
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_exmc.obj
-
-# target to build an object file
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_exmc.c.obj:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_exmc.c.obj
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_exmc.c.obj
-
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_exmc.i: Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_exmc.c.i
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_exmc.i
-
-# target to preprocess a source file
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_exmc.c.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_exmc.c.i
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_exmc.c.i
-
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_exmc.s: Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_exmc.c.s
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_exmc.s
-
-# target to generate assembly for a file
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_exmc.c.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_exmc.c.s
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_exmc.c.s
-
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_exti.obj: Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_exti.c.obj
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_exti.obj
-
-# target to build an object file
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_exti.c.obj:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_exti.c.obj
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_exti.c.obj
-
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_exti.i: Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_exti.c.i
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_exti.i
-
-# target to preprocess a source file
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_exti.c.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_exti.c.i
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_exti.c.i
-
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_exti.s: Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_exti.c.s
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_exti.s
-
-# target to generate assembly for a file
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_exti.c.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_exti.c.s
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_exti.c.s
-
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_fmc.obj: Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_fmc.c.obj
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_fmc.obj
-
-# target to build an object file
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_fmc.c.obj:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_fmc.c.obj
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_fmc.c.obj
-
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_fmc.i: Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_fmc.c.i
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_fmc.i
-
-# target to preprocess a source file
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_fmc.c.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_fmc.c.i
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_fmc.c.i
-
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_fmc.s: Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_fmc.c.s
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_fmc.s
-
-# target to generate assembly for a file
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_fmc.c.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_fmc.c.s
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_fmc.c.s
-
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_fwdgt.obj: Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_fwdgt.c.obj
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_fwdgt.obj
-
-# target to build an object file
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_fwdgt.c.obj:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_fwdgt.c.obj
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_fwdgt.c.obj
-
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_fwdgt.i: Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_fwdgt.c.i
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_fwdgt.i
-
-# target to preprocess a source file
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_fwdgt.c.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_fwdgt.c.i
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_fwdgt.c.i
-
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_fwdgt.s: Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_fwdgt.c.s
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_fwdgt.s
-
-# target to generate assembly for a file
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_fwdgt.c.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_fwdgt.c.s
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_fwdgt.c.s
-
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_gpio.obj: Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_gpio.c.obj
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_gpio.obj
-
-# target to build an object file
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_gpio.c.obj:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_gpio.c.obj
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_gpio.c.obj
-
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_gpio.i: Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_gpio.c.i
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_gpio.i
-
-# target to preprocess a source file
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_gpio.c.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_gpio.c.i
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_gpio.c.i
-
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_gpio.s: Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_gpio.c.s
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_gpio.s
-
-# target to generate assembly for a file
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_gpio.c.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_gpio.c.s
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_gpio.c.s
-
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_i2c.obj: Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_i2c.c.obj
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_i2c.obj
-
-# target to build an object file
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_i2c.c.obj:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_i2c.c.obj
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_i2c.c.obj
-
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_i2c.i: Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_i2c.c.i
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_i2c.i
-
-# target to preprocess a source file
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_i2c.c.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_i2c.c.i
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_i2c.c.i
-
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_i2c.s: Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_i2c.c.s
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_i2c.s
-
-# target to generate assembly for a file
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_i2c.c.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_i2c.c.s
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_i2c.c.s
-
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_ipa.obj: Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_ipa.c.obj
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_ipa.obj
-
-# target to build an object file
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_ipa.c.obj:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_ipa.c.obj
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_ipa.c.obj
-
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_ipa.i: Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_ipa.c.i
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_ipa.i
-
-# target to preprocess a source file
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_ipa.c.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_ipa.c.i
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_ipa.c.i
-
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_ipa.s: Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_ipa.c.s
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_ipa.s
-
-# target to generate assembly for a file
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_ipa.c.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_ipa.c.s
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_ipa.c.s
-
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_iref.obj: Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_iref.c.obj
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_iref.obj
-
-# target to build an object file
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_iref.c.obj:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_iref.c.obj
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_iref.c.obj
-
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_iref.i: Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_iref.c.i
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_iref.i
-
-# target to preprocess a source file
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_iref.c.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_iref.c.i
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_iref.c.i
-
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_iref.s: Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_iref.c.s
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_iref.s
-
-# target to generate assembly for a file
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_iref.c.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_iref.c.s
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_iref.c.s
-
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_misc.obj: Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_misc.c.obj
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_misc.obj
-
-# target to build an object file
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_misc.c.obj:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_misc.c.obj
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_misc.c.obj
-
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_misc.i: Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_misc.c.i
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_misc.i
-
-# target to preprocess a source file
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_misc.c.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_misc.c.i
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_misc.c.i
-
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_misc.s: Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_misc.c.s
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_misc.s
-
-# target to generate assembly for a file
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_misc.c.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_misc.c.s
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_misc.c.s
-
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_pmu.obj: Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_pmu.c.obj
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_pmu.obj
-
-# target to build an object file
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_pmu.c.obj:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_pmu.c.obj
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_pmu.c.obj
-
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_pmu.i: Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_pmu.c.i
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_pmu.i
-
-# target to preprocess a source file
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_pmu.c.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_pmu.c.i
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_pmu.c.i
-
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_pmu.s: Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_pmu.c.s
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_pmu.s
-
-# target to generate assembly for a file
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_pmu.c.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_pmu.c.s
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_pmu.c.s
-
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_rcu.obj: Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_rcu.c.obj
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_rcu.obj
-
-# target to build an object file
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_rcu.c.obj:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_rcu.c.obj
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_rcu.c.obj
-
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_rcu.i: Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_rcu.c.i
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_rcu.i
-
-# target to preprocess a source file
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_rcu.c.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_rcu.c.i
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_rcu.c.i
-
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_rcu.s: Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_rcu.c.s
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_rcu.s
-
-# target to generate assembly for a file
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_rcu.c.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_rcu.c.s
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_rcu.c.s
-
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_rtc.obj: Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_rtc.c.obj
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_rtc.obj
-
-# target to build an object file
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_rtc.c.obj:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_rtc.c.obj
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_rtc.c.obj
-
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_rtc.i: Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_rtc.c.i
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_rtc.i
-
-# target to preprocess a source file
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_rtc.c.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_rtc.c.i
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_rtc.c.i
-
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_rtc.s: Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_rtc.c.s
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_rtc.s
-
-# target to generate assembly for a file
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_rtc.c.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_rtc.c.s
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_rtc.c.s
-
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_sdio.obj: Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_sdio.c.obj
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_sdio.obj
-
-# target to build an object file
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_sdio.c.obj:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_sdio.c.obj
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_sdio.c.obj
-
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_sdio.i: Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_sdio.c.i
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_sdio.i
-
-# target to preprocess a source file
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_sdio.c.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_sdio.c.i
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_sdio.c.i
-
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_sdio.s: Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_sdio.c.s
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_sdio.s
-
-# target to generate assembly for a file
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_sdio.c.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_sdio.c.s
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_sdio.c.s
-
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_spi.obj: Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_spi.c.obj
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_spi.obj
-
-# target to build an object file
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_spi.c.obj:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_spi.c.obj
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_spi.c.obj
-
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_spi.i: Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_spi.c.i
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_spi.i
-
-# target to preprocess a source file
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_spi.c.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_spi.c.i
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_spi.c.i
-
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_spi.s: Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_spi.c.s
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_spi.s
-
-# target to generate assembly for a file
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_spi.c.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_spi.c.s
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_spi.c.s
-
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_syscfg.obj: Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_syscfg.c.obj
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_syscfg.obj
-
-# target to build an object file
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_syscfg.c.obj:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_syscfg.c.obj
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_syscfg.c.obj
-
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_syscfg.i: Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_syscfg.c.i
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_syscfg.i
-
-# target to preprocess a source file
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_syscfg.c.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_syscfg.c.i
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_syscfg.c.i
-
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_syscfg.s: Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_syscfg.c.s
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_syscfg.s
-
-# target to generate assembly for a file
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_syscfg.c.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_syscfg.c.s
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_syscfg.c.s
-
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_timer.obj: Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_timer.c.obj
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_timer.obj
-
-# target to build an object file
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_timer.c.obj:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_timer.c.obj
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_timer.c.obj
-
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_timer.i: Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_timer.c.i
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_timer.i
-
-# target to preprocess a source file
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_timer.c.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_timer.c.i
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_timer.c.i
-
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_timer.s: Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_timer.c.s
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_timer.s
-
-# target to generate assembly for a file
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_timer.c.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_timer.c.s
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_timer.c.s
-
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_tli.obj: Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_tli.c.obj
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_tli.obj
-
-# target to build an object file
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_tli.c.obj:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_tli.c.obj
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_tli.c.obj
-
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_tli.i: Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_tli.c.i
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_tli.i
-
-# target to preprocess a source file
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_tli.c.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_tli.c.i
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_tli.c.i
-
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_tli.s: Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_tli.c.s
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_tli.s
-
-# target to generate assembly for a file
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_tli.c.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_tli.c.s
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_tli.c.s
-
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_trng.obj: Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_trng.c.obj
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_trng.obj
-
-# target to build an object file
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_trng.c.obj:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_trng.c.obj
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_trng.c.obj
-
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_trng.i: Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_trng.c.i
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_trng.i
-
-# target to preprocess a source file
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_trng.c.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_trng.c.i
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_trng.c.i
-
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_trng.s: Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_trng.c.s
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_trng.s
-
-# target to generate assembly for a file
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_trng.c.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_trng.c.s
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_trng.c.s
-
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_usart.obj: Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_usart.c.obj
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_usart.obj
-
-# target to build an object file
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_usart.c.obj:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_usart.c.obj
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_usart.c.obj
-
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_usart.i: Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_usart.c.i
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_usart.i
-
-# target to preprocess a source file
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_usart.c.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_usart.c.i
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_usart.c.i
-
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_usart.s: Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_usart.c.s
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_usart.s
-
-# target to generate assembly for a file
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_usart.c.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_usart.c.s
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_usart.c.s
-
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_wwdgt.obj: Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_wwdgt.c.obj
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_wwdgt.obj
-
-# target to build an object file
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_wwdgt.c.obj:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_wwdgt.c.obj
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_wwdgt.c.obj
-
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_wwdgt.i: Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_wwdgt.c.i
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_wwdgt.i
-
-# target to preprocess a source file
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_wwdgt.c.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_wwdgt.c.i
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_wwdgt.c.i
-
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_wwdgt.s: Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_wwdgt.c.s
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_wwdgt.s
-
-# target to generate assembly for a file
-Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_wwdgt.c.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_wwdgt.c.s
-.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_wwdgt.c.s
-
-User/Drive/src/Air780EG.obj: User/Drive/src/Air780EG.c.obj
-.PHONY : User/Drive/src/Air780EG.obj
-
-# target to build an object file
-User/Drive/src/Air780EG.c.obj:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/User/Drive/src/Air780EG.c.obj
-.PHONY : User/Drive/src/Air780EG.c.obj
-
-User/Drive/src/Air780EG.i: User/Drive/src/Air780EG.c.i
-.PHONY : User/Drive/src/Air780EG.i
-
-# target to preprocess a source file
-User/Drive/src/Air780EG.c.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/User/Drive/src/Air780EG.c.i
-.PHONY : User/Drive/src/Air780EG.c.i
-
-User/Drive/src/Air780EG.s: User/Drive/src/Air780EG.c.s
-.PHONY : User/Drive/src/Air780EG.s
-
-# target to generate assembly for a file
-User/Drive/src/Air780EG.c.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/User/Drive/src/Air780EG.c.s
-.PHONY : User/Drive/src/Air780EG.c.s
-
-User/Drive/src/SdRam.obj: User/Drive/src/SdRam.c.obj
-.PHONY : User/Drive/src/SdRam.obj
-
-# target to build an object file
-User/Drive/src/SdRam.c.obj:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/User/Drive/src/SdRam.c.obj
-.PHONY : User/Drive/src/SdRam.c.obj
-
-User/Drive/src/SdRam.i: User/Drive/src/SdRam.c.i
-.PHONY : User/Drive/src/SdRam.i
-
-# target to preprocess a source file
-User/Drive/src/SdRam.c.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/User/Drive/src/SdRam.c.i
-.PHONY : User/Drive/src/SdRam.c.i
-
-User/Drive/src/SdRam.s: User/Drive/src/SdRam.c.s
-.PHONY : User/Drive/src/SdRam.s
-
-# target to generate assembly for a file
-User/Drive/src/SdRam.c.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/User/Drive/src/SdRam.c.s
-.PHONY : User/Drive/src/SdRam.c.s
-
-User/Drive/src/Usart.obj: User/Drive/src/Usart.c.obj
-.PHONY : User/Drive/src/Usart.obj
-
-# target to build an object file
-User/Drive/src/Usart.c.obj:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/User/Drive/src/Usart.c.obj
-.PHONY : User/Drive/src/Usart.c.obj
-
-User/Drive/src/Usart.i: User/Drive/src/Usart.c.i
-.PHONY : User/Drive/src/Usart.i
-
-# target to preprocess a source file
-User/Drive/src/Usart.c.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/User/Drive/src/Usart.c.i
-.PHONY : User/Drive/src/Usart.c.i
-
-User/Drive/src/Usart.s: User/Drive/src/Usart.c.s
-.PHONY : User/Drive/src/Usart.s
-
-# target to generate assembly for a file
-User/Drive/src/Usart.c.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/User/Drive/src/Usart.c.s
-.PHONY : User/Drive/src/Usart.c.s
-
-User/Drive/src/delay.obj: User/Drive/src/delay.c.obj
-.PHONY : User/Drive/src/delay.obj
-
-# target to build an object file
-User/Drive/src/delay.c.obj:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/User/Drive/src/delay.c.obj
-.PHONY : User/Drive/src/delay.c.obj
-
-User/Drive/src/delay.i: User/Drive/src/delay.c.i
-.PHONY : User/Drive/src/delay.i
-
-# target to preprocess a source file
-User/Drive/src/delay.c.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/User/Drive/src/delay.c.i
-.PHONY : User/Drive/src/delay.c.i
-
-User/Drive/src/delay.s: User/Drive/src/delay.c.s
-.PHONY : User/Drive/src/delay.s
-
-# target to generate assembly for a file
-User/Drive/src/delay.c.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/User/Drive/src/delay.c.s
-.PHONY : User/Drive/src/delay.c.s
-
-User/gd32f4xx_it.obj: User/gd32f4xx_it.c.obj
-.PHONY : User/gd32f4xx_it.obj
-
-# target to build an object file
-User/gd32f4xx_it.c.obj:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/User/gd32f4xx_it.c.obj
-.PHONY : User/gd32f4xx_it.c.obj
-
-User/gd32f4xx_it.i: User/gd32f4xx_it.c.i
-.PHONY : User/gd32f4xx_it.i
-
-# target to preprocess a source file
-User/gd32f4xx_it.c.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/User/gd32f4xx_it.c.i
-.PHONY : User/gd32f4xx_it.c.i
-
-User/gd32f4xx_it.s: User/gd32f4xx_it.c.s
-.PHONY : User/gd32f4xx_it.s
-
-# target to generate assembly for a file
-User/gd32f4xx_it.c.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/User/gd32f4xx_it.c.s
-.PHONY : User/gd32f4xx_it.c.s
+User/app/taskmanager.c.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/User/app/taskmanager.c.s
+.PHONY : User/app/taskmanager.c.s
 
 User/main.obj: User/main.c.obj
 .PHONY : User/main.obj
@@ -1216,6 +423,54 @@ User/main.s: User/main.c.s
 User/main.c.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/User/main.c.s
 .PHONY : User/main.c.s
+
+User/module/rtos/portrtos.obj: User/module/rtos/portrtos.c.obj
+.PHONY : User/module/rtos/portrtos.obj
+
+# target to build an object file
+User/module/rtos/portrtos.c.obj:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/User/module/rtos/portrtos.c.obj
+.PHONY : User/module/rtos/portrtos.c.obj
+
+User/module/rtos/portrtos.i: User/module/rtos/portrtos.c.i
+.PHONY : User/module/rtos/portrtos.i
+
+# target to preprocess a source file
+User/module/rtos/portrtos.c.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/User/module/rtos/portrtos.c.i
+.PHONY : User/module/rtos/portrtos.c.i
+
+User/module/rtos/portrtos.s: User/module/rtos/portrtos.c.s
+.PHONY : User/module/rtos/portrtos.s
+
+# target to generate assembly for a file
+User/module/rtos/portrtos.c.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/User/module/rtos/portrtos.c.s
+.PHONY : User/module/rtos/portrtos.c.s
+
+User/module/rtos/rtos.obj: User/module/rtos/rtos.c.obj
+.PHONY : User/module/rtos/rtos.obj
+
+# target to build an object file
+User/module/rtos/rtos.c.obj:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/User/module/rtos/rtos.c.obj
+.PHONY : User/module/rtos/rtos.c.obj
+
+User/module/rtos/rtos.i: User/module/rtos/rtos.c.i
+.PHONY : User/module/rtos/rtos.i
+
+# target to preprocess a source file
+User/module/rtos/rtos.c.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/User/module/rtos/rtos.c.i
+.PHONY : User/module/rtos/rtos.c.i
+
+User/module/rtos/rtos.s: User/module/rtos/rtos.c.s
+.PHONY : User/module/rtos/rtos.s
+
+# target to generate assembly for a file
+User/module/rtos/rtos.c.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/User/module/rtos/rtos.c.s
+.PHONY : User/module/rtos/rtos.c.s
 
 # Help Target
 help:
@@ -1242,9 +497,9 @@ help:
 	@echo ... Firmware/FreeRTOS/portable/GCC/ARM_CM4F/port.obj
 	@echo ... Firmware/FreeRTOS/portable/GCC/ARM_CM4F/port.i
 	@echo ... Firmware/FreeRTOS/portable/GCC/ARM_CM4F/port.s
-	@echo ... Firmware/FreeRTOS/portable/MemMang/heap_5.obj
-	@echo ... Firmware/FreeRTOS/portable/MemMang/heap_5.i
-	@echo ... Firmware/FreeRTOS/portable/MemMang/heap_5.s
+	@echo ... Firmware/FreeRTOS/portable/MemMang/heap_4.obj
+	@echo ... Firmware/FreeRTOS/portable/MemMang/heap_4.i
+	@echo ... Firmware/FreeRTOS/portable/MemMang/heap_4.s
 	@echo ... Firmware/FreeRTOS/queue.obj
 	@echo ... Firmware/FreeRTOS/queue.i
 	@echo ... Firmware/FreeRTOS/queue.s
@@ -1257,111 +512,18 @@ help:
 	@echo ... Firmware/FreeRTOS/timers.obj
 	@echo ... Firmware/FreeRTOS/timers.i
 	@echo ... Firmware/FreeRTOS/timers.s
-	@echo ... Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_adc.obj
-	@echo ... Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_adc.i
-	@echo ... Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_adc.s
-	@echo ... Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_can.obj
-	@echo ... Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_can.i
-	@echo ... Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_can.s
-	@echo ... Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_crc.obj
-	@echo ... Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_crc.i
-	@echo ... Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_crc.s
-	@echo ... Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_ctc.obj
-	@echo ... Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_ctc.i
-	@echo ... Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_ctc.s
-	@echo ... Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_dac.obj
-	@echo ... Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_dac.i
-	@echo ... Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_dac.s
-	@echo ... Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_dbg.obj
-	@echo ... Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_dbg.i
-	@echo ... Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_dbg.s
-	@echo ... Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_dci.obj
-	@echo ... Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_dci.i
-	@echo ... Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_dci.s
-	@echo ... Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_dma.obj
-	@echo ... Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_dma.i
-	@echo ... Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_dma.s
-	@echo ... Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_enet.obj
-	@echo ... Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_enet.i
-	@echo ... Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_enet.s
-	@echo ... Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_exmc.obj
-	@echo ... Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_exmc.i
-	@echo ... Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_exmc.s
-	@echo ... Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_exti.obj
-	@echo ... Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_exti.i
-	@echo ... Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_exti.s
-	@echo ... Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_fmc.obj
-	@echo ... Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_fmc.i
-	@echo ... Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_fmc.s
-	@echo ... Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_fwdgt.obj
-	@echo ... Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_fwdgt.i
-	@echo ... Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_fwdgt.s
-	@echo ... Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_gpio.obj
-	@echo ... Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_gpio.i
-	@echo ... Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_gpio.s
-	@echo ... Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_i2c.obj
-	@echo ... Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_i2c.i
-	@echo ... Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_i2c.s
-	@echo ... Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_ipa.obj
-	@echo ... Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_ipa.i
-	@echo ... Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_ipa.s
-	@echo ... Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_iref.obj
-	@echo ... Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_iref.i
-	@echo ... Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_iref.s
-	@echo ... Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_misc.obj
-	@echo ... Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_misc.i
-	@echo ... Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_misc.s
-	@echo ... Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_pmu.obj
-	@echo ... Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_pmu.i
-	@echo ... Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_pmu.s
-	@echo ... Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_rcu.obj
-	@echo ... Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_rcu.i
-	@echo ... Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_rcu.s
-	@echo ... Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_rtc.obj
-	@echo ... Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_rtc.i
-	@echo ... Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_rtc.s
-	@echo ... Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_sdio.obj
-	@echo ... Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_sdio.i
-	@echo ... Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_sdio.s
-	@echo ... Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_spi.obj
-	@echo ... Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_spi.i
-	@echo ... Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_spi.s
-	@echo ... Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_syscfg.obj
-	@echo ... Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_syscfg.i
-	@echo ... Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_syscfg.s
-	@echo ... Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_timer.obj
-	@echo ... Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_timer.i
-	@echo ... Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_timer.s
-	@echo ... Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_tli.obj
-	@echo ... Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_tli.i
-	@echo ... Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_tli.s
-	@echo ... Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_trng.obj
-	@echo ... Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_trng.i
-	@echo ... Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_trng.s
-	@echo ... Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_usart.obj
-	@echo ... Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_usart.i
-	@echo ... Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_usart.s
-	@echo ... Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_wwdgt.obj
-	@echo ... Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_wwdgt.i
-	@echo ... Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_wwdgt.s
-	@echo ... User/Drive/src/Air780EG.obj
-	@echo ... User/Drive/src/Air780EG.i
-	@echo ... User/Drive/src/Air780EG.s
-	@echo ... User/Drive/src/SdRam.obj
-	@echo ... User/Drive/src/SdRam.i
-	@echo ... User/Drive/src/SdRam.s
-	@echo ... User/Drive/src/Usart.obj
-	@echo ... User/Drive/src/Usart.i
-	@echo ... User/Drive/src/Usart.s
-	@echo ... User/Drive/src/delay.obj
-	@echo ... User/Drive/src/delay.i
-	@echo ... User/Drive/src/delay.s
-	@echo ... User/gd32f4xx_it.obj
-	@echo ... User/gd32f4xx_it.i
-	@echo ... User/gd32f4xx_it.s
+	@echo ... User/app/taskmanager.obj
+	@echo ... User/app/taskmanager.i
+	@echo ... User/app/taskmanager.s
 	@echo ... User/main.obj
 	@echo ... User/main.i
 	@echo ... User/main.s
+	@echo ... User/module/rtos/portrtos.obj
+	@echo ... User/module/rtos/portrtos.i
+	@echo ... User/module/rtos/portrtos.s
+	@echo ... User/module/rtos/rtos.obj
+	@echo ... User/module/rtos/rtos.i
+	@echo ... User/module/rtos/rtos.s
 .PHONY : help
 
 
@@ -1373,7 +535,6 @@ help:
 # No rule that depends on this can have commands that come from listfiles
 # because they might be regenerated.
 cmake_check_build_system:
-	$(CMAKE_COMMAND) -P D:\Space\Cosmos\ventcore\build\arm-gcc\CMakeFiles\VerifyGlobs.cmake
 	$(CMAKE_COMMAND) -S$(CMAKE_SOURCE_DIR) -B$(CMAKE_BINARY_DIR) --check-build-system CMakeFiles\Makefile.cmake 0
 .PHONY : cmake_check_build_system
 

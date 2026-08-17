@@ -39,6 +39,7 @@ target_include_directories(ventcore PRIVATE
     User/module/rtos
     Firmware/CMSIS
     Firmware/CMSIS/GD/GD32F4xx/Include
+    Firmware/GD32F4xx_standard_peripheral/Include
     Firmware/FreeRTOS/include
     Firmware/FreeRTOS/portable/GCC/ARM_CM4F)
 

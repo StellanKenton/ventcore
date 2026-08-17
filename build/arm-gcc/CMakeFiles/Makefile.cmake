@@ -27,8 +27,6 @@ set(CMAKE_MAKEFILE_DEPENDS
   "CMakeFiles/4.3.3/CMakeASMCompiler.cmake"
   "CMakeFiles/4.3.3/CMakeCCompiler.cmake"
   "CMakeFiles/4.3.3/CMakeSystem.cmake"
-  "CMakeFiles/VerifyGlobs.cmake"
-  "CMakeFiles/cmake.verify_globs"
   "D:/Space/Cosmos/ventcore/cmake/arm-none-eabi-gcc.cmake"
   )
 

@@ -54,6 +54,11 @@ dkms.conf
 *.dwo
 *.crf
 
+# Generated development files
+build/
+__pycache__/
+*.pyc
+
 
 *.html
 *.make

@@ -218,7 +218,7 @@ CMAKE_STRIP:FILEPATH=C:/Program Files (x86)/Arm/GNU Toolchain mingw-w64-i686-arm
 CMAKE_TAPI:FILEPATH=CMAKE_TAPI-NOTFOUND
 
 //No help, variable specified on the command line.
-CMAKE_TOOLCHAIN_FILE:FILEPATH=D:/Space/Cosmos/ventcore/cmake/arm-none-eabi-gcc.cmake
+CMAKE_TOOLCHAIN_FILE:UNINITIALIZED=D:/Space/Cosmos/ventcore/cmake/arm-none-eabi-gcc.cmake
 
 //If this value is on, makefiles will be generated without the
 // .SILENT directive, and all commands will be echoed to the console
