@@ -5,6 +5,7 @@
 | 子目录 | 说明 | 主文档 |
 | --- | --- | --- |
 | `aes` | AES 加解密工具 | `aes/aes.md` |
+| `filter` | 数字滤波工具集合 | `filter/filter.md` |
 | `md5` | MD5 摘要工具 | `md5/md5.md` |
 | `ringbuffer` | 字节环形缓冲区工具 | `ringbuffer/ringbuffer.md` |
 
