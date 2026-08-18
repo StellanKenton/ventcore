@@ -11,6 +11,7 @@
 
 #include <stddef.h>
 
+#include "blower_vcm.h"
 #include "log.h"
 #include "rtos.h"
 #include "sfm3119.h"
@@ -99,13 +100,22 @@ static void ventTask(void *argument)
 static void sensorTask(void *argument)
 {
     uint32_t lPreviousWakeMs;
+    uint32_t lNowMs;
 
     (void)argument;
     (void)sfm3119Init();
+    if (blowerVcmInit() != BLOWER_VCM_STATUS_OK) {
+        LOG_E(gTaskManagerTag, "blower VCM init failed");
+    } else {
+        LOG_I(gTaskManagerTag, "blower VCM ready");
+    }
     lPreviousWakeMs = repRtosGetTickMs();
 
     for (;;) {
+        lNowMs = repRtosGetTickMs();
+        (void)blowerVcmProcess(lNowMs);
         (void)sfm3119Process();
+        (void)blowerVcmProcess(repRtosGetTickMs());
         (void)repRtosTaskDelayUntilMs(&lPreviousWakeMs, SENSOR_TASK_INTERVAL_MS);
     }
 }

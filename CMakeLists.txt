@@ -29,6 +29,7 @@ add_executable(ventcore
     User/app/taskmanager.c
     User/bsp/bspdebug.c
     User/bsp/adc/adc.c
+    User/bsp/blower_vcm/blower_vcm.c
     User/bsp/dvalve/dvalve.c
     User/bsp/sf06sdk/sensirion_common.c
     User/bsp/sf06sdk/sensirion_i2c.c
@@ -52,6 +53,7 @@ add_executable(ventcore
     Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_i2c.c
     Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_rcu.c
     Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_timer.c
+    Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_usart.c
     ${FREERTOS_SOURCES})
 
 target_include_directories(ventcore PRIVATE
@@ -59,6 +61,7 @@ target_include_directories(ventcore PRIVATE
     User/app
     User/bsp
     User/bsp/adc
+    User/bsp/blower_vcm
     User/bsp/dvalve
     User/bsp/sf06sdk
     User/bsp/valve

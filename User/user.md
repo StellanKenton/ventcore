@@ -7,6 +7,7 @@
 | `main.c` | 初始化日志和控制台、注册 worker tasks 并启动调度器 |
 | `app/taskmanager.*` | 通过 `WorkerTasksRegister()` 创建 defaultTask、VentTask、SensorTask、HMITask、AlarmTask；全部任务使用绝对周期 `DelayUntil`，SensorTask 每 2 ms 读取两只 SFM3119 |
 | `bsp/adc/adc.*` | 使用 ADC1 规则组扫描、连续转换和 DMA1 循环模式持续采集 14 路板级模拟量 |
+| `bsp/blower_vcm/blower_vcm.*` | 使用 UART4（板级 VCM UART5，PC12/PD2）和 DMA0 循环接收实现风机控制帧发送、速度反馈解析、连接超时与通信统计；由 SensorTask 每 2 ms 处理字节流 |
 | `bsp/dvalve/dvalve.*` | 以枚举选择氧气阀、泄压阀或呼气阀，提供统一的 20 kHz、0～100% PWM 占空比控制接口 |
 | `bsp/sf06sdk/sfm3119.*` | 管理两只 SFM3119；空气通道使用 PB6/PB7 硬件 I2C0，氧气通道使用 PA12/PA11 模拟 I2C，并缓存原始量、工程量、状态、产品 ID 与序列号 |
 | `bsp/valve/valve.*` | 初始化 4 路零点阀控制输出和状态反馈输入，并提供按阀门枚举访问的接口 |
@@ -18,3 +19,5 @@
 | `FreeRTOSConfig.h` | FreeRTOS 工程配置 |
 
 项目代码只能通过 `rtos.h` 使用任务、调度、tick 和临界区能力；FreeRTOS 原生 API 仅允许出现在 `portrtos.c`。日志统一使用 `LOG_I`、`LOG_W`、`LOG_E` 等宏，不能直接使用标准库输出函数。
+
+当前 GD32F470 板载 HXTAL 为 8 MHz，系统使用 `240M_PLL_8M_HXTAL` 配置；该配置决定 RTOS tick 和 APB 外设（包括 VCM UART 230400）的实际时基。
