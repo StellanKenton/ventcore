@@ -26,7 +26,7 @@ set(FREERTOS_SOURCES
 
 add_executable(ventcore
     User/main.c
-    User/app/taskmanager.c
+    User/app/system/taskmanager.c
     User/bsp/bspdebug.c
     User/bsp/adc/adc.c
     User/bsp/blower_vcm/blower_vcm.c
@@ -58,7 +58,7 @@ add_executable(ventcore
 
 target_include_directories(ventcore PRIVATE
     User
-    User/app
+    User/app/system
     User/bsp
     User/bsp/adc
     User/bsp/blower_vcm

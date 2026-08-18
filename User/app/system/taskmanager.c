@@ -21,13 +21,13 @@ static bool gWorkerTasksCreated = false;
 static repRtosTaskHandle gDefaultTaskHandle = NULL;
 static repRtosTaskHandle gVentTaskHandle = NULL;
 static repRtosTaskHandle gSensorTaskHandle = NULL;
-static repRtosTaskHandle gHmiTaskHandle = NULL;
+static repRtosTaskHandle gSysTaskHandle = NULL;
 static repRtosTaskHandle gAlarmTaskHandle = NULL;
 
 static void defaultTask(void *argument);
 static void ventTask(void *argument);
 static void sensorTask(void *argument);
-static void hmiTask(void *argument);
+static void sysTask(void *argument);
 static void alarmTask(void *argument);
 static int8_t taskManagerCreateTask(const stRepRtosTaskConfig *config);
 
@@ -57,12 +57,12 @@ static const stRepRtosTaskConfig gWorkerTaskConfigs[] = {
         .handle = &gSensorTaskHandle,
     },
     {
-        .name = "HMITask",
-        .entry = hmiTask,
+        .name = "SysTask",
+        .entry = sysTask,
         .argument = NULL,
-        .stackSize = HMI_TASK_STACK_SIZE,
-        .priority = HMI_TASK_PRIORITY,
-        .handle = &gHmiTaskHandle,
+        .stackSize = SYS_TASK_STACK_SIZE,
+        .priority = SYS_TASK_PRIORITY,
+        .handle = &gSysTaskHandle,
     },
     {
         .name = "AlarmTask",
@@ -120,14 +120,14 @@ static void sensorTask(void *argument)
     }
 }
 
-static void hmiTask(void *argument)
+static void sysTask(void *argument)
 {
     uint32_t lPreviousWakeMs = repRtosGetTickMs();
 
     (void)argument;
 
     for (;;) {
-        (void)repRtosTaskDelayUntilMs(&lPreviousWakeMs, HMI_TASK_INTERVAL_MS);
+        (void)repRtosTaskDelayUntilMs(&lPreviousWakeMs, SYS_TASK_INTERVAL_MS);
     }
 }
 

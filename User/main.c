@@ -20,11 +20,7 @@ int main(void)
 {
     int8_t lSchedulerStatus;
 
-    if (!logInit()) {
-        for (;;) {
-        }
-    }
-
+    logInit();
 #if LOG_CONSOLE_ENABLE
     if (!sysdebugConsoleRegister()) {
         LOG_W("main", "sysdebug console registration failed");
@@ -45,15 +41,11 @@ int main(void)
     /* Register project tasks before handing control to the scheduler. */
     if (!WorkerTasksRegister()) {
         LOG_T("main", "worker task registration failed");
-        for (;;) {
-        }
     }
 
     lSchedulerStatus = repRtosSchedulerStart();
     if (lSchedulerStatus != REP_RTOS_STATUS_OK) {
         LOG_T("main", "scheduler start failed: %d", (int)lSchedulerStatus);
-        for (;;) {
-        }
     }
 
     /* A running scheduler never returns to the application entry point. */

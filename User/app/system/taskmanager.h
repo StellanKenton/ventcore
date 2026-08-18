@@ -17,23 +17,23 @@ extern "C" {
 #endif
 
 #define DEFAULT_TASK_STACK_SIZE          1024U
-#define DEFAULT_TASK_PRIORITY            1U
+#define DEFAULT_TASK_PRIORITY            2U
 #define DEFAULT_TASK_INTERVAL_MS         10U
 
 #define VENT_TASK_STACK_SIZE             512U
-#define VENT_TASK_PRIORITY               3U
-#define VENT_TASK_INTERVAL_MS            10U
+#define VENT_TASK_PRIORITY               10U
+#define VENT_TASK_INTERVAL_MS            5U
 
 #define SENSOR_TASK_STACK_SIZE           512U
-#define SENSOR_TASK_PRIORITY             2U
+#define SENSOR_TASK_PRIORITY             20U
 #define SENSOR_TASK_INTERVAL_MS          2U
 
-#define HMI_TASK_STACK_SIZE              256U
-#define HMI_TASK_PRIORITY                2U
-#define HMI_TASK_INTERVAL_MS             20U
+#define SYS_TASK_STACK_SIZE              256U
+#define SYS_TASK_PRIORITY                2U
+#define SYS_TASK_INTERVAL_MS             50U
 
 #define ALARM_TASK_STACK_SIZE            512U
-#define ALARM_TASK_PRIORITY              3U
+#define ALARM_TASK_PRIORITY              15U
 #define ALARM_TASK_INTERVAL_MS           10U
 
 bool WorkerTasksRegister(void);
