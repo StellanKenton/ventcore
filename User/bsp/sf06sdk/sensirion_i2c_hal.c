@@ -144,7 +144,8 @@ static int8_t sensirionI2cSoftRead(uint8_t address, uint8_t* data, uint8_t count
 }
 
 static int8_t sensirionI2cHardwareWaitSet(i2c_flag_enum flag) {
-    uint32_t lTimeout = SENSIRION_I2C_HAL_TIMEOUT_LOOPS;
+    uint32_t lStart = DWT->CYCCNT;
+    uint32_t lTimeoutCycles = (SystemCoreClock / 1000000U) * SENSIRION_I2C_HAL_TIMEOUT_US;
 
     while (i2c_flag_get(I2C0, flag) == RESET) {
         if (i2c_flag_get(I2C0, I2C_FLAG_AERR) != RESET) {
@@ -155,7 +156,7 @@ static int8_t sensirionI2cHardwareWaitSet(i2c_flag_enum flag) {
             i2c_flag_clear(I2C0, I2C_FLAG_BERR);
             return SENSIRION_I2C_HAL_ERROR_BUS;
         }
-        if (lTimeout-- == 0U) {
+        if ((uint32_t)(DWT->CYCCNT - lStart) >= lTimeoutCycles) {
             return SENSIRION_I2C_HAL_ERROR_TIMEOUT;
         }
     }
@@ -163,10 +164,11 @@ static int8_t sensirionI2cHardwareWaitSet(i2c_flag_enum flag) {
 }
 
 static int8_t sensirionI2cHardwareWaitIdle(void) {
-    uint32_t lTimeout = SENSIRION_I2C_HAL_TIMEOUT_LOOPS;
+    uint32_t lStart = DWT->CYCCNT;
+    uint32_t lTimeoutCycles = (SystemCoreClock / 1000000U) * SENSIRION_I2C_HAL_TIMEOUT_US;
 
     while (i2c_flag_get(I2C0, I2C_FLAG_I2CBSY) != RESET) {
-        if (lTimeout-- == 0U) {
+        if ((uint32_t)(DWT->CYCCNT - lStart) >= lTimeoutCycles) {
             return SENSIRION_I2C_HAL_ERROR_TIMEOUT;
         }
     }
@@ -282,7 +284,7 @@ void sensirion_i2c_hal_init(void) {
     gpio_mode_set(GPIOB, GPIO_MODE_AF, GPIO_PUPD_PULLUP, GPIO_PIN_6 | GPIO_PIN_7);
     gpio_output_options_set(GPIOB, GPIO_OTYPE_OD, GPIO_OSPEED_50MHZ, GPIO_PIN_6 | GPIO_PIN_7);
     i2c_deinit(I2C0);
-    i2c_clock_config(I2C0, 400000U, I2C_DTCY_2);
+    i2c_clock_config(I2C0, 100000U, I2C_DTCY_2);
     i2c_mode_addr_config(I2C0, I2C_I2CMODE_ENABLE, I2C_ADDFORMAT_7BITS, 0U);
     i2c_enable(I2C0);
     i2c_ack_config(I2C0, I2C_ACK_ENABLE);

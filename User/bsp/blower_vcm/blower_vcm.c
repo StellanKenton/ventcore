@@ -1,7 +1,7 @@
 /************************************************************************************
 * @file     : blower_vcm.c
 * @brief    : VCM blower UART communication BSP.
-* @details  : Implements circular DMA reception, stream parsing, and interrupt TX.
+* @details  : Implements circular DMA reception, stream parsing, and reliable control TX.
 * @author   :
 * @date     :
 * @version  :
@@ -20,13 +20,10 @@
 
 static uint8_t gBlowerVcmRxDmaBuffer[BLOWER_VCM_RX_DMA_SIZE];
 static uint8_t gBlowerVcmRxFifo[BLOWER_VCM_RX_FIFO_SIZE];
-static uint8_t gBlowerVcmTxBuffer[BLOWER_VCM_MAX_FRAME_LENGTH];
 static uint8_t gBlowerVcmParseBuffer[BLOWER_VCM_MAX_FRAME_LENGTH];
 static volatile uint16_t gBlowerVcmRxWrite = 0U;
 static volatile uint16_t gBlowerVcmRxRead = 0U;
 static volatile uint16_t gBlowerVcmDmaReadPos = 0U;
-static volatile uint8_t gBlowerVcmTxLength = 0U;
-static volatile uint8_t gBlowerVcmTxIndex = 0U;
 static volatile bool gBlowerVcmTxBusy = false;
 static volatile bool gBlowerVcmInitialized = false;
 static volatile bool gBlowerVcmRxOverflow = false;
@@ -348,6 +345,38 @@ static void blowerVcmUartInit(void)
     usart_dma_receive_config(UART4, USART_RECEIVE_DMA_ENABLE);
 }
 
+static int8_t blowerVcmWaitFlag(usart_flag_enum flag)
+{
+    uint32_t lTimeout = BLOWER_VCM_TX_WAIT_LOOPS;
+
+    while (usart_flag_get(UART4, flag) == RESET) {
+        if (lTimeout-- == 0U) {
+            return BLOWER_VCM_ERROR_TIMEOUT;
+        }
+    }
+    return BLOWER_VCM_STATUS_OK;
+}
+
+static int8_t blowerVcmFrameTransmit(const uint8_t *frame, uint8_t length)
+{
+    uint8_t lFrameIndex;
+    uint8_t lRepeatIndex;
+
+    for (lRepeatIndex = 0U; lRepeatIndex < BLOWER_VCM_CONTROL_FRAME_COUNT; lRepeatIndex++) {
+        for (lFrameIndex = 0U; lFrameIndex < length; lFrameIndex++) {
+            if (blowerVcmWaitFlag(USART_FLAG_TBE) != BLOWER_VCM_STATUS_OK) {
+                return BLOWER_VCM_ERROR_TIMEOUT;
+            }
+            usart_data_transmit(UART4, frame[lFrameIndex]);
+        }
+        if (blowerVcmWaitFlag(USART_FLAG_TC) != BLOWER_VCM_STATUS_OK) {
+            return BLOWER_VCM_ERROR_TIMEOUT;
+        }
+        gBlowerVcmStats.txFrameCount++;
+    }
+    return BLOWER_VCM_STATUS_OK;
+}
+
 int8_t blowerVcmInit(void)
 {
     if (gBlowerVcmInitialized) {
@@ -356,14 +385,11 @@ int8_t blowerVcmInit(void)
 
     blowerVcmMemoryClear(gBlowerVcmRxDmaBuffer, BLOWER_VCM_RX_DMA_SIZE);
     blowerVcmMemoryClear(gBlowerVcmRxFifo, BLOWER_VCM_RX_FIFO_SIZE);
-    blowerVcmMemoryClear(gBlowerVcmTxBuffer, BLOWER_VCM_MAX_FRAME_LENGTH);
     blowerVcmMemoryClear(gBlowerVcmParseBuffer, BLOWER_VCM_MAX_FRAME_LENGTH);
     blowerVcmStatsClear();
     gBlowerVcmRxWrite = 0U;
     gBlowerVcmRxRead = 0U;
     gBlowerVcmDmaReadPos = 0U;
-    gBlowerVcmTxLength = 0U;
-    gBlowerVcmTxIndex = 0U;
     gBlowerVcmTxBusy = false;
     gBlowerVcmRxOverflow = false;
     gBlowerVcmDmaCollecting = false;
@@ -456,9 +482,9 @@ int8_t blowerVcmSendControl(eBlowerVcmControlMode mode, uint16_t targetValue, ui
 {
     uint8_t lFrame[BLOWER_VCM_CONTROL_DATA_LENGTH + BLOWER_VCM_FRAME_OVERHEAD];
     uint16_t lCrc;
-    uint8_t lIndex;
+    int8_t lStatus;
 
-    if (((uint32_t)mode > (uint32_t)BLOWER_VCM_CONTROL_MODE_4) ||
+    if (((uint32_t)mode >= (uint32_t)BLOWER_CTRL_MAX) ||
         (vcmSaturation > BLOWER_VCM_SATURATION_MAX)) {
         return BLOWER_VCM_ERROR_INVALID_PARAM;
     }
@@ -484,17 +510,13 @@ int8_t blowerVcmSendControl(eBlowerVcmControlMode mode, uint16_t targetValue, ui
         repRtosExitCritical();
         return BLOWER_VCM_ERROR_BUSY;
     }
-    for (lIndex = 0U; lIndex < (uint8_t)sizeof(lFrame); lIndex++) {
-        gBlowerVcmTxBuffer[lIndex] = lFrame[lIndex];
-    }
-    gBlowerVcmTxLength = (uint8_t)sizeof(lFrame);
-    gBlowerVcmTxIndex = 1U;
     gBlowerVcmTxBusy = true;
-    usart_flag_clear(UART4, USART_FLAG_TC);
-    usart_data_transmit(UART4, gBlowerVcmTxBuffer[0]);
-    usart_interrupt_enable(UART4, USART_INT_TBE);
     repRtosExitCritical();
-    return BLOWER_VCM_STATUS_OK;
+    lStatus = blowerVcmFrameTransmit(lFrame, (uint8_t)sizeof(lFrame));
+    repRtosEnterCritical();
+    gBlowerVcmTxBusy = false;
+    repRtosExitCritical();
+    return lStatus;
 }
 
 bool blowerVcmIsConnected(uint32_t nowMs)
@@ -547,21 +569,6 @@ void UART4_IRQHandler(void)
         lDiscard = USART_STAT0(UART4);
         lDiscard = USART_DATA(UART4);
         (void)lDiscard;
-    }
-    if (usart_interrupt_flag_get(UART4, USART_INT_FLAG_TBE) == SET) {
-        if (gBlowerVcmTxIndex < gBlowerVcmTxLength) {
-            usart_data_transmit(UART4, gBlowerVcmTxBuffer[gBlowerVcmTxIndex]);
-            gBlowerVcmTxIndex++;
-        } else {
-            usart_interrupt_disable(UART4, USART_INT_TBE);
-            usart_interrupt_enable(UART4, USART_INT_TC);
-        }
-    }
-    if (usart_interrupt_flag_get(UART4, USART_INT_FLAG_TC) == SET) {
-        usart_interrupt_disable(UART4, USART_INT_TC);
-        usart_interrupt_flag_clear(UART4, USART_INT_FLAG_TC);
-        gBlowerVcmTxBusy = false;
-        gBlowerVcmStats.txFrameCount++;
     }
 }
 

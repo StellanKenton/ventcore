@@ -24,6 +24,7 @@ extern "C" {
 #define SFM3119_O2_ADDR                   0x29U
 #define SFM3119_TEMPERATURE_SCALE         200.0f
 #define SFM3119_PROCESS_LOG_CYCLES        500U
+#define SFM3119_INIT_RETRY_DELAY_US        2000U
 
 typedef enum eSfm3119SensorIndex {
     SFM3119_AIR_INDEX = 0,

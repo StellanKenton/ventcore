@@ -1,7 +1,7 @@
 /************************************************************************************
 * @file     : bspdebug.h
 * @brief    : BSP debug console commands.
-* @details  : Declares the BSP ADC and valve debug command registration entry.
+* @details  : Declares the BSP peripheral debug command registration entry.
 * @author   :
 * @date     :
 * @version  :
@@ -11,6 +11,11 @@
 #define USER_BSP_BSPDEBUG_H
 
 #include <stdbool.h>
+
+#define BSP_DEBUG_BLOWER_SPEED_MAX_RPS       1000U
+#define BSP_DEBUG_BLOWER_SPEED_SCALE         10U
+#define BSP_DEBUG_BLOWER_PWM_MAX_PERCENT     100U
+#define BSP_DEBUG_BLOWER_PWM_SCALE           100U
 
 #ifdef __cplusplus
 extern "C" {

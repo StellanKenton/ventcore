@@ -1,7 +1,7 @@
 /************************************************************************************
 * @file     : blower_vcm.h
 * @brief    : VCM blower UART communication BSP.
-* @details  : Declares protocol, feedback, diagnostics, and interrupt entry points.
+* @details  : Declares protocol, reliable control TX, feedback, and diagnostics.
 * @author   :
 * @date     :
 * @version  :
@@ -22,6 +22,7 @@ extern "C" {
 #define BLOWER_VCM_ERROR_NOT_READY              ((int8_t)-2)
 #define BLOWER_VCM_ERROR_BUSY                   ((int8_t)-3)
 #define BLOWER_VCM_ERROR_SELF_TEST              ((int8_t)-4)
+#define BLOWER_VCM_ERROR_TIMEOUT                ((int8_t)-5)
 
 #define BLOWER_VCM_FRAME_HEADER                 0xAAU
 #define BLOWER_VCM_FRAME_TAIL                   0x55U
@@ -39,6 +40,8 @@ extern "C" {
 #define BLOWER_VCM_FEEDBACK_TIMEOUT_MS          1000U
 #define BLOWER_VCM_BAUDRATE                     230400U
 #define BLOWER_VCM_SATURATION_MAX               1U
+#define BLOWER_VCM_CONTROL_FRAME_COUNT           2U
+#define BLOWER_VCM_TX_WAIT_LOOPS                 240000U
 
 #define BLOWER_VCM_PARSE_WAIT_HEADER            0U
 #define BLOWER_VCM_PARSE_COMMAND                1U
@@ -108,7 +111,7 @@ int8_t blowerVcmProcess(uint32_t nowMs);
  * @param targetScaled Target already converted to the protocol scale.
  * @param vcmSaturation VCM saturation flag, either 0 or 1.
  * @return BLOWER_VCM_STATUS_OK, or a negative error code.
- * @note Call from task context. The encoded frame is copied into private storage.
+ * @note Call from task context. Two frames are sent synchronously in less than 1 ms.
  */
 int8_t blowerVcmSendControl(eBlowerVcmControlMode mode, uint16_t targetValue, uint8_t vcmSaturation);
 

@@ -84,12 +84,12 @@ clean: CMakeFiles/ventcore.dir/clean
 CMakeFiles/ventcore.dir/all:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/depend
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/build
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=D:\Space\Cosmos\ventcore\build\arm-gcc\CMakeFiles --progress-num=1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37 "Built target ventcore"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=D:\Space\Cosmos\ventcore\build\arm-gcc\CMakeFiles --progress-num=1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39 "Built target ventcore"
 .PHONY : CMakeFiles/ventcore.dir/all
 
 # Build rule for subdir invocation for target.
 CMakeFiles/ventcore.dir/rule: cmake_check_build_system
-	$(CMAKE_COMMAND) -E cmake_progress_start D:\Space\Cosmos\ventcore\build\arm-gcc\CMakeFiles 37
+	$(CMAKE_COMMAND) -E cmake_progress_start D:\Space\Cosmos\ventcore\build\arm-gcc\CMakeFiles 39
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\Makefile2 CMakeFiles/ventcore.dir/all
 	$(CMAKE_COMMAND) -E cmake_progress_start D:\Space\Cosmos\ventcore\build\arm-gcc\CMakeFiles 0
 .PHONY : CMakeFiles/ventcore.dir/rule
@@ -101,7 +101,7 @@ ventcore: CMakeFiles/ventcore.dir/rule
 # codegen rule for target.
 CMakeFiles/ventcore.dir/codegen:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/codegen
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=D:\Space\Cosmos\ventcore\build\arm-gcc\CMakeFiles --progress-num=1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37 "Finished codegen for target ventcore"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=D:\Space\Cosmos\ventcore\build\arm-gcc\CMakeFiles --progress-num=1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39 "Finished codegen for target ventcore"
 .PHONY : CMakeFiles/ventcore.dir/codegen
 
 # clean rule for target.

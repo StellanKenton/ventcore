@@ -13,6 +13,7 @@
 #include <stdint.h>
 
 #include "adc.h"
+#include "blower_vcm.h"
 #include "console.h"
 #include "dvalve.h"
 #include "log.h"
@@ -131,13 +132,14 @@ static int32_t bspDebugNameFind(const char *token, uint32_t length, const char *
 }
 
 /**
- * @brief Parse a PWM duty percentage.
+ * @brief Parse an unsigned decimal value with an inclusive upper bound.
  * @param token Token start address.
  * @param length Token length.
- * @param duty Parsed percentage.
- * @return true for a decimal value from 0 through 100.
+ * @param maximum Largest accepted value.
+ * @param value Parsed value.
+ * @return true when the complete token is a decimal value within the bound.
  */
-static bool bspDebugDutyParse(const char *token, uint32_t length, uint8_t *duty)
+static bool bspDebugUint16Parse(const char *token, uint32_t length, uint16_t maximum, uint16_t *value)
 {
     uint32_t lIndex;
     uint32_t lValue = 0U;
@@ -150,12 +152,12 @@ static bool bspDebugDutyParse(const char *token, uint32_t length, uint8_t *duty)
             return false;
         }
         lValue = (lValue * 10U) + (uint32_t)(token[lIndex] - '0');
-        if (lValue > DVALVE_DUTY_MAX_PERCENT) {
+        if (lValue > maximum) {
             return false;
         }
     }
 
-    *duty = (uint8_t)lValue;
+    *value = (uint16_t)lValue;
     return true;
 }
 
@@ -167,6 +169,7 @@ static void bspDebugUsageShow(void)
     LOG_I(gBspDebugTag, "adc: bsp a|adc <sfcur|flow|hw|3v3|temp|24v|peepcur|insp|5v|peep|exp|mdiff|o2cur|26v>");
     LOG_I(gBspDebugTag, "valve: bsp v|valve <insp|exp|diff|flush> [0|1]");
     LOG_I(gBspDebugTag, "dvalve: bsp d|dv|dvalve <o2|relief|exp> <0-100>");
+    LOG_I(gBspDebugTag, "blower: bsp blower <speed 0-1000|pwm 0-100>");
 }
 
 /**
@@ -253,7 +256,7 @@ static eConsoleCommandResult bspDebugDvalveCommand(const char *arguments)
     const char *lToken;
     uint32_t lLength;
     int32_t lIndex;
-    uint8_t lDuty;
+    uint16_t lDuty;
     int8_t lStatus;
 
     if (!bspDebugTokenRead(&arguments, &lToken, &lLength)) {
@@ -262,18 +265,64 @@ static eConsoleCommandResult bspDebugDvalveCommand(const char *arguments)
     }
     lIndex = bspDebugNameFind(lToken, lLength, gBspDebugDvalveNames, (uint32_t)DVALVE_COUNT);
     if ((lIndex < 0) || !bspDebugTokenRead(&arguments, &lToken, &lLength) ||
-        !bspDebugDutyParse(lToken, lLength, &lDuty) ||
+        !bspDebugUint16Parse(lToken, lLength, DVALVE_DUTY_MAX_PERCENT, &lDuty) ||
         bspDebugTokenRead(&arguments, &lToken, &lLength)) {
         bspDebugUsageShow();
         return CONSOLE_COMMAND_RESULT_INVALID_ARGUMENT;
     }
 
-    lStatus = dvalveDutySet((eDvalveIndex)lIndex, lDuty);
+    lStatus = dvalveDutySet((eDvalveIndex)lIndex, (uint8_t)lDuty);
     if (lStatus != DVALVE_STATUS_OK) {
         LOG_E(gBspDebugTag, "dvalve %s set failed: %d", gBspDebugDvalveNames[lIndex], (int)lStatus);
         return CONSOLE_COMMAND_RESULT_ERROR;
     }
     LOG_I(gBspDebugTag, "dvalve %s %u%%", gBspDebugDvalveNames[lIndex], (unsigned int)lDuty);
+    return CONSOLE_COMMAND_RESULT_OK;
+}
+
+/**
+ * @brief Handle a VCM blower speed or PWM control request.
+ * @param arguments Arguments following the blower subcommand.
+ * @return Console command result.
+ */
+static eConsoleCommandResult bspDebugBlowerCommand(const char *arguments)
+{
+    const char *lModeToken;
+    const char *lValueToken;
+    uint32_t lModeLength;
+    uint32_t lValueLength;
+    uint16_t lValue;
+    uint16_t lTarget;
+    eBlowerVcmControlMode lMode;
+    int8_t lStatus;
+
+    if (!bspDebugTokenRead(&arguments, &lModeToken, &lModeLength) ||
+        !bspDebugTokenRead(&arguments, &lValueToken, &lValueLength) ||
+        bspDebugTokenRead(&arguments, &lValueToken, &lValueLength)) {
+        bspDebugUsageShow();
+        return CONSOLE_COMMAND_RESULT_INVALID_ARGUMENT;
+    }
+
+    if (bspDebugTokenEqual(lModeToken, lModeLength, "speed") &&
+        bspDebugUint16Parse(lValueToken, lValueLength, BSP_DEBUG_BLOWER_SPEED_MAX_RPS, &lValue)) {
+        lMode = BLOWER_CTRL_SPEED;
+        lTarget = (uint16_t)(lValue * BSP_DEBUG_BLOWER_SPEED_SCALE);
+    } else if (bspDebugTokenEqual(lModeToken, lModeLength, "pwm") &&
+               bspDebugUint16Parse(lValueToken, lValueLength, BSP_DEBUG_BLOWER_PWM_MAX_PERCENT, &lValue)) {
+        lMode = BLOWER_CTRL_PWM;
+        lTarget = (uint16_t)(lValue * BSP_DEBUG_BLOWER_PWM_SCALE);
+    } else {
+        bspDebugUsageShow();
+        return CONSOLE_COMMAND_RESULT_INVALID_ARGUMENT;
+    }
+
+    lStatus = blowerVcmSendControl(lMode, lTarget, 0U);
+    if (lStatus != BLOWER_VCM_STATUS_OK) {
+        LOG_E(gBspDebugTag, "blower control failed: %d", (int)lStatus);
+        return CONSOLE_COMMAND_RESULT_ERROR;
+    }
+    LOG_I(gBspDebugTag, "blower %s %u", (lMode == BLOWER_CTRL_SPEED) ? "speed" : "pwm",
+          (unsigned int)lValue);
     return CONSOLE_COMMAND_RESULT_OK;
 }
 
@@ -301,6 +350,9 @@ static eConsoleCommandResult bspDebugConsoleCommand(const char *arguments)
         bspDebugTokenEqual(lToken, lLength, "dvalve")) {
         return bspDebugDvalveCommand(arguments);
     }
+    if (bspDebugTokenEqual(lToken, lLength, "blower")) {
+        return bspDebugBlowerCommand(arguments);
+    }
 
     bspDebugUsageShow();
     return CONSOLE_COMMAND_RESULT_INVALID_ARGUMENT;
@@ -308,7 +360,7 @@ static eConsoleCommandResult bspDebugConsoleCommand(const char *arguments)
 
 static const stConsoleCommand gBspDebugConsoleCommand = {
     "bsp",
-    "BSP debug: adc values and valve states",
+    "BSP debug: adc, valves, and blower control",
     bspDebugConsoleCommand
 };
 

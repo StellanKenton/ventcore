@@ -104,7 +104,15 @@ int8_t sfm3119Init(void) {
     gSfm3119LastError[SFM3119_AIR_INDEX] = 0;
     gSfm3119LastError[SFM3119_O2_INDEX] = 0;
     lAirStatus = sfm3119InitSensor(SFM3119_AIR_INDEX);
+    if (lAirStatus != SFM3119_STATUS_OK) {
+        sensirion_i2c_hal_sleep_usec(SFM3119_INIT_RETRY_DELAY_US);
+        lAirStatus = sfm3119InitSensor(SFM3119_AIR_INDEX);
+    }
     lO2Status = sfm3119InitSensor(SFM3119_O2_INDEX);
+    if (lO2Status != SFM3119_STATUS_OK) {
+        sensirion_i2c_hal_sleep_usec(SFM3119_INIT_RETRY_DELAY_US);
+        lO2Status = sfm3119InitSensor(SFM3119_O2_INDEX);
+    }
     if (lAirStatus != SFM3119_STATUS_OK) {
         gSfm3119Status = lAirStatus;
     } else {
@@ -180,12 +188,6 @@ int8_t sfm3119ReadAll(void) {
 }
 
 int8_t sfm3119Process(void) {
-    const SFM3119_Result *lAirResult;
-    const SFM3119_Result *lO2Result;
-    int32_t lAirFlowMilliSlm;
-    int32_t lAirTemperatureMilliDegC;
-    int32_t lO2FlowMilliSlm;
-    int32_t lO2TemperatureMilliDegC;
     uint32_t lReadCycles;
     uint32_t lReadUs;
     uint32_t lMaxReadUs;
@@ -205,28 +207,12 @@ int8_t sfm3119Process(void) {
                   (int)sfm3119GetLastError(SFM3119_AIR_INDEX),
                   (int)sfm3119GetLastError(SFM3119_O2_INDEX));
         } else if ((gSfm3119ProcessCycle % SFM3119_PROCESS_LOG_CYCLES) == 0U) {
-            lAirResult = sfm3119GetResult(SFM3119_AIR_INDEX);
-            lO2Result = sfm3119GetResult(SFM3119_O2_INDEX);
-            lAirFlowMilliSlm = (int32_t)(lAirResult->flow_slm * 1000.0f);
-            lAirTemperatureMilliDegC = (int32_t)(lAirResult->temperature_degC * 1000.0f);
-            lO2FlowMilliSlm = (int32_t)(lO2Result->flow_slm * 1000.0f);
-            lO2TemperatureMilliDegC = (int32_t)(lO2Result->temperature_degC * 1000.0f);
             lReadUs = lReadCycles / (SystemCoreClock / 1000000U);
             lMaxReadUs = gSfm3119MaxReadCycles / (SystemCoreClock / 1000000U);
             lMaxProcessUs = gSfm3119MaxProcessCycles / (SystemCoreClock / 1000000U);
-            // LOG_I(gSfm3119Tag,
-            //       "air raw=%d temp_raw=%d status=0x%04X flow_mSlm=%ld temp_mdegC=%ld",
-            //       (int)lAirResult->flow_raw, (int)lAirResult->temperature_raw,
-            //       (unsigned int)lAirResult->status, (long)lAirFlowMilliSlm,
-            //       (long)lAirTemperatureMilliDegC);
-            // LOG_I(gSfm3119Tag,
-            //       "o2 raw=%d temp_raw=%d status=0x%04X flow_mSlm=%ld temp_mdegC=%ld",
-            //       (int)lO2Result->flow_raw, (int)lO2Result->temperature_raw,
-            //       (unsigned int)lO2Result->status, (long)lO2FlowMilliSlm,
-            //       (long)lO2TemperatureMilliDegC);
-            // LOG_I(gSfm3119Tag, "timing read_us=%lu max_read_us=%lu max_process_us=%lu",
-            //       (unsigned long)lReadUs, (unsigned long)lMaxReadUs,
-            //       (unsigned long)lMaxProcessUs);
+            LOG_I(gSfm3119Tag, "timing read_us=%lu max_read_us=%lu max_process_us=%lu",
+                  (unsigned long)lReadUs, (unsigned long)lMaxReadUs,
+                  (unsigned long)lMaxProcessUs);
             gSfm3119MaxReadCycles = 0U;
             gSfm3119MaxProcessCycles = 0U;
         }

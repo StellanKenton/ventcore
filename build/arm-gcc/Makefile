@@ -520,6 +520,30 @@ Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_timer.c.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_timer.c.s
 .PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_timer.c.s
 
+Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_usart.obj: Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_usart.c.obj
+.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_usart.obj
+
+# target to build an object file
+Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_usart.c.obj:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_usart.c.obj
+.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_usart.c.obj
+
+Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_usart.i: Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_usart.c.i
+.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_usart.i
+
+# target to preprocess a source file
+Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_usart.c.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_usart.c.i
+.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_usart.c.i
+
+Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_usart.s: Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_usart.c.s
+.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_usart.s
+
+# target to generate assembly for a file
+Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_usart.c.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_usart.c.s
+.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_usart.c.s
+
 User/app/taskmanager.obj: User/app/taskmanager.c.obj
 .PHONY : User/app/taskmanager.obj
 
@@ -567,6 +591,30 @@ User/bsp/adc/adc.s: User/bsp/adc/adc.c.s
 User/bsp/adc/adc.c.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/User/bsp/adc/adc.c.s
 .PHONY : User/bsp/adc/adc.c.s
+
+User/bsp/blower_vcm/blower_vcm.obj: User/bsp/blower_vcm/blower_vcm.c.obj
+.PHONY : User/bsp/blower_vcm/blower_vcm.obj
+
+# target to build an object file
+User/bsp/blower_vcm/blower_vcm.c.obj:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/User/bsp/blower_vcm/blower_vcm.c.obj
+.PHONY : User/bsp/blower_vcm/blower_vcm.c.obj
+
+User/bsp/blower_vcm/blower_vcm.i: User/bsp/blower_vcm/blower_vcm.c.i
+.PHONY : User/bsp/blower_vcm/blower_vcm.i
+
+# target to preprocess a source file
+User/bsp/blower_vcm/blower_vcm.c.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/User/bsp/blower_vcm/blower_vcm.c.i
+.PHONY : User/bsp/blower_vcm/blower_vcm.c.i
+
+User/bsp/blower_vcm/blower_vcm.s: User/bsp/blower_vcm/blower_vcm.c.s
+.PHONY : User/bsp/blower_vcm/blower_vcm.s
+
+# target to generate assembly for a file
+User/bsp/blower_vcm/blower_vcm.c.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/User/bsp/blower_vcm/blower_vcm.c.s
+.PHONY : User/bsp/blower_vcm/blower_vcm.c.s
 
 User/bsp/bspdebug.obj: User/bsp/bspdebug.c.obj
 .PHONY : User/bsp/bspdebug.obj
@@ -1034,12 +1082,18 @@ help:
 	@echo ... Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_timer.obj
 	@echo ... Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_timer.i
 	@echo ... Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_timer.s
+	@echo ... Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_usart.obj
+	@echo ... Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_usart.i
+	@echo ... Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_usart.s
 	@echo ... User/app/taskmanager.obj
 	@echo ... User/app/taskmanager.i
 	@echo ... User/app/taskmanager.s
 	@echo ... User/bsp/adc/adc.obj
 	@echo ... User/bsp/adc/adc.i
 	@echo ... User/bsp/adc/adc.s
+	@echo ... User/bsp/blower_vcm/blower_vcm.obj
+	@echo ... User/bsp/blower_vcm/blower_vcm.i
+	@echo ... User/bsp/blower_vcm/blower_vcm.s
 	@echo ... User/bsp/bspdebug.obj
 	@echo ... User/bsp/bspdebug.i
 	@echo ... User/bsp/bspdebug.s
