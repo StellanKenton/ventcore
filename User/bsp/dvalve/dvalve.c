@@ -13,7 +13,41 @@
 #include "gd32f4xx_rcu.h"
 #include "gd32f4xx_timer.h"
 
+static const uint32_t gDvalvePins[DVALVE_COUNT] = {
+    GPIO_PIN_4,
+    GPIO_PIN_8,
+    GPIO_PIN_3
+};
 
+static const uint32_t gDvalveGpioAf[DVALVE_COUNT] = {
+    GPIO_AF_2,
+    GPIO_AF_3,
+    GPIO_AF_1
+};
+
+static const rcu_periph_enum gDvalveTimerClocks[DVALVE_COUNT] = {
+    RCU_TIMER2,
+    RCU_TIMER9,
+    RCU_TIMER1
+};
+
+static const uint32_t gDvalveTimers[DVALVE_COUNT] = {
+    TIMER2,
+    TIMER9,
+    TIMER1
+};
+
+static const uint16_t gDvalveTimerChannels[DVALVE_COUNT] = {
+    TIMER_CH_0,
+    TIMER_CH_0,
+    TIMER_CH_1
+};
+
+static const uint32_t gDvalveTimerPeriods[DVALVE_COUNT] = {
+    5999U,
+    11999U,
+    5999U
+};
 
 static void dvalveTimerInit(eDvalveIndex valveIndex)
 {

@@ -12,6 +12,7 @@
 #include "sysdebug.h"
 #include "taskmanager.h"
 #include "adc.h"
+#include "bspdebug.h"
 #include "dvalve.h"
 #include "valve.h"
 
@@ -27,6 +28,9 @@ int main(void)
 #if LOG_CONSOLE_ENABLE
     if (!sysdebugConsoleRegister()) {
         LOG_W("main", "sysdebug console registration failed");
+    }
+    if (!bspDebugConsoleRegister()) {
+        LOG_W("main", "bspdebug console registration failed");
     }
 #endif
 

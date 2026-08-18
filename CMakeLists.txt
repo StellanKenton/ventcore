@@ -27,6 +27,7 @@ set(FREERTOS_SOURCES
 add_executable(ventcore
     User/main.c
     User/app/taskmanager.c
+    User/bsp/bspdebug.c
     User/bsp/adc/adc.c
     User/bsp/dvalve/dvalve.c
     User/bsp/valve/valve.c
@@ -50,6 +51,7 @@ add_executable(ventcore
 target_include_directories(ventcore PRIVATE
     User
     User/app
+    User/bsp
     User/bsp/adc
     User/bsp/dvalve
     User/bsp/valve
