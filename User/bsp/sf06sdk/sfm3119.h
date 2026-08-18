@@ -17,6 +17,7 @@ extern "C" {
 #endif
 
 #define SFM3119_STATUS_OK                 ((int8_t)1)
+#define SFM3119_STATUS_PENDING            ((int8_t)2)
 #define SFM3119_ERROR_INVALID_INDEX       ((int8_t)-1)
 #define SFM3119_ERROR_NOT_READY           ((int8_t)-2)
 #define SFM3119_ERROR_IO                  ((int8_t)-3)
@@ -25,6 +26,9 @@ extern "C" {
 #define SFM3119_TEMPERATURE_SCALE         200.0f
 #define SFM3119_PROCESS_LOG_CYCLES        500U
 #define SFM3119_INIT_RETRY_DELAY_US        2000U
+#define SFM3119_FLOW_FRAME_LENGTH          3U
+#define SFM3119_FULL_FRAME_LENGTH          9U
+#define SFM3119_AUX_UPDATE_CYCLES          100U
 
 typedef enum eSfm3119SensorIndex {
     SFM3119_AIR_INDEX = 0,

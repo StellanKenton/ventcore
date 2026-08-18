@@ -13,6 +13,8 @@
 
 #include "gd32f4xx.h"
 #include "log.h"
+#include "sensirion_common.h"
+#include "sensirion_i2c.h"
 #include "sensirion_i2c_hal.h"
 #include "sfm_sf06_i2c.h"
 #include "system_gd32f4xx.h"
@@ -23,6 +25,10 @@ static int16_t gSfm3119FlowScale[SFM3119_SENSOR_NUM];
 static int16_t gSfm3119FlowOffset[SFM3119_SENSOR_NUM];
 static int16_t gSfm3119LastError[SFM3119_SENSOR_NUM];
 static uint8_t gSfm3119Ready[SFM3119_SENSOR_NUM];
+static uint8_t gSfm3119AirBuffer[SFM3119_FULL_FRAME_LENGTH];
+static uint8_t gSfm3119O2Buffer[SFM3119_FULL_FRAME_LENGTH];
+static uint8_t gSfm3119AirReadLength = 0U;
+static uint8_t gSfm3119AirReadPending = 0U;
 static uint32_t gSfm3119ProcessCycle = 0U;
 static uint32_t gSfm3119MaxReadCycles = 0U;
 static uint32_t gSfm3119MaxProcessCycles = 0U;
@@ -45,6 +51,60 @@ static int8_t sfm3119Select(eSfm3119SensorIndex sensorIndex) {
     }
     sfm_sf06_init(sfm3119GetAddress(sensorIndex));
     return SFM3119_STATUS_OK;
+}
+
+static int8_t sfm3119MeasurementDecode(eSfm3119SensorIndex sensorIndex, const uint8_t *data, uint8_t length) {
+    SFM3119_Result *lResult = &gSfm3119Results[sensorIndex];
+    uint8_t lIndex;
+
+    for (lIndex = 0U; lIndex < length; lIndex += SFM3119_FLOW_FRAME_LENGTH) {
+        if (sensirion_i2c_check_crc(&data[lIndex], 2U, data[lIndex + 2U]) != 0) {
+            gSfm3119LastError[sensorIndex] = CRC_ERROR;
+            return SFM3119_ERROR_IO;
+        }
+    }
+    lResult->flow_raw = sensirion_common_bytes_to_int16_t(&data[0]);
+    lResult->flow_slm = ((float)lResult->flow_raw - (float)gSfm3119FlowOffset[sensorIndex]) /
+                        (float)gSfm3119FlowScale[sensorIndex];
+    if (length == SFM3119_FULL_FRAME_LENGTH) {
+        lResult->temperature_raw = sensirion_common_bytes_to_int16_t(&data[3]);
+        lResult->status = sensirion_common_bytes_to_uint16_t(&data[6]);
+        lResult->temperature_degC = (float)lResult->temperature_raw / SFM3119_TEMPERATURE_SCALE;
+    }
+    gSfm3119LastError[sensorIndex] = 0;
+    return SFM3119_STATUS_OK;
+}
+
+static int8_t sfm3119MeasurementReadSync(eSfm3119SensorIndex sensorIndex, uint8_t *data, uint8_t length) {
+    int8_t lStatus;
+
+    if (sfm3119Select(sensorIndex) != SFM3119_STATUS_OK) {
+        return SFM3119_ERROR_IO;
+    }
+    lStatus = sensirion_i2c_hal_read(sfm3119GetAddress(sensorIndex), data, length);
+    if (lStatus != SENSIRION_I2C_HAL_STATUS_OK) {
+        gSfm3119LastError[sensorIndex] = lStatus;
+        return SFM3119_ERROR_IO;
+    }
+    return sfm3119MeasurementDecode(sensorIndex, data, length);
+}
+
+static int8_t sfm3119AirReadFinish(void) {
+    int8_t lStatus;
+
+    if (gSfm3119AirReadPending == 0U) {
+        return SFM3119_STATUS_OK;
+    }
+    lStatus = sensirion_i2c_hal_read_async_poll();
+    if (lStatus == SENSIRION_I2C_HAL_STATUS_PENDING) {
+        return SFM3119_STATUS_PENDING;
+    }
+    gSfm3119AirReadPending = 0U;
+    if (lStatus != SENSIRION_I2C_HAL_STATUS_OK) {
+        gSfm3119LastError[SFM3119_AIR_INDEX] = lStatus;
+        return SFM3119_ERROR_IO;
+    }
+    return sfm3119MeasurementDecode(SFM3119_AIR_INDEX, gSfm3119AirBuffer, gSfm3119AirReadLength);
 }
 
 static int8_t sfm3119InitSensor(eSfm3119SensorIndex sensorIndex) {
@@ -101,6 +161,7 @@ int8_t sfm3119Init(void) {
     sensirion_i2c_hal_init();
     gSfm3119Ready[SFM3119_AIR_INDEX] = 0U;
     gSfm3119Ready[SFM3119_O2_INDEX] = 0U;
+    gSfm3119AirReadPending = 0U;
     gSfm3119LastError[SFM3119_AIR_INDEX] = 0;
     gSfm3119LastError[SFM3119_O2_INDEX] = 0;
     lAirStatus = sfm3119InitSensor(SFM3119_AIR_INDEX);
@@ -148,40 +209,49 @@ int8_t sfm3119Init(void) {
 }
 
 int8_t sfm3119Read(eSfm3119SensorIndex sensorIndex) {
-    SFM3119_Result* lResult;
-    int16_t lError;
-
     if ((uint32_t)sensorIndex >= (uint32_t)SFM3119_SENSOR_NUM) {
         return SFM3119_ERROR_INVALID_INDEX;
     }
     if (gSfm3119Ready[sensorIndex] == 0U) {
         return SFM3119_ERROR_NOT_READY;
     }
-    if (sfm3119Select(sensorIndex) != SFM3119_STATUS_OK) {
-        return SFM3119_ERROR_IO;
-    }
-
-    lResult = &gSfm3119Results[sensorIndex];
-    lError = sfm_sf06_read_measurement_data_raw(
-        &lResult->flow_raw,
-        &lResult->temperature_raw,
-        &lResult->status);
-    if (lError != 0) {
-        gSfm3119LastError[sensorIndex] = lError;
-        return SFM3119_ERROR_IO;
-    }
-    lResult->flow_slm = ((float)lResult->flow_raw - (float)gSfm3119FlowOffset[sensorIndex]) /
-                        (float)gSfm3119FlowScale[sensorIndex];
-    lResult->temperature_degC = (float)lResult->temperature_raw / SFM3119_TEMPERATURE_SCALE;
-    gSfm3119LastError[sensorIndex] = 0;
-    return SFM3119_STATUS_OK;
+    return sfm3119MeasurementReadSync(sensorIndex,
+                                      (sensorIndex == SFM3119_AIR_INDEX) ? gSfm3119AirBuffer : gSfm3119O2Buffer,
+                                      SFM3119_FULL_FRAME_LENGTH);
 }
 
 int8_t sfm3119ReadAll(void) {
-    int8_t lAirStatus = sfm3119Read(SFM3119_AIR_INDEX);
-    int8_t lO2Status = sfm3119Read(SFM3119_O2_INDEX);
+    uint8_t lReadLength;
+    int8_t lAirStatus;
+    int8_t lO2Status;
 
+    lAirStatus = sfm3119AirReadFinish();
+    if (lAirStatus == SFM3119_STATUS_PENDING) {
+        return SFM3119_STATUS_OK;
+    }
     if (lAirStatus != SFM3119_STATUS_OK) {
+        return lAirStatus;
+    }
+    lReadLength = ((gSfm3119ProcessCycle % SFM3119_AUX_UPDATE_CYCLES) == 0U)
+                      ? SFM3119_FULL_FRAME_LENGTH
+                      : SFM3119_FLOW_FRAME_LENGTH;
+    if (sfm3119Select(SFM3119_AIR_INDEX) != SFM3119_STATUS_OK) {
+        return SFM3119_ERROR_IO;
+    }
+    lAirStatus = sensirion_i2c_hal_read_async_start(SFM3119_AIR_ADDR,
+                                                    gSfm3119AirBuffer,
+                                                    lReadLength);
+    if (lAirStatus != SENSIRION_I2C_HAL_STATUS_OK) {
+        gSfm3119LastError[SFM3119_AIR_INDEX] = lAirStatus;
+        return SFM3119_ERROR_IO;
+    }
+    gSfm3119AirReadLength = lReadLength;
+    gSfm3119AirReadPending = 1U;
+    lO2Status = sfm3119MeasurementReadSync(SFM3119_O2_INDEX, gSfm3119O2Buffer, lReadLength);
+    lAirStatus = sfm3119AirReadFinish();
+
+    if ((lAirStatus != SFM3119_STATUS_OK) &&
+        (lAirStatus != SFM3119_STATUS_PENDING)) {
         return lAirStatus;
     }
     return lO2Status;

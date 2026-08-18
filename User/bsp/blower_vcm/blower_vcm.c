@@ -20,6 +20,7 @@
 
 static uint8_t gBlowerVcmRxDmaBuffer[BLOWER_VCM_RX_DMA_SIZE];
 static uint8_t gBlowerVcmRxFifo[BLOWER_VCM_RX_FIFO_SIZE];
+static uint8_t gBlowerVcmTxBuffer[BLOWER_VCM_TX_DMA_SIZE];
 static uint8_t gBlowerVcmParseBuffer[BLOWER_VCM_MAX_FRAME_LENGTH];
 static volatile uint16_t gBlowerVcmRxWrite = 0U;
 static volatile uint16_t gBlowerVcmRxRead = 0U;
@@ -28,6 +29,10 @@ static volatile bool gBlowerVcmTxBusy = false;
 static volatile bool gBlowerVcmInitialized = false;
 static volatile bool gBlowerVcmRxOverflow = false;
 static volatile bool gBlowerVcmDmaCollecting = false;
+static bool gBlowerVcmLastControlValid = false;
+static eBlowerVcmControlMode gBlowerVcmLastMode = BLOWER_CTRL_INIT;
+static uint16_t gBlowerVcmLastTargetValue = 0U;
+static uint8_t gBlowerVcmLastSaturation = 0U;
 static uint8_t gBlowerVcmParseState = BLOWER_VCM_PARSE_WAIT_HEADER;
 static uint8_t gBlowerVcmParseIndex = 0U;
 static uint8_t gBlowerVcmParseDataLength = 0U;
@@ -326,6 +331,29 @@ static void blowerVcmDmaInit(void)
     dma_interrupt_enable(DMA0, DMA_CH0, DMA_CHXCTL_HTFIE);
     dma_interrupt_enable(DMA0, DMA_CH0, DMA_CHXCTL_FTFIE);
     dma_interrupt_enable(DMA0, DMA_CH0, DMA_CHXFCTL_FEEIE);
+
+    dma_channel_disable(DMA0, DMA_CH7);
+    dma_deinit(DMA0, DMA_CH7);
+    dma_single_data_para_struct_init(&lDmaConfig);
+    lDmaConfig.periph_addr = (uint32_t)&USART_DATA(UART4);
+    lDmaConfig.periph_inc = DMA_PERIPH_INCREASE_DISABLE;
+    lDmaConfig.memory0_addr = (uint32_t)gBlowerVcmTxBuffer;
+    lDmaConfig.memory_inc = DMA_MEMORY_INCREASE_ENABLE;
+    lDmaConfig.periph_memory_width = DMA_PERIPH_WIDTH_8BIT;
+    lDmaConfig.circular_mode = DMA_CIRCULAR_MODE_DISABLE;
+    lDmaConfig.direction = DMA_MEMORY_TO_PERIPH;
+    lDmaConfig.number = BLOWER_VCM_TX_DMA_SIZE;
+    lDmaConfig.priority = DMA_PRIORITY_HIGH;
+    dma_single_data_mode_init(DMA0, DMA_CH7, &lDmaConfig);
+    dma_channel_subperipheral_select(DMA0, DMA_CH7, DMA_SUBPERI4);
+    dma_interrupt_flag_clear(DMA0, DMA_CH7, DMA_INT_FLAG_FEE);
+    dma_interrupt_flag_clear(DMA0, DMA_CH7, DMA_INT_FLAG_SDE);
+    dma_interrupt_flag_clear(DMA0, DMA_CH7, DMA_INT_FLAG_TAE);
+    dma_interrupt_flag_clear(DMA0, DMA_CH7, DMA_INT_FLAG_FTF);
+    dma_interrupt_enable(DMA0, DMA_CH7, DMA_CHXCTL_SDEIE);
+    dma_interrupt_enable(DMA0, DMA_CH7, DMA_CHXCTL_TAEIE);
+    dma_interrupt_enable(DMA0, DMA_CH7, DMA_CHXCTL_FTFIE);
+    dma_interrupt_enable(DMA0, DMA_CH7, DMA_CHXFCTL_FEEIE);
 }
 
 static void blowerVcmUartInit(void)
@@ -345,38 +373,6 @@ static void blowerVcmUartInit(void)
     usart_dma_receive_config(UART4, USART_RECEIVE_DMA_ENABLE);
 }
 
-static int8_t blowerVcmWaitFlag(usart_flag_enum flag)
-{
-    uint32_t lTimeout = BLOWER_VCM_TX_WAIT_LOOPS;
-
-    while (usart_flag_get(UART4, flag) == RESET) {
-        if (lTimeout-- == 0U) {
-            return BLOWER_VCM_ERROR_TIMEOUT;
-        }
-    }
-    return BLOWER_VCM_STATUS_OK;
-}
-
-static int8_t blowerVcmFrameTransmit(const uint8_t *frame, uint8_t length)
-{
-    uint8_t lFrameIndex;
-    uint8_t lRepeatIndex;
-
-    for (lRepeatIndex = 0U; lRepeatIndex < BLOWER_VCM_CONTROL_FRAME_COUNT; lRepeatIndex++) {
-        for (lFrameIndex = 0U; lFrameIndex < length; lFrameIndex++) {
-            if (blowerVcmWaitFlag(USART_FLAG_TBE) != BLOWER_VCM_STATUS_OK) {
-                return BLOWER_VCM_ERROR_TIMEOUT;
-            }
-            usart_data_transmit(UART4, frame[lFrameIndex]);
-        }
-        if (blowerVcmWaitFlag(USART_FLAG_TC) != BLOWER_VCM_STATUS_OK) {
-            return BLOWER_VCM_ERROR_TIMEOUT;
-        }
-        gBlowerVcmStats.txFrameCount++;
-    }
-    return BLOWER_VCM_STATUS_OK;
-}
-
 int8_t blowerVcmInit(void)
 {
     if (gBlowerVcmInitialized) {
@@ -385,6 +381,7 @@ int8_t blowerVcmInit(void)
 
     blowerVcmMemoryClear(gBlowerVcmRxDmaBuffer, BLOWER_VCM_RX_DMA_SIZE);
     blowerVcmMemoryClear(gBlowerVcmRxFifo, BLOWER_VCM_RX_FIFO_SIZE);
+    blowerVcmMemoryClear(gBlowerVcmTxBuffer, BLOWER_VCM_TX_DMA_SIZE);
     blowerVcmMemoryClear(gBlowerVcmParseBuffer, BLOWER_VCM_MAX_FRAME_LENGTH);
     blowerVcmStatsClear();
     gBlowerVcmRxWrite = 0U;
@@ -393,6 +390,7 @@ int8_t blowerVcmInit(void)
     gBlowerVcmTxBusy = false;
     gBlowerVcmRxOverflow = false;
     gBlowerVcmDmaCollecting = false;
+    gBlowerVcmLastControlValid = false;
     gBlowerVcmFeedback.speedRps = 0.0f;
     gBlowerVcmFeedback.speedScaled = 0U;
     gBlowerVcmFeedback.pcmSaturation = 0U;
@@ -419,10 +417,13 @@ int8_t blowerVcmInit(void)
     blowerVcmUartInit();
     NVIC_ClearPendingIRQ(UART4_IRQn);
     NVIC_ClearPendingIRQ(DMA0_Channel0_IRQn);
+    NVIC_ClearPendingIRQ(DMA0_Channel7_IRQn);
     NVIC_SetPriority(UART4_IRQn, 6U);
     NVIC_SetPriority(DMA0_Channel0_IRQn, 7U);
+    NVIC_SetPriority(DMA0_Channel7_IRQn, 7U);
     NVIC_EnableIRQ(UART4_IRQn);
     NVIC_EnableIRQ(DMA0_Channel0_IRQn);
+    NVIC_EnableIRQ(DMA0_Channel7_IRQn);
     dma_channel_enable(DMA0, DMA_CH0);
     usart_enable(UART4);
     gBlowerVcmInitialized = true;
@@ -437,17 +438,22 @@ void blowerVcmDeInit(void)
 
     NVIC_DisableIRQ(UART4_IRQn);
     NVIC_DisableIRQ(DMA0_Channel0_IRQn);
+    NVIC_DisableIRQ(DMA0_Channel7_IRQn);
     usart_interrupt_disable(UART4, USART_INT_TBE);
     usart_interrupt_disable(UART4, USART_INT_TC);
     usart_interrupt_disable(UART4, USART_INT_IDLE);
     usart_interrupt_disable(UART4, USART_INT_ERR);
     usart_dma_receive_config(UART4, USART_RECEIVE_DMA_DISABLE);
+    usart_dma_transmit_config(UART4, USART_TRANSMIT_DMA_DISABLE);
     dma_channel_disable(DMA0, DMA_CH0);
+    dma_channel_disable(DMA0, DMA_CH7);
     dma_deinit(DMA0, DMA_CH0);
+    dma_deinit(DMA0, DMA_CH7);
     usart_disable(UART4);
     usart_deinit(UART4);
     NVIC_ClearPendingIRQ(UART4_IRQn);
     NVIC_ClearPendingIRQ(DMA0_Channel0_IRQn);
+    NVIC_ClearPendingIRQ(DMA0_Channel7_IRQn);
     gBlowerVcmTxBusy = false;
     gBlowerVcmInitialized = false;
 }
@@ -482,7 +488,8 @@ int8_t blowerVcmSendControl(eBlowerVcmControlMode mode, uint16_t targetValue, ui
 {
     uint8_t lFrame[BLOWER_VCM_CONTROL_DATA_LENGTH + BLOWER_VCM_FRAME_OVERHEAD];
     uint16_t lCrc;
-    int8_t lStatus;
+    uint8_t lFrameIndex;
+    uint8_t lRepeatIndex;
 
     if (((uint32_t)mode >= (uint32_t)BLOWER_CTRL_MAX) ||
         (vcmSaturation > BLOWER_VCM_SATURATION_MAX)) {
@@ -505,18 +512,40 @@ int8_t blowerVcmSendControl(eBlowerVcmControlMode mode, uint16_t targetValue, ui
     lFrame[9] = BLOWER_VCM_FRAME_TAIL;
 
     repRtosEnterCritical();
+    if (gBlowerVcmLastControlValid &&
+        (gBlowerVcmLastMode == mode) &&
+        (gBlowerVcmLastTargetValue == targetValue) &&
+        (gBlowerVcmLastSaturation == vcmSaturation)) {
+        repRtosExitCritical();
+        return BLOWER_VCM_STATUS_OK;
+    }
     if (gBlowerVcmTxBusy) {
         gBlowerVcmStats.txBusyDropCount++;
         repRtosExitCritical();
         return BLOWER_VCM_ERROR_BUSY;
     }
+    for (lRepeatIndex = 0U; lRepeatIndex < BLOWER_VCM_CONTROL_FRAME_COUNT; lRepeatIndex++) {
+        for (lFrameIndex = 0U; lFrameIndex < (uint8_t)sizeof(lFrame); lFrameIndex++) {
+            gBlowerVcmTxBuffer[(lRepeatIndex * (uint8_t)sizeof(lFrame)) + lFrameIndex] = lFrame[lFrameIndex];
+        }
+    }
+    dma_channel_disable(DMA0, DMA_CH7);
+    dma_interrupt_flag_clear(DMA0, DMA_CH7, DMA_INT_FLAG_FEE);
+    dma_interrupt_flag_clear(DMA0, DMA_CH7, DMA_INT_FLAG_SDE);
+    dma_interrupt_flag_clear(DMA0, DMA_CH7, DMA_INT_FLAG_TAE);
+    dma_interrupt_flag_clear(DMA0, DMA_CH7, DMA_INT_FLAG_FTF);
+    dma_memory_address_config(DMA0, DMA_CH7, DMA_MEMORY_0, (uint32_t)gBlowerVcmTxBuffer);
+    dma_transfer_number_config(DMA0, DMA_CH7, BLOWER_VCM_TX_DMA_SIZE);
     gBlowerVcmTxBusy = true;
+    gBlowerVcmLastControlValid = true;
+    gBlowerVcmLastMode = mode;
+    gBlowerVcmLastTargetValue = targetValue;
+    gBlowerVcmLastSaturation = vcmSaturation;
+    usart_flag_clear(UART4, USART_FLAG_TC);
+    dma_channel_enable(DMA0, DMA_CH7);
+    usart_dma_transmit_config(UART4, USART_TRANSMIT_DMA_ENABLE);
     repRtosExitCritical();
-    lStatus = blowerVcmFrameTransmit(lFrame, (uint8_t)sizeof(lFrame));
-    repRtosEnterCritical();
-    gBlowerVcmTxBusy = false;
-    repRtosExitCritical();
-    return lStatus;
+    return BLOWER_VCM_STATUS_OK;
 }
 
 bool blowerVcmIsConnected(uint32_t nowMs)
@@ -570,6 +599,12 @@ void UART4_IRQHandler(void)
         lDiscard = USART_DATA(UART4);
         (void)lDiscard;
     }
+    if (usart_interrupt_flag_get(UART4, USART_INT_FLAG_TC) == SET) {
+        usart_interrupt_disable(UART4, USART_INT_TC);
+        usart_interrupt_flag_clear(UART4, USART_INT_FLAG_TC);
+        gBlowerVcmTxBusy = false;
+        gBlowerVcmStats.txFrameCount += BLOWER_VCM_CONTROL_FRAME_COUNT;
+    }
 }
 
 void DMA0_Channel0_IRQHandler(void)
@@ -598,6 +633,39 @@ void DMA0_Channel0_IRQHandler(void)
     if (dma_interrupt_flag_get(DMA0, DMA_CH0, DMA_INT_FLAG_TAE) == SET) {
         dma_interrupt_flag_clear(DMA0, DMA_CH0, DMA_INT_FLAG_TAE);
         gBlowerVcmStats.dmaErrorCount++;
+    }
+}
+
+void DMA0_Channel7_IRQHandler(void)
+{
+    bool lError = false;
+
+    if (dma_interrupt_flag_get(DMA0, DMA_CH7, DMA_INT_FLAG_FEE) == SET) {
+        dma_interrupt_flag_clear(DMA0, DMA_CH7, DMA_INT_FLAG_FEE);
+        lError = true;
+    }
+    if (dma_interrupt_flag_get(DMA0, DMA_CH7, DMA_INT_FLAG_SDE) == SET) {
+        dma_interrupt_flag_clear(DMA0, DMA_CH7, DMA_INT_FLAG_SDE);
+        lError = true;
+    }
+    if (dma_interrupt_flag_get(DMA0, DMA_CH7, DMA_INT_FLAG_TAE) == SET) {
+        dma_interrupt_flag_clear(DMA0, DMA_CH7, DMA_INT_FLAG_TAE);
+        lError = true;
+    }
+    if (lError) {
+        dma_channel_disable(DMA0, DMA_CH7);
+        usart_dma_transmit_config(UART4, USART_TRANSMIT_DMA_DISABLE);
+        gBlowerVcmStats.dmaErrorCount++;
+        gBlowerVcmLastControlValid = false;
+        gBlowerVcmTxBusy = false;
+        usart_interrupt_disable(UART4, USART_INT_TC);
+        return;
+    }
+    if (dma_interrupt_flag_get(DMA0, DMA_CH7, DMA_INT_FLAG_FTF) == SET) {
+        dma_interrupt_flag_clear(DMA0, DMA_CH7, DMA_INT_FLAG_FTF);
+        dma_channel_disable(DMA0, DMA_CH7);
+        usart_dma_transmit_config(UART4, USART_TRANSMIT_DMA_DISABLE);
+        usart_interrupt_enable(UART4, USART_INT_TC);
     }
 }
 

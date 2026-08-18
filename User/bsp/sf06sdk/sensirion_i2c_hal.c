@@ -9,12 +9,15 @@
 ***********************************************************************************/
 #include "sensirion_i2c_hal.h"
 
+#include "gd32f4xx_dma.h"
 #include "gd32f4xx_gpio.h"
 #include "gd32f4xx_i2c.h"
 #include "gd32f4xx_rcu.h"
 #include "system_gd32f4xx.h"
 
 static uint8_t gSensirionI2cBus = SENSIRION_I2C_HAL_BUS_AIR;
+static uint8_t gSensirionI2cAsyncActive = 0U;
+static uint32_t gSensirionI2cAsyncStartCycles = 0U;
 
 static void sensirionI2cHardwareRecover(void) {
     uint8_t lIndex;
@@ -43,11 +46,9 @@ static void sensirionI2cSoftDelay(void) {
 
 static void sensirionI2cSoftSetLine(uint32_t pin, uint8_t high) {
     if (high != 0U) {
-        gpio_mode_set(GPIOA, GPIO_MODE_INPUT, GPIO_PUPD_NONE, pin);
+        gpio_bit_set(GPIOA, pin);
     } else {
         gpio_bit_reset(GPIOA, pin);
-        gpio_mode_set(GPIOA, GPIO_MODE_OUTPUT, GPIO_PUPD_NONE, pin);
-        gpio_output_options_set(GPIOA, GPIO_OTYPE_OD, GPIO_OSPEED_25MHZ, pin);
     }
 }
 
@@ -262,6 +263,35 @@ static int8_t sensirionI2cHardwareRead(uint8_t address, uint8_t* data, uint8_t c
     return SENSIRION_I2C_HAL_STATUS_OK;
 }
 
+static void sensirionI2cHardwareDmaInit(void) {
+    dma_single_data_parameter_struct lDmaConfig;
+
+    rcu_periph_clock_enable(RCU_DMA0);
+    dma_channel_disable(DMA0, DMA_CH5);
+    dma_deinit(DMA0, DMA_CH5);
+    dma_single_data_para_struct_init(&lDmaConfig);
+    lDmaConfig.periph_addr = (uint32_t)&I2C_DATA(I2C0);
+    lDmaConfig.periph_inc = DMA_PERIPH_INCREASE_DISABLE;
+    lDmaConfig.memory0_addr = 0U;
+    lDmaConfig.memory_inc = DMA_MEMORY_INCREASE_ENABLE;
+    lDmaConfig.periph_memory_width = DMA_PERIPH_WIDTH_8BIT;
+    lDmaConfig.circular_mode = DMA_CIRCULAR_MODE_DISABLE;
+    lDmaConfig.direction = DMA_PERIPH_TO_MEMORY;
+    lDmaConfig.number = 1U;
+    lDmaConfig.priority = DMA_PRIORITY_HIGH;
+    dma_single_data_mode_init(DMA0, DMA_CH5, &lDmaConfig);
+    dma_channel_subperipheral_select(DMA0, DMA_CH5, DMA_SUBPERI1);
+}
+
+static void sensirionI2cHardwareAsyncAbort(void) {
+    i2c_dma_config(I2C0, I2C_DMA_OFF);
+    dma_channel_disable(DMA0, DMA_CH5);
+    i2c_stop_on_bus(I2C0);
+    i2c_ack_config(I2C0, I2C_ACK_ENABLE);
+    dma_flag_clear(DMA0, DMA_CH5, DMA_FLAG_FTF | DMA_FLAG_FEE | DMA_FLAG_SDE | DMA_FLAG_TAE);
+    gSensirionI2cAsyncActive = 0U;
+}
+
 int16_t sensirion_i2c_hal_select_bus(uint8_t bus_idx) {
     if (bus_idx >= SENSIRION_I2C_HAL_BUS_COUNT) {
         return SENSIRION_I2C_HAL_ERROR_PARAM;
@@ -284,16 +314,22 @@ void sensirion_i2c_hal_init(void) {
     gpio_mode_set(GPIOB, GPIO_MODE_AF, GPIO_PUPD_PULLUP, GPIO_PIN_6 | GPIO_PIN_7);
     gpio_output_options_set(GPIOB, GPIO_OTYPE_OD, GPIO_OSPEED_50MHZ, GPIO_PIN_6 | GPIO_PIN_7);
     i2c_deinit(I2C0);
-    i2c_clock_config(I2C0, 100000U, I2C_DTCY_2);
+    i2c_clock_config(I2C0, SENSIRION_I2C_HAL_HARDWARE_SPEED_HZ, I2C_DTCY_2);
     i2c_mode_addr_config(I2C0, I2C_I2CMODE_ENABLE, I2C_ADDFORMAT_7BITS, 0U);
     i2c_enable(I2C0);
     i2c_ack_config(I2C0, I2C_ACK_ENABLE);
 
+    sensirionI2cHardwareDmaInit();
+
+    gpio_mode_set(GPIOA, GPIO_MODE_OUTPUT, GPIO_PUPD_PULLUP, GPIO_PIN_11 | GPIO_PIN_12);
+    gpio_output_options_set(GPIOA, GPIO_OTYPE_OD, GPIO_OSPEED_50MHZ, GPIO_PIN_11 | GPIO_PIN_12);
     sensirionI2cSoftSetLine(GPIO_PIN_11, 1U);
     sensirionI2cSoftSetLine(GPIO_PIN_12, 1U);
 }
 
 void sensirion_i2c_hal_free(void) {
+    sensirionI2cHardwareAsyncAbort();
+    dma_deinit(DMA0, DMA_CH5);
     i2c_disable(I2C0);
 }
 
@@ -305,6 +341,57 @@ int8_t sensirion_i2c_hal_read(uint8_t address, uint8_t* data, uint8_t count) {
         return sensirionI2cHardwareRead(address, data, count);
     }
     return sensirionI2cSoftRead(address, data, count);
+}
+
+int8_t sensirion_i2c_hal_read_async_start(uint8_t address, uint8_t* data, uint8_t count) {
+    int8_t lStatus;
+
+    if ((gSensirionI2cBus != SENSIRION_I2C_HAL_BUS_AIR) || (address > 0x7FU) ||
+        (data == NULL) || (count == 0U) || (gSensirionI2cAsyncActive != 0U)) {
+        return SENSIRION_I2C_HAL_ERROR_PARAM;
+    }
+    dma_channel_disable(DMA0, DMA_CH5);
+    dma_flag_clear(DMA0, DMA_CH5, DMA_FLAG_FTF | DMA_FLAG_FEE | DMA_FLAG_SDE | DMA_FLAG_TAE);
+    dma_memory_address_config(DMA0, DMA_CH5, DMA_MEMORY_0, (uint32_t)data);
+    dma_transfer_number_config(DMA0, DMA_CH5, count);
+    i2c_ack_config(I2C0, I2C_ACK_ENABLE);
+    i2c_dma_last_transfer_config(I2C0, I2C_DMALST_ON);
+    lStatus = sensirionI2cHardwareStart(address, I2C_RECEIVER);
+    if (lStatus != SENSIRION_I2C_HAL_STATUS_OK) {
+        sensirionI2cHardwareAsyncAbort();
+        return lStatus;
+    }
+    dma_channel_enable(DMA0, DMA_CH5);
+    i2c_dma_config(I2C0, I2C_DMA_ON);
+    gSensirionI2cAsyncStartCycles = DWT->CYCCNT;
+    gSensirionI2cAsyncActive = 1U;
+    i2c_flag_clear(I2C0, I2C_FLAG_ADDSEND);
+    return SENSIRION_I2C_HAL_STATUS_OK;
+}
+
+int8_t sensirion_i2c_hal_read_async_poll(void) {
+    uint32_t lTimeoutCycles = (SystemCoreClock / 1000000U) * SENSIRION_I2C_HAL_TIMEOUT_US;
+
+    if (gSensirionI2cAsyncActive == 0U) {
+        return SENSIRION_I2C_HAL_ERROR_PARAM;
+    }
+    if ((i2c_flag_get(I2C0, I2C_FLAG_AERR) != RESET) ||
+        (i2c_flag_get(I2C0, I2C_FLAG_BERR) != RESET) ||
+        (dma_flag_get(DMA0, DMA_CH5, DMA_FLAG_FEE) != RESET) ||
+        (dma_flag_get(DMA0, DMA_CH5, DMA_FLAG_SDE) != RESET) ||
+        (dma_flag_get(DMA0, DMA_CH5, DMA_FLAG_TAE) != RESET)) {
+        sensirionI2cHardwareAsyncAbort();
+        return SENSIRION_I2C_HAL_ERROR_BUS;
+    }
+    if (dma_flag_get(DMA0, DMA_CH5, DMA_FLAG_FTF) != RESET) {
+        sensirionI2cHardwareAsyncAbort();
+        return SENSIRION_I2C_HAL_STATUS_OK;
+    }
+    if ((uint32_t)(DWT->CYCCNT - gSensirionI2cAsyncStartCycles) >= lTimeoutCycles) {
+        sensirionI2cHardwareAsyncAbort();
+        return SENSIRION_I2C_HAL_ERROR_TIMEOUT;
+    }
+    return SENSIRION_I2C_HAL_STATUS_PENDING;
 }
 
 int8_t sensirion_i2c_hal_write(uint8_t address, const uint8_t* data, uint8_t count) {

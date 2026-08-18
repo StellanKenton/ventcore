@@ -38,6 +38,7 @@
 #define SENSIRION_I2C_HAL_BUS_O2               1U
 #define SENSIRION_I2C_HAL_BUS_COUNT            2U
 #define SENSIRION_I2C_HAL_STATUS_OK            0
+#define SENSIRION_I2C_HAL_STATUS_PENDING       1
 #define SENSIRION_I2C_HAL_ERROR_PARAM         (-1)
 #define SENSIRION_I2C_HAL_ERROR_BUS           (-2)
 #define SENSIRION_I2C_HAL_ERROR_NACK          (-3)
@@ -50,6 +51,7 @@
 #define SENSIRION_I2C_HAL_ERROR_TIMEOUT_RX    (-15)
 #define SENSIRION_I2C_HAL_SOFT_HALF_PERIOD_US  1U
 #define SENSIRION_I2C_HAL_TIMEOUT_US           1000U
+#define SENSIRION_I2C_HAL_HARDWARE_SPEED_HZ    200000U
 
 #ifdef __cplusplus
 extern "C" {
@@ -89,6 +91,12 @@ void sensirion_i2c_hal_free(void);
  * @returns 0 on success, error code otherwise
  */
 int8_t sensirion_i2c_hal_read(uint8_t address, uint8_t* data, uint8_t count);
+
+/** Start a non-blocking DMA read on the selected hardware air bus. */
+int8_t sensirion_i2c_hal_read_async_start(uint8_t address, uint8_t* data, uint8_t count);
+
+/** Poll the selected hardware air bus DMA read. */
+int8_t sensirion_i2c_hal_read_async_poll(void);
 
 /**
  * Execute one write transaction on the I2C bus, sending a given number of
