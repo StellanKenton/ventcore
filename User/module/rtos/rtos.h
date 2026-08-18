@@ -37,6 +37,7 @@ typedef struct stRepRtosOps {
     int8_t (*taskCreate)(const stRepRtosTaskConfig *config);
     void (*taskDelete)(repRtosTaskHandle handle);
     int8_t (*taskDelayMs)(uint32_t delayMs);
+    int8_t (*taskDelayUntilMs)(uint32_t *previousWakeMs, uint32_t periodMs);
     uint32_t (*getTickMs)(void);
     void (*enterCritical)(void);
     void (*exitCritical)(void);
@@ -46,6 +47,14 @@ typedef struct stRepRtosOps {
 int8_t repRtosTaskCreate(const stRepRtosTaskConfig *config);
 void repRtosTaskDelete(repRtosTaskHandle handle);
 int8_t repRtosTaskDelayMs(uint32_t delayMs);
+
+/**
+ * @brief Block a task until the next absolute periodic wake time.
+ * @param previousWakeMs Previous absolute wake time in milliseconds; updated on return.
+ * @param periodMs Task period in milliseconds.
+ * @return REP_RTOS_STATUS_OK on success, otherwise a negative error code.
+ */
+int8_t repRtosTaskDelayUntilMs(uint32_t *previousWakeMs, uint32_t periodMs);
 uint32_t repRtosGetTickMs(void);
 void repRtosEnterCritical(void);
 void repRtosExitCritical(void);

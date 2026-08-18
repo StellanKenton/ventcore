@@ -51,6 +51,17 @@ int8_t repRtosTaskDelayMs(uint32_t delayMs)
     return lOps->taskDelayMs(delayMs);
 }
 
+int8_t repRtosTaskDelayUntilMs(uint32_t *previousWakeMs, uint32_t periodMs)
+{
+    const stRepRtosOps *lOps = repRtosGetOps();
+
+    if ((lOps == NULL) || (lOps->taskDelayUntilMs == NULL)) {
+        return REP_RTOS_STATUS_NOT_READY;
+    }
+
+    return lOps->taskDelayUntilMs(previousWakeMs, periodMs);
+}
+
 uint32_t repRtosGetTickMs(void)
 {
     const stRepRtosOps *lOps = repRtosGetOps();

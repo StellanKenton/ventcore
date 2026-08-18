@@ -70,6 +70,26 @@ static int8_t portRtosTaskDelayMs(uint32_t delayMs)
     return REP_RTOS_STATUS_OK;
 }
 
+static int8_t portRtosTaskDelayUntilMs(uint32_t *previousWakeMs, uint32_t periodMs)
+{
+    TickType_t lPreviousWakeTicks;
+    TickType_t lPeriodTicks;
+
+    if ((previousWakeMs == NULL) || (periodMs == 0U)) {
+        return REP_RTOS_STATUS_INVALID_PARAM;
+    }
+
+    lPreviousWakeTicks = pdMS_TO_TICKS(*previousWakeMs);
+    lPeriodTicks = pdMS_TO_TICKS(periodMs);
+    if (lPeriodTicks == 0U) {
+        lPeriodTicks = 1U;
+    }
+    xTaskDelayUntil(&lPreviousWakeTicks, lPeriodTicks);
+    *previousWakeMs = (uint32_t)(((uint64_t)lPreviousWakeTicks * 1000ULL) /
+                                 (uint64_t)configTICK_RATE_HZ);
+    return REP_RTOS_STATUS_OK;
+}
+
 static uint32_t portRtosGetTickMs(void)
 {
     return (uint32_t)(((uint64_t)xTaskGetTickCount() * 1000ULL) / (uint64_t)configTICK_RATE_HZ);
@@ -95,6 +115,7 @@ static const stRepRtosOps gRtosOps = {
     .taskCreate = portRtosTaskCreate,
     .taskDelete = portRtosTaskDelete,
     .taskDelayMs = portRtosTaskDelayMs,
+    .taskDelayUntilMs = portRtosTaskDelayUntilMs,
     .getTickMs = portRtosGetTickMs,
     .enterCritical = portRtosEnterCritical,
     .exitCritical = portRtosExitCritical,

@@ -1,0 +1,259 @@
+/************************************************************************************
+* @file     : sfm3119.c
+* @brief    : Dual SFM3119 flow sensor interface.
+* @details  : Manages the separate air and oxygen buses and cached results.
+* @author   :
+* @date     :
+* @version  :
+* @copyright: Copyright (c) 2050
+***********************************************************************************/
+#include "sfm3119.h"
+
+#include <stddef.h>
+
+#include "gd32f4xx.h"
+#include "log.h"
+#include "sensirion_i2c_hal.h"
+#include "sfm_sf06_i2c.h"
+#include "system_gd32f4xx.h"
+
+static const char *const gSfm3119Tag = "sfm3119";
+static SFM3119_Result gSfm3119Results[SFM3119_SENSOR_NUM];
+static int16_t gSfm3119FlowScale[SFM3119_SENSOR_NUM];
+static int16_t gSfm3119FlowOffset[SFM3119_SENSOR_NUM];
+static int16_t gSfm3119LastError[SFM3119_SENSOR_NUM];
+static uint8_t gSfm3119Ready[SFM3119_SENSOR_NUM];
+static uint32_t gSfm3119ProcessCycle = 0U;
+static uint32_t gSfm3119MaxReadCycles = 0U;
+static uint32_t gSfm3119MaxProcessCycles = 0U;
+static int8_t gSfm3119Status = SFM3119_ERROR_NOT_READY;
+
+static uint8_t sfm3119GetAddress(eSfm3119SensorIndex sensorIndex) {
+    return (sensorIndex == SFM3119_AIR_INDEX) ? SFM3119_AIR_ADDR : SFM3119_O2_ADDR;
+}
+
+static uint8_t sfm3119GetBus(eSfm3119SensorIndex sensorIndex) {
+    return (sensorIndex == SFM3119_AIR_INDEX) ? SENSIRION_I2C_HAL_BUS_AIR : SENSIRION_I2C_HAL_BUS_O2;
+}
+
+static int8_t sfm3119Select(eSfm3119SensorIndex sensorIndex) {
+    if ((uint32_t)sensorIndex >= (uint32_t)SFM3119_SENSOR_NUM) {
+        return SFM3119_ERROR_INVALID_INDEX;
+    }
+    if (sensirion_i2c_hal_select_bus(sfm3119GetBus(sensorIndex)) != SENSIRION_I2C_HAL_STATUS_OK) {
+        return SFM3119_ERROR_IO;
+    }
+    sfm_sf06_init(sfm3119GetAddress(sensorIndex));
+    return SFM3119_STATUS_OK;
+}
+
+static int8_t sfm3119InitSensor(eSfm3119SensorIndex sensorIndex) {
+    uint16_t lFlowUnit;
+    uint16_t lCommand;
+    int16_t lError;
+
+    if (sfm3119Select(sensorIndex) != SFM3119_STATUS_OK) {
+        gSfm3119LastError[sensorIndex] = SFM3119_ERROR_INVALID_INDEX;
+        return SFM3119_ERROR_IO;
+    }
+    (void)sfm_sf06_stop_continuous_measurement();
+    sensirion_i2c_hal_sleep_usec(1000U);
+    lError = sfm_sf06_read_product_identifier(
+        &gSfm3119Results[sensorIndex].product_identifier,
+        gSfm3119Results[sensorIndex].serial_number,
+        (uint16_t)sizeof(gSfm3119Results[sensorIndex].serial_number));
+    if (lError != 0) {
+        gSfm3119LastError[sensorIndex] = lError;
+        return SFM3119_ERROR_IO;
+    }
+
+    lCommand = (sensorIndex == SFM3119_AIR_INDEX)
+                   ? SFM_SF06_START_AIR_CONTINUOUS_MEASUREMENT_CMD_ID
+                   : SFM_SF06_START_O2_CONTINUOUS_MEASUREMENT_CMD_ID;
+    lError = sfm_sf06_read_scale_offset_unit(
+        lCommand,
+        &gSfm3119FlowScale[sensorIndex],
+        &gSfm3119FlowOffset[sensorIndex],
+        &lFlowUnit);
+    if ((lError != 0) || (gSfm3119FlowScale[sensorIndex] == 0)) {
+        gSfm3119LastError[sensorIndex] = (lError != 0) ? lError : SFM3119_ERROR_IO;
+        return SFM3119_ERROR_IO;
+    }
+
+    lError = (sensorIndex == SFM3119_AIR_INDEX)
+                 ? ll_sfm_sf06_start_air_continuous_measurement()
+                 : ll_sfm_sf06_start_o2_continuous_measurement();
+    if (lError != 0) {
+        gSfm3119LastError[sensorIndex] = lError;
+        return SFM3119_ERROR_IO;
+    }
+    gSfm3119LastError[sensorIndex] = 0;
+    gSfm3119Ready[sensorIndex] = 1U;
+    return SFM3119_STATUS_OK;
+}
+
+int8_t sfm3119Init(void) {
+    const SFM3119_Result *lAirResult;
+    const SFM3119_Result *lO2Result;
+    int8_t lAirStatus;
+    int8_t lO2Status;
+
+    sensirion_i2c_hal_init();
+    gSfm3119Ready[SFM3119_AIR_INDEX] = 0U;
+    gSfm3119Ready[SFM3119_O2_INDEX] = 0U;
+    gSfm3119LastError[SFM3119_AIR_INDEX] = 0;
+    gSfm3119LastError[SFM3119_O2_INDEX] = 0;
+    lAirStatus = sfm3119InitSensor(SFM3119_AIR_INDEX);
+    lO2Status = sfm3119InitSensor(SFM3119_O2_INDEX);
+    if (lAirStatus != SFM3119_STATUS_OK) {
+        gSfm3119Status = lAirStatus;
+    } else {
+        gSfm3119Status = lO2Status;
+    }
+
+    if (gSfm3119Status != SFM3119_STATUS_OK) {
+        LOG_E(gSfm3119Tag, "init failed status=%d air_err=%d o2_err=%d",
+              (int)gSfm3119Status,
+              (int)sfm3119GetLastError(SFM3119_AIR_INDEX),
+              (int)sfm3119GetLastError(SFM3119_O2_INDEX));
+        return gSfm3119Status;
+    }
+
+    lAirResult = sfm3119GetResult(SFM3119_AIR_INDEX);
+    lO2Result = sfm3119GetResult(SFM3119_O2_INDEX);
+    LOG_I(gSfm3119Tag,
+          "ready air_pid=0x%08lX air_sn=%02X%02X%02X%02X%02X%02X%02X%02X",
+          (unsigned long)lAirResult->product_identifier,
+          lAirResult->serial_number[0], lAirResult->serial_number[1],
+          lAirResult->serial_number[2], lAirResult->serial_number[3],
+          lAirResult->serial_number[4], lAirResult->serial_number[5],
+          lAirResult->serial_number[6], lAirResult->serial_number[7]);
+    LOG_I(gSfm3119Tag,
+          "ready o2_pid=0x%08lX o2_sn=%02X%02X%02X%02X%02X%02X%02X%02X",
+          (unsigned long)lO2Result->product_identifier,
+          lO2Result->serial_number[0], lO2Result->serial_number[1],
+          lO2Result->serial_number[2], lO2Result->serial_number[3],
+          lO2Result->serial_number[4], lO2Result->serial_number[5],
+          lO2Result->serial_number[6], lO2Result->serial_number[7]);
+    gSfm3119ProcessCycle = 0U;
+    return SFM3119_STATUS_OK;
+}
+
+int8_t sfm3119Read(eSfm3119SensorIndex sensorIndex) {
+    SFM3119_Result* lResult;
+    int16_t lError;
+
+    if ((uint32_t)sensorIndex >= (uint32_t)SFM3119_SENSOR_NUM) {
+        return SFM3119_ERROR_INVALID_INDEX;
+    }
+    if (gSfm3119Ready[sensorIndex] == 0U) {
+        return SFM3119_ERROR_NOT_READY;
+    }
+    if (sfm3119Select(sensorIndex) != SFM3119_STATUS_OK) {
+        return SFM3119_ERROR_IO;
+    }
+
+    lResult = &gSfm3119Results[sensorIndex];
+    lError = sfm_sf06_read_measurement_data_raw(
+        &lResult->flow_raw,
+        &lResult->temperature_raw,
+        &lResult->status);
+    if (lError != 0) {
+        gSfm3119LastError[sensorIndex] = lError;
+        return SFM3119_ERROR_IO;
+    }
+    lResult->flow_slm = ((float)lResult->flow_raw - (float)gSfm3119FlowOffset[sensorIndex]) /
+                        (float)gSfm3119FlowScale[sensorIndex];
+    lResult->temperature_degC = (float)lResult->temperature_raw / SFM3119_TEMPERATURE_SCALE;
+    gSfm3119LastError[sensorIndex] = 0;
+    return SFM3119_STATUS_OK;
+}
+
+int8_t sfm3119ReadAll(void) {
+    int8_t lAirStatus = sfm3119Read(SFM3119_AIR_INDEX);
+    int8_t lO2Status = sfm3119Read(SFM3119_O2_INDEX);
+
+    if (lAirStatus != SFM3119_STATUS_OK) {
+        return lAirStatus;
+    }
+    return lO2Status;
+}
+
+int8_t sfm3119Process(void) {
+    const SFM3119_Result *lAirResult;
+    const SFM3119_Result *lO2Result;
+    int32_t lAirFlowMilliSlm;
+    int32_t lAirTemperatureMilliDegC;
+    int32_t lO2FlowMilliSlm;
+    int32_t lO2TemperatureMilliDegC;
+    uint32_t lReadCycles;
+    uint32_t lReadUs;
+    uint32_t lMaxReadUs;
+    uint32_t lMaxProcessUs;
+    uint32_t lProcessCycles;
+    uint32_t lStartCycles = DWT->CYCCNT;
+
+    if (gSfm3119Status == SFM3119_STATUS_OK) {
+        gSfm3119Status = sfm3119ReadAll();
+        lReadCycles = (uint32_t)(DWT->CYCCNT - lStartCycles);
+        if (lReadCycles > gSfm3119MaxReadCycles) {
+            gSfm3119MaxReadCycles = lReadCycles;
+        }
+        if (gSfm3119Status != SFM3119_STATUS_OK) {
+            LOG_E(gSfm3119Tag, "read failed status=%d air_err=%d o2_err=%d",
+                  (int)gSfm3119Status,
+                  (int)sfm3119GetLastError(SFM3119_AIR_INDEX),
+                  (int)sfm3119GetLastError(SFM3119_O2_INDEX));
+        } else if ((gSfm3119ProcessCycle % SFM3119_PROCESS_LOG_CYCLES) == 0U) {
+            lAirResult = sfm3119GetResult(SFM3119_AIR_INDEX);
+            lO2Result = sfm3119GetResult(SFM3119_O2_INDEX);
+            lAirFlowMilliSlm = (int32_t)(lAirResult->flow_slm * 1000.0f);
+            lAirTemperatureMilliDegC = (int32_t)(lAirResult->temperature_degC * 1000.0f);
+            lO2FlowMilliSlm = (int32_t)(lO2Result->flow_slm * 1000.0f);
+            lO2TemperatureMilliDegC = (int32_t)(lO2Result->temperature_degC * 1000.0f);
+            lReadUs = lReadCycles / (SystemCoreClock / 1000000U);
+            lMaxReadUs = gSfm3119MaxReadCycles / (SystemCoreClock / 1000000U);
+            lMaxProcessUs = gSfm3119MaxProcessCycles / (SystemCoreClock / 1000000U);
+            // LOG_I(gSfm3119Tag,
+            //       "air raw=%d temp_raw=%d status=0x%04X flow_mSlm=%ld temp_mdegC=%ld",
+            //       (int)lAirResult->flow_raw, (int)lAirResult->temperature_raw,
+            //       (unsigned int)lAirResult->status, (long)lAirFlowMilliSlm,
+            //       (long)lAirTemperatureMilliDegC);
+            // LOG_I(gSfm3119Tag,
+            //       "o2 raw=%d temp_raw=%d status=0x%04X flow_mSlm=%ld temp_mdegC=%ld",
+            //       (int)lO2Result->flow_raw, (int)lO2Result->temperature_raw,
+            //       (unsigned int)lO2Result->status, (long)lO2FlowMilliSlm,
+            //       (long)lO2TemperatureMilliDegC);
+            // LOG_I(gSfm3119Tag, "timing read_us=%lu max_read_us=%lu max_process_us=%lu",
+            //       (unsigned long)lReadUs, (unsigned long)lMaxReadUs,
+            //       (unsigned long)lMaxProcessUs);
+            gSfm3119MaxReadCycles = 0U;
+            gSfm3119MaxProcessCycles = 0U;
+        }
+    } else if ((gSfm3119ProcessCycle % SFM3119_PROCESS_LOG_CYCLES) == 0U) {
+        gSfm3119Status = sfm3119Init();
+    }
+
+    gSfm3119ProcessCycle++;
+    lProcessCycles = (uint32_t)(DWT->CYCCNT - lStartCycles);
+    if (lProcessCycles > gSfm3119MaxProcessCycles) {
+        gSfm3119MaxProcessCycles = lProcessCycles;
+    }
+    return gSfm3119Status;
+}
+
+const SFM3119_Result* sfm3119GetResult(eSfm3119SensorIndex sensorIndex) {
+    if ((uint32_t)sensorIndex >= (uint32_t)SFM3119_SENSOR_NUM) {
+        return NULL;
+    }
+    return &gSfm3119Results[sensorIndex];
+}
+
+int16_t sfm3119GetLastError(eSfm3119SensorIndex sensorIndex) {
+    if ((uint32_t)sensorIndex >= (uint32_t)SFM3119_SENSOR_NUM) {
+        return SFM3119_ERROR_INVALID_INDEX;
+    }
+    return gSfm3119LastError[sensorIndex];
+}
+
+/**************************End of file********************************/

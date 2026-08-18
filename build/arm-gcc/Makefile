@@ -448,6 +448,30 @@ Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_gpio.c.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_gpio.c.s
 .PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_gpio.c.s
 
+Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_i2c.obj: Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_i2c.c.obj
+.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_i2c.obj
+
+# target to build an object file
+Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_i2c.c.obj:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_i2c.c.obj
+.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_i2c.c.obj
+
+Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_i2c.i: Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_i2c.c.i
+.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_i2c.i
+
+# target to preprocess a source file
+Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_i2c.c.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_i2c.c.i
+.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_i2c.c.i
+
+Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_i2c.s: Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_i2c.c.s
+.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_i2c.s
+
+# target to generate assembly for a file
+Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_i2c.c.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_i2c.c.s
+.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_i2c.c.s
+
 Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_rcu.obj: Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_rcu.c.obj
 .PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_rcu.obj
 
@@ -471,6 +495,30 @@ Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_rcu.s: Firmware/GD32F4xx_s
 Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_rcu.c.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_rcu.c.s
 .PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_rcu.c.s
+
+Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_timer.obj: Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_timer.c.obj
+.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_timer.obj
+
+# target to build an object file
+Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_timer.c.obj:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_timer.c.obj
+.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_timer.c.obj
+
+Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_timer.i: Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_timer.c.i
+.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_timer.i
+
+# target to preprocess a source file
+Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_timer.c.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_timer.c.i
+.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_timer.c.i
+
+Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_timer.s: Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_timer.c.s
+.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_timer.s
+
+# target to generate assembly for a file
+Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_timer.c.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_timer.c.s
+.PHONY : Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_timer.c.s
 
 User/app/taskmanager.obj: User/app/taskmanager.c.obj
 .PHONY : User/app/taskmanager.obj
@@ -519,6 +567,198 @@ User/bsp/adc/adc.s: User/bsp/adc/adc.c.s
 User/bsp/adc/adc.c.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/User/bsp/adc/adc.c.s
 .PHONY : User/bsp/adc/adc.c.s
+
+User/bsp/bspdebug.obj: User/bsp/bspdebug.c.obj
+.PHONY : User/bsp/bspdebug.obj
+
+# target to build an object file
+User/bsp/bspdebug.c.obj:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/User/bsp/bspdebug.c.obj
+.PHONY : User/bsp/bspdebug.c.obj
+
+User/bsp/bspdebug.i: User/bsp/bspdebug.c.i
+.PHONY : User/bsp/bspdebug.i
+
+# target to preprocess a source file
+User/bsp/bspdebug.c.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/User/bsp/bspdebug.c.i
+.PHONY : User/bsp/bspdebug.c.i
+
+User/bsp/bspdebug.s: User/bsp/bspdebug.c.s
+.PHONY : User/bsp/bspdebug.s
+
+# target to generate assembly for a file
+User/bsp/bspdebug.c.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/User/bsp/bspdebug.c.s
+.PHONY : User/bsp/bspdebug.c.s
+
+User/bsp/dvalve/dvalve.obj: User/bsp/dvalve/dvalve.c.obj
+.PHONY : User/bsp/dvalve/dvalve.obj
+
+# target to build an object file
+User/bsp/dvalve/dvalve.c.obj:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/User/bsp/dvalve/dvalve.c.obj
+.PHONY : User/bsp/dvalve/dvalve.c.obj
+
+User/bsp/dvalve/dvalve.i: User/bsp/dvalve/dvalve.c.i
+.PHONY : User/bsp/dvalve/dvalve.i
+
+# target to preprocess a source file
+User/bsp/dvalve/dvalve.c.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/User/bsp/dvalve/dvalve.c.i
+.PHONY : User/bsp/dvalve/dvalve.c.i
+
+User/bsp/dvalve/dvalve.s: User/bsp/dvalve/dvalve.c.s
+.PHONY : User/bsp/dvalve/dvalve.s
+
+# target to generate assembly for a file
+User/bsp/dvalve/dvalve.c.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/User/bsp/dvalve/dvalve.c.s
+.PHONY : User/bsp/dvalve/dvalve.c.s
+
+User/bsp/sf06sdk/sensirion_common.obj: User/bsp/sf06sdk/sensirion_common.c.obj
+.PHONY : User/bsp/sf06sdk/sensirion_common.obj
+
+# target to build an object file
+User/bsp/sf06sdk/sensirion_common.c.obj:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/User/bsp/sf06sdk/sensirion_common.c.obj
+.PHONY : User/bsp/sf06sdk/sensirion_common.c.obj
+
+User/bsp/sf06sdk/sensirion_common.i: User/bsp/sf06sdk/sensirion_common.c.i
+.PHONY : User/bsp/sf06sdk/sensirion_common.i
+
+# target to preprocess a source file
+User/bsp/sf06sdk/sensirion_common.c.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/User/bsp/sf06sdk/sensirion_common.c.i
+.PHONY : User/bsp/sf06sdk/sensirion_common.c.i
+
+User/bsp/sf06sdk/sensirion_common.s: User/bsp/sf06sdk/sensirion_common.c.s
+.PHONY : User/bsp/sf06sdk/sensirion_common.s
+
+# target to generate assembly for a file
+User/bsp/sf06sdk/sensirion_common.c.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/User/bsp/sf06sdk/sensirion_common.c.s
+.PHONY : User/bsp/sf06sdk/sensirion_common.c.s
+
+User/bsp/sf06sdk/sensirion_i2c.obj: User/bsp/sf06sdk/sensirion_i2c.c.obj
+.PHONY : User/bsp/sf06sdk/sensirion_i2c.obj
+
+# target to build an object file
+User/bsp/sf06sdk/sensirion_i2c.c.obj:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/User/bsp/sf06sdk/sensirion_i2c.c.obj
+.PHONY : User/bsp/sf06sdk/sensirion_i2c.c.obj
+
+User/bsp/sf06sdk/sensirion_i2c.i: User/bsp/sf06sdk/sensirion_i2c.c.i
+.PHONY : User/bsp/sf06sdk/sensirion_i2c.i
+
+# target to preprocess a source file
+User/bsp/sf06sdk/sensirion_i2c.c.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/User/bsp/sf06sdk/sensirion_i2c.c.i
+.PHONY : User/bsp/sf06sdk/sensirion_i2c.c.i
+
+User/bsp/sf06sdk/sensirion_i2c.s: User/bsp/sf06sdk/sensirion_i2c.c.s
+.PHONY : User/bsp/sf06sdk/sensirion_i2c.s
+
+# target to generate assembly for a file
+User/bsp/sf06sdk/sensirion_i2c.c.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/User/bsp/sf06sdk/sensirion_i2c.c.s
+.PHONY : User/bsp/sf06sdk/sensirion_i2c.c.s
+
+User/bsp/sf06sdk/sensirion_i2c_hal.obj: User/bsp/sf06sdk/sensirion_i2c_hal.c.obj
+.PHONY : User/bsp/sf06sdk/sensirion_i2c_hal.obj
+
+# target to build an object file
+User/bsp/sf06sdk/sensirion_i2c_hal.c.obj:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/User/bsp/sf06sdk/sensirion_i2c_hal.c.obj
+.PHONY : User/bsp/sf06sdk/sensirion_i2c_hal.c.obj
+
+User/bsp/sf06sdk/sensirion_i2c_hal.i: User/bsp/sf06sdk/sensirion_i2c_hal.c.i
+.PHONY : User/bsp/sf06sdk/sensirion_i2c_hal.i
+
+# target to preprocess a source file
+User/bsp/sf06sdk/sensirion_i2c_hal.c.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/User/bsp/sf06sdk/sensirion_i2c_hal.c.i
+.PHONY : User/bsp/sf06sdk/sensirion_i2c_hal.c.i
+
+User/bsp/sf06sdk/sensirion_i2c_hal.s: User/bsp/sf06sdk/sensirion_i2c_hal.c.s
+.PHONY : User/bsp/sf06sdk/sensirion_i2c_hal.s
+
+# target to generate assembly for a file
+User/bsp/sf06sdk/sensirion_i2c_hal.c.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/User/bsp/sf06sdk/sensirion_i2c_hal.c.s
+.PHONY : User/bsp/sf06sdk/sensirion_i2c_hal.c.s
+
+User/bsp/sf06sdk/sfm3119.obj: User/bsp/sf06sdk/sfm3119.c.obj
+.PHONY : User/bsp/sf06sdk/sfm3119.obj
+
+# target to build an object file
+User/bsp/sf06sdk/sfm3119.c.obj:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/User/bsp/sf06sdk/sfm3119.c.obj
+.PHONY : User/bsp/sf06sdk/sfm3119.c.obj
+
+User/bsp/sf06sdk/sfm3119.i: User/bsp/sf06sdk/sfm3119.c.i
+.PHONY : User/bsp/sf06sdk/sfm3119.i
+
+# target to preprocess a source file
+User/bsp/sf06sdk/sfm3119.c.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/User/bsp/sf06sdk/sfm3119.c.i
+.PHONY : User/bsp/sf06sdk/sfm3119.c.i
+
+User/bsp/sf06sdk/sfm3119.s: User/bsp/sf06sdk/sfm3119.c.s
+.PHONY : User/bsp/sf06sdk/sfm3119.s
+
+# target to generate assembly for a file
+User/bsp/sf06sdk/sfm3119.c.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/User/bsp/sf06sdk/sfm3119.c.s
+.PHONY : User/bsp/sf06sdk/sfm3119.c.s
+
+User/bsp/sf06sdk/sfm_sf06_i2c.obj: User/bsp/sf06sdk/sfm_sf06_i2c.c.obj
+.PHONY : User/bsp/sf06sdk/sfm_sf06_i2c.obj
+
+# target to build an object file
+User/bsp/sf06sdk/sfm_sf06_i2c.c.obj:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/User/bsp/sf06sdk/sfm_sf06_i2c.c.obj
+.PHONY : User/bsp/sf06sdk/sfm_sf06_i2c.c.obj
+
+User/bsp/sf06sdk/sfm_sf06_i2c.i: User/bsp/sf06sdk/sfm_sf06_i2c.c.i
+.PHONY : User/bsp/sf06sdk/sfm_sf06_i2c.i
+
+# target to preprocess a source file
+User/bsp/sf06sdk/sfm_sf06_i2c.c.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/User/bsp/sf06sdk/sfm_sf06_i2c.c.i
+.PHONY : User/bsp/sf06sdk/sfm_sf06_i2c.c.i
+
+User/bsp/sf06sdk/sfm_sf06_i2c.s: User/bsp/sf06sdk/sfm_sf06_i2c.c.s
+.PHONY : User/bsp/sf06sdk/sfm_sf06_i2c.s
+
+# target to generate assembly for a file
+User/bsp/sf06sdk/sfm_sf06_i2c.c.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/User/bsp/sf06sdk/sfm_sf06_i2c.c.s
+.PHONY : User/bsp/sf06sdk/sfm_sf06_i2c.c.s
+
+User/bsp/valve/valve.obj: User/bsp/valve/valve.c.obj
+.PHONY : User/bsp/valve/valve.obj
+
+# target to build an object file
+User/bsp/valve/valve.c.obj:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/User/bsp/valve/valve.c.obj
+.PHONY : User/bsp/valve/valve.c.obj
+
+User/bsp/valve/valve.i: User/bsp/valve/valve.c.i
+.PHONY : User/bsp/valve/valve.i
+
+# target to preprocess a source file
+User/bsp/valve/valve.c.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/User/bsp/valve/valve.c.i
+.PHONY : User/bsp/valve/valve.c.i
+
+User/bsp/valve/valve.s: User/bsp/valve/valve.c.s
+.PHONY : User/bsp/valve/valve.s
+
+# target to generate assembly for a file
+User/bsp/valve/valve.c.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/User/bsp/valve/valve.c.s
+.PHONY : User/bsp/valve/valve.c.s
 
 User/main.obj: User/main.c.obj
 .PHONY : User/main.obj
@@ -785,15 +1025,45 @@ help:
 	@echo ... Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_gpio.obj
 	@echo ... Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_gpio.i
 	@echo ... Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_gpio.s
+	@echo ... Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_i2c.obj
+	@echo ... Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_i2c.i
+	@echo ... Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_i2c.s
 	@echo ... Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_rcu.obj
 	@echo ... Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_rcu.i
 	@echo ... Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_rcu.s
+	@echo ... Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_timer.obj
+	@echo ... Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_timer.i
+	@echo ... Firmware/GD32F4xx_standard_peripheral/Source/gd32f4xx_timer.s
 	@echo ... User/app/taskmanager.obj
 	@echo ... User/app/taskmanager.i
 	@echo ... User/app/taskmanager.s
 	@echo ... User/bsp/adc/adc.obj
 	@echo ... User/bsp/adc/adc.i
 	@echo ... User/bsp/adc/adc.s
+	@echo ... User/bsp/bspdebug.obj
+	@echo ... User/bsp/bspdebug.i
+	@echo ... User/bsp/bspdebug.s
+	@echo ... User/bsp/dvalve/dvalve.obj
+	@echo ... User/bsp/dvalve/dvalve.i
+	@echo ... User/bsp/dvalve/dvalve.s
+	@echo ... User/bsp/sf06sdk/sensirion_common.obj
+	@echo ... User/bsp/sf06sdk/sensirion_common.i
+	@echo ... User/bsp/sf06sdk/sensirion_common.s
+	@echo ... User/bsp/sf06sdk/sensirion_i2c.obj
+	@echo ... User/bsp/sf06sdk/sensirion_i2c.i
+	@echo ... User/bsp/sf06sdk/sensirion_i2c.s
+	@echo ... User/bsp/sf06sdk/sensirion_i2c_hal.obj
+	@echo ... User/bsp/sf06sdk/sensirion_i2c_hal.i
+	@echo ... User/bsp/sf06sdk/sensirion_i2c_hal.s
+	@echo ... User/bsp/sf06sdk/sfm3119.obj
+	@echo ... User/bsp/sf06sdk/sfm3119.i
+	@echo ... User/bsp/sf06sdk/sfm3119.s
+	@echo ... User/bsp/sf06sdk/sfm_sf06_i2c.obj
+	@echo ... User/bsp/sf06sdk/sfm_sf06_i2c.i
+	@echo ... User/bsp/sf06sdk/sfm_sf06_i2c.s
+	@echo ... User/bsp/valve/valve.obj
+	@echo ... User/bsp/valve/valve.i
+	@echo ... User/bsp/valve/valve.s
 	@echo ... User/main.obj
 	@echo ... User/main.i
 	@echo ... User/main.s

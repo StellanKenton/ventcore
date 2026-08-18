@@ -13,6 +13,7 @@
 
 #include "log.h"
 #include "rtos.h"
+#include "sfm3119.h"
 
 static const char *const gTaskManagerTag = "taskManager";
 static bool gWorkerTasksCreated = false;
@@ -74,47 +75,60 @@ static const stRepRtosTaskConfig gWorkerTaskConfigs[] = {
 
 static void defaultTask(void *argument)
 {
+    uint32_t lPreviousWakeMs = repRtosGetTickMs();
+
     (void)argument;
 
     for (;;) {
         (void)logProcess((uint16_t)DEFAULT_TASK_INTERVAL_MS);
-        (void)repRtosTaskDelayMs(DEFAULT_TASK_INTERVAL_MS);
+        (void)repRtosTaskDelayUntilMs(&lPreviousWakeMs, DEFAULT_TASK_INTERVAL_MS);
     }
 }
 
 static void ventTask(void *argument)
 {
+    uint32_t lPreviousWakeMs = repRtosGetTickMs();
+
     (void)argument;
 
     for (;;) {
-        (void)repRtosTaskDelayMs(VENT_TASK_INTERVAL_MS);
+        (void)repRtosTaskDelayUntilMs(&lPreviousWakeMs, VENT_TASK_INTERVAL_MS);
     }
 }
 
 static void sensorTask(void *argument)
 {
+    uint32_t lPreviousWakeMs;
+
     (void)argument;
+    (void)sfm3119Init();
+    lPreviousWakeMs = repRtosGetTickMs();
 
     for (;;) {
-        (void)repRtosTaskDelayMs(SENSOR_TASK_INTERVAL_MS);
+        (void)sfm3119Process();
+        (void)repRtosTaskDelayUntilMs(&lPreviousWakeMs, SENSOR_TASK_INTERVAL_MS);
     }
 }
 
 static void hmiTask(void *argument)
 {
+    uint32_t lPreviousWakeMs = repRtosGetTickMs();
+
     (void)argument;
 
     for (;;) {
-        (void)repRtosTaskDelayMs(HMI_TASK_INTERVAL_MS);
+        (void)repRtosTaskDelayUntilMs(&lPreviousWakeMs, HMI_TASK_INTERVAL_MS);
     }
 }
 
 static void alarmTask(void *argument)
 {
+    uint32_t lPreviousWakeMs = repRtosGetTickMs();
+
     (void)argument;
 
     for (;;) {
-        (void)repRtosTaskDelayMs(ALARM_TASK_INTERVAL_MS);
+        (void)repRtosTaskDelayUntilMs(&lPreviousWakeMs, ALARM_TASK_INTERVAL_MS);
     }
 }
 

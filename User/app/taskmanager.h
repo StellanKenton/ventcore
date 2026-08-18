@@ -26,7 +26,7 @@ extern "C" {
 
 #define SENSOR_TASK_STACK_SIZE           256U
 #define SENSOR_TASK_PRIORITY             2U
-#define SENSOR_TASK_INTERVAL_MS          20U
+#define SENSOR_TASK_INTERVAL_MS          2U
 
 #define HMI_TASK_STACK_SIZE              256U
 #define HMI_TASK_PRIORITY                2U
