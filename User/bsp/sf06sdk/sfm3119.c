@@ -29,6 +29,7 @@ static uint8_t gSfm3119AirBuffer[SFM3119_FULL_FRAME_LENGTH];
 static uint8_t gSfm3119O2Buffer[SFM3119_FULL_FRAME_LENGTH];
 static uint8_t gSfm3119AirReadLength = 0U;
 static uint8_t gSfm3119AirReadPending = 0U;
+static uint8_t gSfm3119ReadErrorCount = 0U;
 static uint32_t gSfm3119ProcessCycle = 0U;
 static uint32_t gSfm3119MaxReadCycles = 0U;
 static uint32_t gSfm3119MaxProcessCycles = 0U;
@@ -107,6 +108,13 @@ static int8_t sfm3119AirReadFinish(void) {
     return sfm3119MeasurementDecode(SFM3119_AIR_INDEX, gSfm3119AirBuffer, gSfm3119AirReadLength);
 }
 
+static void sfm3119AirReadAbort(void) {
+    if (gSfm3119AirReadPending != 0U) {
+        sensirion_i2c_hal_read_async_abort();
+        gSfm3119AirReadPending = 0U;
+    }
+}
+
 static int8_t sfm3119InitSensor(eSfm3119SensorIndex sensorIndex) {
     uint16_t lFlowUnit;
     uint16_t lCommand;
@@ -158,10 +166,12 @@ int8_t sfm3119Init(void) {
     int8_t lAirStatus;
     int8_t lO2Status;
 
+    sfm3119AirReadAbort();
     sensirion_i2c_hal_init();
     gSfm3119Ready[SFM3119_AIR_INDEX] = 0U;
     gSfm3119Ready[SFM3119_O2_INDEX] = 0U;
     gSfm3119AirReadPending = 0U;
+    gSfm3119ReadErrorCount = 0U;
     gSfm3119LastError[SFM3119_AIR_INDEX] = 0;
     gSfm3119LastError[SFM3119_O2_INDEX] = 0;
     lAirStatus = sfm3119InitSensor(SFM3119_AIR_INDEX);
@@ -187,6 +197,9 @@ int8_t sfm3119Init(void) {
               (int)sfm3119GetLastError(SFM3119_O2_INDEX));
         return gSfm3119Status;
     }
+
+    /* SFM3119 NACKs read requests until its first result is ready. */
+    sensirion_i2c_hal_sleep_usec(SFM3119_FIRST_MEASUREMENT_DELAY_US);
 
     lAirResult = sfm3119GetResult(SFM3119_AIR_INDEX);
     lO2Result = sfm3119GetResult(SFM3119_O2_INDEX);
@@ -250,6 +263,11 @@ int8_t sfm3119ReadAll(void) {
     lO2Status = sfm3119MeasurementReadSync(SFM3119_O2_INDEX, gSfm3119O2Buffer, lReadLength);
     lAirStatus = sfm3119AirReadFinish();
 
+    if ((lO2Status != SFM3119_STATUS_OK) &&
+        (lAirStatus == SFM3119_STATUS_PENDING)) {
+        sfm3119AirReadAbort();
+    }
+
     if ((lAirStatus != SFM3119_STATUS_OK) &&
         (lAirStatus != SFM3119_STATUS_PENDING)) {
         return lAirStatus;
@@ -271,18 +289,26 @@ int8_t sfm3119Process(void) {
         if (lReadCycles > gSfm3119MaxReadCycles) {
             gSfm3119MaxReadCycles = lReadCycles;
         }
-        if (gSfm3119Status != SFM3119_STATUS_OK) {
+        if (gSfm3119Status == SFM3119_STATUS_OK) {
+            gSfm3119ReadErrorCount = 0U;
+        } else if (++gSfm3119ReadErrorCount < SFM3119_READ_ERROR_LIMIT) {
+            /* A measurement read may NACK briefly while the next sample is prepared. */
+            gSfm3119Status = SFM3119_STATUS_OK;
+        } else {
+            gSfm3119ReadErrorCount = 0U;
             LOG_E(gSfm3119Tag, "read failed status=%d air_err=%d o2_err=%d",
                   (int)gSfm3119Status,
                   (int)sfm3119GetLastError(SFM3119_AIR_INDEX),
                   (int)sfm3119GetLastError(SFM3119_O2_INDEX));
-        } else if ((gSfm3119ProcessCycle % SFM3119_PROCESS_LOG_CYCLES) == 0U) {
+        }
+        if ((gSfm3119Status == SFM3119_STATUS_OK) &&
+            ((gSfm3119ProcessCycle % SFM3119_PROCESS_LOG_CYCLES) == 0U)) {
             lReadUs = lReadCycles / (SystemCoreClock / 1000000U);
             lMaxReadUs = gSfm3119MaxReadCycles / (SystemCoreClock / 1000000U);
             lMaxProcessUs = gSfm3119MaxProcessCycles / (SystemCoreClock / 1000000U);
-            LOG_I(gSfm3119Tag, "timing read_us=%lu max_read_us=%lu max_process_us=%lu",
-                  (unsigned long)lReadUs, (unsigned long)lMaxReadUs,
-                  (unsigned long)lMaxProcessUs);
+            // LOG_I(gSfm3119Tag, "timing read_us=%lu max_read_us=%lu max_process_us=%lu",
+            //       (unsigned long)lReadUs, (unsigned long)lMaxReadUs,
+            //       (unsigned long)lMaxProcessUs);
             gSfm3119MaxReadCycles = 0U;
             gSfm3119MaxProcessCycles = 0U;
         }

@@ -33,6 +33,7 @@ static bool gBlowerVcmLastControlValid = false;
 static eBlowerVcmControlMode gBlowerVcmLastMode = BLOWER_CTRL_INIT;
 static uint16_t gBlowerVcmLastTargetValue = 0U;
 static uint8_t gBlowerVcmLastSaturation = 0U;
+static uint32_t gBlowerVcmLastTxAtMs = 0U;
 static uint8_t gBlowerVcmParseState = BLOWER_VCM_PARSE_WAIT_HEADER;
 static uint8_t gBlowerVcmParseIndex = 0U;
 static uint8_t gBlowerVcmParseDataLength = 0U;
@@ -391,6 +392,7 @@ int8_t blowerVcmInit(void)
     gBlowerVcmRxOverflow = false;
     gBlowerVcmDmaCollecting = false;
     gBlowerVcmLastControlValid = false;
+    gBlowerVcmLastTxAtMs = 0U;
     gBlowerVcmFeedback.speedRps = 0.0f;
     gBlowerVcmFeedback.speedScaled = 0U;
     gBlowerVcmFeedback.pcmSaturation = 0U;
@@ -481,6 +483,12 @@ int8_t blowerVcmProcess(uint32_t nowMs)
         blowerVcmParseByte(lData);
         lCount++;
     }
+    if (gBlowerVcmLastControlValid && !gBlowerVcmTxBusy &&
+        ((uint32_t)(nowMs - gBlowerVcmLastTxAtMs) >= BLOWER_VCM_CONTROL_KEEPALIVE_MS)) {
+        (void)blowerVcmSendControl(gBlowerVcmLastMode,
+                                  gBlowerVcmLastTargetValue,
+                                  gBlowerVcmLastSaturation);
+    }
     return BLOWER_VCM_STATUS_OK;
 }
 
@@ -515,7 +523,8 @@ int8_t blowerVcmSendControl(eBlowerVcmControlMode mode, uint16_t targetValue, ui
     if (gBlowerVcmLastControlValid &&
         (gBlowerVcmLastMode == mode) &&
         (gBlowerVcmLastTargetValue == targetValue) &&
-        (gBlowerVcmLastSaturation == vcmSaturation)) {
+        (gBlowerVcmLastSaturation == vcmSaturation) &&
+        ((uint32_t)(gBlowerVcmProcessNowMs - gBlowerVcmLastTxAtMs) < BLOWER_VCM_CONTROL_KEEPALIVE_MS)) {
         repRtosExitCritical();
         return BLOWER_VCM_STATUS_OK;
     }
@@ -541,6 +550,7 @@ int8_t blowerVcmSendControl(eBlowerVcmControlMode mode, uint16_t targetValue, ui
     gBlowerVcmLastMode = mode;
     gBlowerVcmLastTargetValue = targetValue;
     gBlowerVcmLastSaturation = vcmSaturation;
+    gBlowerVcmLastTxAtMs = gBlowerVcmProcessNowMs;
     usart_flag_clear(UART4, USART_FLAG_TC);
     dma_channel_enable(DMA0, DMA_CH7);
     usart_dma_transmit_config(UART4, USART_TRANSMIT_DMA_ENABLE);
@@ -656,7 +666,6 @@ void DMA0_Channel7_IRQHandler(void)
         dma_channel_disable(DMA0, DMA_CH7);
         usart_dma_transmit_config(UART4, USART_TRANSMIT_DMA_DISABLE);
         gBlowerVcmStats.dmaErrorCount++;
-        gBlowerVcmLastControlValid = false;
         gBlowerVcmTxBusy = false;
         usart_interrupt_disable(UART4, USART_INT_TC);
         return;

@@ -37,6 +37,7 @@ extern "C" {
 #define BLOWER_VCM_RX_FIFO_MASK                 (BLOWER_VCM_RX_FIFO_SIZE - 1U)
 #define BLOWER_VCM_PROCESS_BYTE_LIMIT           BLOWER_VCM_RX_FIFO_SIZE
 #define BLOWER_VCM_FEEDBACK_TIMEOUT_MS          1000U
+#define BLOWER_VCM_CONTROL_KEEPALIVE_MS          100U
 #define BLOWER_VCM_BAUDRATE                     230400U
 #define BLOWER_VCM_SATURATION_MAX               1U
 #define BLOWER_VCM_CONTROL_FRAME_COUNT           2U
@@ -111,7 +112,8 @@ int8_t blowerVcmProcess(uint32_t nowMs);
  * @param targetScaled Target already converted to the protocol scale.
  * @param vcmSaturation VCM saturation flag, either 0 or 1.
  * @return BLOWER_VCM_STATUS_OK, or a negative error code.
- * @note Call from task context. An unchanged setting is ignored; changed settings use DMA TX.
+ * @note Call from task context. Changed settings are sent immediately and the
+ * latest setting is periodically retransmitted by blowerVcmProcess().
  */
 int8_t blowerVcmSendControl(eBlowerVcmControlMode mode, uint16_t targetValue, uint8_t vcmSaturation);
 

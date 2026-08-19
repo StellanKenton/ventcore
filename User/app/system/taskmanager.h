@@ -22,15 +22,15 @@ extern "C" {
 
 #define VENT_TASK_STACK_SIZE             512U
 #define VENT_TASK_PRIORITY               10U
-#define VENT_TASK_INTERVAL_MS            5U
+#define VENT_TASK_INTERVAL_MS            6U
 
 #define SENSOR_TASK_STACK_SIZE           512U
 #define SENSOR_TASK_PRIORITY             20U
-#define SENSOR_TASK_INTERVAL_MS          2U
+#define SENSOR_TASK_INTERVAL_MS          3U
 
 #define SYS_TASK_STACK_SIZE              256U
-#define SYS_TASK_PRIORITY                2U
-#define SYS_TASK_INTERVAL_MS             50U
+#define SYS_TASK_PRIORITY                21U
+#define SYS_TASK_INTERVAL_MS             20U
 
 #define ALARM_TASK_STACK_SIZE            512U
 #define ALARM_TASK_PRIORITY              15U

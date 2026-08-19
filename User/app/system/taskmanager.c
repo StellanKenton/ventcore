@@ -12,6 +12,7 @@
 #include <stddef.h>
 
 #include "blower_vcm.h"
+#include "databus.h"
 #include "log.h"
 #include "rtos.h"
 #include "sfm3119.h"
@@ -93,6 +94,7 @@ static void ventTask(void *argument)
     (void)argument;
 
     for (;;) {
+        controlDataFilterProcess();
         (void)repRtosTaskDelayUntilMs(&lPreviousWakeMs, VENT_TASK_INTERVAL_MS);
     }
 }
@@ -115,6 +117,7 @@ static void sensorTask(void *argument)
         lNowMs = repRtosGetTickMs();
         (void)blowerVcmProcess(lNowMs);
         (void)sfm3119Process();
+        controlDataRawProcess();
         (void)blowerVcmProcess(repRtosGetTickMs());
         (void)repRtosTaskDelayUntilMs(&lPreviousWakeMs, SENSOR_TASK_INTERVAL_MS);
     }

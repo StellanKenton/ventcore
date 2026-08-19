@@ -26,6 +26,8 @@ set(FREERTOS_SOURCES
 
 add_executable(ventcore
     User/main.c
+    User/app/databus/controldata.c
+    User/app/databus/databus.c
     User/app/system/taskmanager.c
     User/bsp/bspdebug.c
     User/bsp/adc/adc.c
@@ -44,6 +46,8 @@ add_executable(ventcore
     User/module/log/SEGGER/SEGGER_RTT.c
     User/module/rtos/rtos.c
     User/module/rtos/portrtos.c
+    User/tools/filter/iir1/iir1.c
+    User/tools/filter/numfilter/numfilter.c
     User/tools/ringbuffer/ringbuffer.c
     Firmware/CMSIS/GD/GD32F4xx/Source/system_gd32f4xx.c
     Firmware/CMSIS/GD/GD32F4xx/Source/GCC/startup_gd32f470zetx.s
@@ -58,6 +62,7 @@ add_executable(ventcore
 
 target_include_directories(ventcore PRIVATE
     User
+    User/app/databus
     User/app/system
     User/bsp
     User/bsp/adc
@@ -69,6 +74,8 @@ target_include_directories(ventcore PRIVATE
     User/module/log/consoleRegisted
     User/module/log/SEGGER
     User/module/rtos
+    User/tools/filter/iir1
+    User/tools/filter/numfilter
     User/tools/ringbuffer
     Firmware/CMSIS
     Firmware/CMSIS/GD/GD32F4xx/Include

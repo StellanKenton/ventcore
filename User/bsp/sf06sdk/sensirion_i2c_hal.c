@@ -288,8 +288,11 @@ static void sensirionI2cHardwareAsyncAbort(void) {
     dma_channel_disable(DMA0, DMA_CH5);
     i2c_stop_on_bus(I2C0);
     i2c_ack_config(I2C0, I2C_ACK_ENABLE);
+    i2c_flag_clear(I2C0, I2C_FLAG_AERR);
+    i2c_flag_clear(I2C0, I2C_FLAG_BERR);
     dma_flag_clear(DMA0, DMA_CH5, DMA_FLAG_FTF | DMA_FLAG_FEE | DMA_FLAG_SDE | DMA_FLAG_TAE);
     gSensirionI2cAsyncActive = 0U;
+    gSensirionI2cAsyncStartCycles = 0U;
 }
 
 int16_t sensirion_i2c_hal_select_bus(uint8_t bus_idx) {
@@ -320,6 +323,8 @@ void sensirion_i2c_hal_init(void) {
     i2c_ack_config(I2C0, I2C_ACK_ENABLE);
 
     sensirionI2cHardwareDmaInit();
+    gSensirionI2cAsyncActive = 0U;
+    gSensirionI2cAsyncStartCycles = 0U;
 
     gpio_mode_set(GPIOA, GPIO_MODE_OUTPUT, GPIO_PUPD_PULLUP, GPIO_PIN_11 | GPIO_PIN_12);
     gpio_output_options_set(GPIOA, GPIO_OTYPE_OD, GPIO_OSPEED_50MHZ, GPIO_PIN_11 | GPIO_PIN_12);
@@ -392,6 +397,12 @@ int8_t sensirion_i2c_hal_read_async_poll(void) {
         return SENSIRION_I2C_HAL_ERROR_TIMEOUT;
     }
     return SENSIRION_I2C_HAL_STATUS_PENDING;
+}
+
+void sensirion_i2c_hal_read_async_abort(void) {
+    if (gSensirionI2cAsyncActive != 0U) {
+        sensirionI2cHardwareAsyncAbort();
+    }
 }
 
 int8_t sensirion_i2c_hal_write(uint8_t address, const uint8_t* data, uint8_t count) {

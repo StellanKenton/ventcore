@@ -98,6 +98,9 @@ int8_t sensirion_i2c_hal_read_async_start(uint8_t address, uint8_t* data, uint8_
 /** Poll the selected hardware air bus DMA read. */
 int8_t sensirion_i2c_hal_read_async_poll(void);
 
+/** Abort an active DMA read on the hardware air bus. */
+void sensirion_i2c_hal_read_async_abort(void);
+
 /**
  * Execute one write transaction on the I2C bus, sending a given number of
  * bytes. The bytes in the supplied buffer must be sent to the given address. If

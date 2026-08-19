@@ -17,6 +17,7 @@
 #include "console.h"
 #include "dvalve.h"
 #include "log.h"
+#include "rtos.h"
 #include "valve.h"
 
 static const char *const gBspDebugTag = "bsp";
@@ -169,7 +170,7 @@ static void bspDebugUsageShow(void)
     LOG_I(gBspDebugTag, "adc: bsp a|adc <sfcur|flow|hw|3v3|temp|24v|peepcur|insp|5v|peep|exp|mdiff|o2cur|26v>");
     LOG_I(gBspDebugTag, "valve: bsp v|valve <insp|exp|diff|flush> [0|1]");
     LOG_I(gBspDebugTag, "dvalve: bsp d|dv|dvalve <o2|relief|exp> <0-100>");
-    LOG_I(gBspDebugTag, "blower: bsp blower <speed 0-1000|pwm 0-100>");
+    LOG_I(gBspDebugTag, "blower: bsp blower <speed 0-1000|pwm 0-100|stats>");
 }
 
 /**
@@ -295,9 +296,40 @@ static eConsoleCommandResult bspDebugBlowerCommand(const char *arguments)
     uint16_t lTarget;
     eBlowerVcmControlMode lMode;
     int8_t lStatus;
+    stBlowerVcmStats lStats;
+    stBlowerVcmFeedback lFeedback;
 
-    if (!bspDebugTokenRead(&arguments, &lModeToken, &lModeLength) ||
-        !bspDebugTokenRead(&arguments, &lValueToken, &lValueLength) ||
+    if (!bspDebugTokenRead(&arguments, &lModeToken, &lModeLength)) {
+        bspDebugUsageShow();
+        return CONSOLE_COMMAND_RESULT_INVALID_ARGUMENT;
+    }
+
+    if (bspDebugTokenEqual(lModeToken, lModeLength, "stats") &&
+        !bspDebugTokenRead(&arguments, &lValueToken, &lValueLength)) {
+        (void)blowerVcmGetStats(&lStats);
+        (void)blowerVcmGetFeedback(&lFeedback);
+        LOG_I(gBspDebugTag,
+              "blower link connected=%u valid=%u speed_x10=%u rx_bytes=%lu rx_frames=%lu tx_frames=%lu",
+              blowerVcmIsConnected(repRtosGetTickMs()) ? 1U : 0U,
+              lFeedback.valid ? 1U : 0U,
+              (unsigned int)lFeedback.speedScaled,
+              (unsigned long)lStats.rxByteCount,
+              (unsigned long)lStats.rxFrameCount,
+              (unsigned long)lStats.txFrameCount);
+        LOG_I(gBspDebugTag,
+              "blower errors crc=%lu len=%lu tail=%lu data=%lu unknown=%lu overflow=%lu uart=%lu dma=%lu busy=%lu",
+              (unsigned long)lStats.rxCrcErrorCount,
+              (unsigned long)lStats.rxLengthErrorCount,
+              (unsigned long)lStats.rxTailErrorCount,
+              (unsigned long)lStats.rxDataErrorCount,
+              (unsigned long)lStats.rxUnknownCommandCount,
+              (unsigned long)lStats.rxOverflowCount,
+              (unsigned long)lStats.uartErrorCount,
+              (unsigned long)lStats.dmaErrorCount,
+              (unsigned long)lStats.txBusyDropCount);
+        return CONSOLE_COMMAND_RESULT_OK;
+    }
+    if (!bspDebugTokenRead(&arguments, &lValueToken, &lValueLength) ||
         bspDebugTokenRead(&arguments, &lValueToken, &lValueLength)) {
         bspDebugUsageShow();
         return CONSOLE_COMMAND_RESULT_INVALID_ARGUMENT;
