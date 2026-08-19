@@ -18,6 +18,9 @@ void controlDataRawProcess(void);
 /* Update moving-average, Butterworth, and cascaded low-pass results. */
 void controlDataFilterProcess(void);
 
+/* Convert Butterworth-filtered ADC values to calibrated physical values. */
+void controlDataCalibrationProcess(void);
+
 #ifdef __cplusplus
 }
 #endif

@@ -9,6 +9,7 @@
 #include "adc.h"
 #include "blower_vcm.h"
 #include "butterworthfilter.h"
+#include "calibtrans.h"
 #include "controldata.h"
 #include "iir1.h"
 #include "numfilter.h"
@@ -139,4 +140,21 @@ void controlDataFilterProcess(void) {
     controlDataSet(INSP_FLOW_TRIGER_FILTERED, lFiltered);
     lFiltered = controlDataLpf2Run(gFlowFilters[1U], controlDataGet(RAW_O2_FLOW), controlDataGet(RAW_O2_FLOW_PRE));
     controlDataSet(O2_FLOW_FILTERED, lFiltered);
+}
+
+void controlDataCalibrationProcess(void) {
+    float lConverted;
+
+    if (calibtransInspPrs(controlDataGet(INSP_PRS_BWF), &lConverted) == CALIBTRANS_STATUS_OK) {
+        controlDataSet(INSP_REAL_PRS, lConverted);
+    }
+    if (calibtransAdultProxFlow(controlDataGet(MDIFF_PRS_BWF), &lConverted) == CALIBTRANS_STATUS_OK) {
+        controlDataSet(MDIFF_REAL_FLOW, lConverted);
+    }
+    if (calibtransPeepPrs(controlDataGet(PEEP_PRS_BWF), &lConverted) == CALIBTRANS_STATUS_OK) {
+        controlDataSet(PEEP_REAL_PRS, lConverted);
+    }
+    if (calibtransExpPrs(controlDataGet(EXP_PRS_BWF), &lConverted) == CALIBTRANS_STATUS_OK) {
+        controlDataSet(EXP_REAL_PRS, lConverted);
+    }
 }

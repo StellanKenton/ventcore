@@ -95,6 +95,7 @@ static void ventTask(void *argument)
 
     for (;;) {
         controlDataFilterProcess();
+        controlDataCalibrationProcess();
         (void)repRtosTaskDelayUntilMs(&lPreviousWakeMs, VENT_TASK_INTERVAL_MS);
     }
 }
