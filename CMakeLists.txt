@@ -26,6 +26,8 @@ set(FREERTOS_SOURCES
 
 add_executable(ventcore
     User/main.c
+    User/app/calibration/calibration.c
+    User/app/calibration/calibtrans.c
     User/app/databus/controldata.c
     User/app/databus/databus.c
     User/app/system/taskmanager.c
@@ -33,6 +35,7 @@ add_executable(ventcore
     User/bsp/adc/adc.c
     User/bsp/blower_vcm/blower_vcm.c
     User/bsp/dvalve/dvalve.c
+    User/bsp/eeprom/m24512r.c
     User/bsp/sf06sdk/sensirion_common.c
     User/bsp/sf06sdk/sensirion_i2c.c
     User/bsp/sf06sdk/sensirion_i2c_hal.c
@@ -63,12 +66,14 @@ add_executable(ventcore
 
 target_include_directories(ventcore PRIVATE
     User
+    User/app/calibration
     User/app/databus
     User/app/system
     User/bsp
     User/bsp/adc
     User/bsp/blower_vcm
     User/bsp/dvalve
+    User/bsp/eeprom
     User/bsp/sf06sdk
     User/bsp/valve
     User/module/log

@@ -13,6 +13,7 @@
 #include "taskmanager.h"
 #include "adc.h"
 #include "bspdebug.h"
+#include "calibration.h"
 #include "dvalve.h"
 #include "valve.h"
 
@@ -37,6 +38,9 @@ int main(void)
     adcInit();
     dvalveInit();
     valveInit();
+    if (calibrationInit() != CALIBRATION_STATUS_OK) {
+        LOG_W("main", "one or more calibration records are unavailable");
+    }
 
     /* Register project tasks before handing control to the scheduler. */
     if (!WorkerTasksRegister()) {
