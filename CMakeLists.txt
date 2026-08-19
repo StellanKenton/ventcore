@@ -30,6 +30,7 @@ add_executable(ventcore
     User/app/calibration/calibtrans.c
     User/app/databus/controldata.c
     User/app/databus/databus.c
+    User/app/databus/settingdata.c
     User/app/system/taskmanager.c
     User/bsp/bspdebug.c
     User/bsp/adc/adc.c
