@@ -23,6 +23,7 @@ typedef enum {
     RAW_INSP_FLOW_PRE,
     RAW_O2_FLOW,
     RAW_O2_FLOW_PRE,
+    RAW_BLOWER_SPEED,
 
     INSP_PRS_10HZ,
     MDIFF_PRS_10HZ,

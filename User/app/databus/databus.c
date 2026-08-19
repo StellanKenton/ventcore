@@ -7,6 +7,7 @@
 #include <stddef.h>
 
 #include "adc.h"
+#include "blower_vcm.h"
 #include "butterworthfilter.h"
 #include "controldata.h"
 #include "iir1.h"
@@ -64,12 +65,15 @@ static void controlDataFiltersInit(void) {
 void controlDataRawProcess(void) {
     const SFM3119_Result *lAirResult = sfm3119GetResult(SFM3119_AIR_INDEX);
     const SFM3119_Result *lO2Result = sfm3119GetResult(SFM3119_O2_INDEX);
+    stBlowerVcmFeedback lBlowerFeedback;
     float lInspPrs = (float)adc_value[ADC_IDX_INSP_PRS];
     float lMdiffPrs = (float)adc_value[ADC_IDX_MDIFF_PRS];
     float lPeepPrs = (float)adc_value[ADC_IDX_PEEP_PRS];
     float lExpPrs = (float)adc_value[ADC_IDX_EXP_PRS];
     float lInspFlow = (lAirResult != NULL) ? lAirResult->flow_slm : 0.0F;
     float lO2Flow = (lO2Result != NULL) ? lO2Result->flow_slm : 0.0F;
+
+    (void)blowerVcmGetFeedback(&lBlowerFeedback);
 
     controlDataSet(RAW_INSP_AD_PRE, controlDataGet(RAW_INSP_AD));
     controlDataSet(RAW_INSP_AD, lInspPrs);
@@ -83,6 +87,7 @@ void controlDataRawProcess(void) {
     controlDataSet(RAW_INSP_FLOW, lInspFlow);
     controlDataSet(RAW_O2_FLOW_PRE, controlDataGet(RAW_O2_FLOW));
     controlDataSet(RAW_O2_FLOW, lO2Flow);
+    controlDataSet(RAW_BLOWER_SPEED, lBlowerFeedback.speedRps);
 }
 
 void controlDataFilterProcess(void) {
