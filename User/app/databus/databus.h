@@ -10,12 +10,11 @@ extern "C" {
 #endif
 
 #define VENT_DATA_CHANNEL_COUNT            6U
-#define VENT_DATA_10HZ_WINDOW_SIZE         20U
 
 /* Store the latest sensor values and retain the preceding raw sample. */
 void controlDataRawProcess(void);
 
-/* Update moving-average, Butterworth, and cascaded low-pass results. */
+/* Update Butterworth and cascaded low-pass results. */
 void controlDataFilterProcess(void);
 
 /* Convert Butterworth-filtered ADC values to calibrated physical values. */

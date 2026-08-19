@@ -1,6 +1,6 @@
 /************************************************************************************
 * @file     : databus.c
-* @brief    : Ventilation data acquisition and 10 Hz filtering.
+* @brief    : Ventilation data acquisition and filtering.
 ***********************************************************************************/
 #include "databus.h"
 
@@ -12,11 +12,8 @@
 #include "calibtrans.h"
 #include "controldata.h"
 #include "iir1.h"
-#include "numfilter.h"
 #include "sfm3119.h"
 
-static MovAvgFilterObj gcontrolDataFilters[VENT_DATA_CHANNEL_COUNT];
-static float gcontrolDataFilterBuffers[VENT_DATA_CHANNEL_COUNT][VENT_DATA_10HZ_WINDOW_SIZE];
 static ButterworthFilterObj gButterworthFilters[VENT_DATA_CHANNEL_COUNT];
 /* Second-order Butterworth low-pass coefficients for Fs = 166.667 Hz and Fc = 14 Hz. */
 static const float gButterworth14HzNum[3U] = {0.05017146F, 0.10034292F, 0.05017146F};
@@ -38,9 +35,6 @@ static void controlDataFiltersInit(void) {
     uint8_t lIndex;
 
     for (lIndex = 0U; lIndex < VENT_DATA_CHANNEL_COUNT; lIndex++) {
-        UnitAlgoMovAvgFilterInit(&gcontrolDataFilters[lIndex],
-                                  gcontrolDataFilterBuffers[lIndex],
-                                  VENT_DATA_10HZ_WINDOW_SIZE);
         UnitAlgoButterworthFilterInit(&gButterworthFilters[lIndex],
                                       gButterworth14HzNum,
                                       gButterworth14HzDen);
@@ -97,19 +91,6 @@ void controlDataFilterProcess(void) {
     if (gcontrolDataFiltersInitialized == 0U) {
         controlDataFiltersInit();
     }
-
-    lFiltered = UnitAlgoMovAvgFilterUpdata(&gcontrolDataFilters[0U], controlDataGet(RAW_INSP_AD));
-    controlDataSet(INSP_PRS_10HZ, lFiltered);
-    lFiltered = UnitAlgoMovAvgFilterUpdata(&gcontrolDataFilters[1U], controlDataGet(RAW_MDIFF_AD));
-    controlDataSet(MDIFF_PRS_10HZ, lFiltered);
-    lFiltered = UnitAlgoMovAvgFilterUpdata(&gcontrolDataFilters[2U], controlDataGet(RAW_PEEP_AD));
-    controlDataSet(PEEP_PRS_10HZ, lFiltered);
-    lFiltered = UnitAlgoMovAvgFilterUpdata(&gcontrolDataFilters[3U], controlDataGet(RAW_EXP_AD));
-    controlDataSet(EXP_PRS_10HZ, lFiltered);
-    lFiltered = UnitAlgoMovAvgFilterUpdata(&gcontrolDataFilters[4U], controlDataGet(RAW_INSP_FLOW));
-    controlDataSet(INSP_FLOW_10HZ, lFiltered);
-    lFiltered = UnitAlgoMovAvgFilterUpdata(&gcontrolDataFilters[5U], controlDataGet(RAW_O2_FLOW));
-    controlDataSet(O2_FLOW_10HZ, lFiltered);
 
     lFiltered = UnitAlgoButterworthFilterUpdate(controlDataGet(RAW_INSP_AD), &gButterworthFilters[0U]);
     controlDataSet(INSP_PRS_BWF, lFiltered);
