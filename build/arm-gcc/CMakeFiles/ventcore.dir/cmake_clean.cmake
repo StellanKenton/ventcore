@@ -76,6 +76,8 @@ file(REMOVE_RECURSE
   "CMakeFiles/ventcore.dir/User/module/rtos/portrtos.c.obj.d"
   "CMakeFiles/ventcore.dir/User/module/rtos/rtos.c.obj"
   "CMakeFiles/ventcore.dir/User/module/rtos/rtos.c.obj.d"
+  "CMakeFiles/ventcore.dir/User/tools/filter/butterworth/butterworthfilter.c.obj"
+  "CMakeFiles/ventcore.dir/User/tools/filter/butterworth/butterworthfilter.c.obj.d"
   "CMakeFiles/ventcore.dir/User/tools/filter/iir1/iir1.c.obj"
   "CMakeFiles/ventcore.dir/User/tools/filter/iir1/iir1.c.obj.d"
   "CMakeFiles/ventcore.dir/User/tools/filter/numfilter/numfilter.c.obj"

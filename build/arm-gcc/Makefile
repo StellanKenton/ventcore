@@ -1048,6 +1048,30 @@ User/module/rtos/rtos.c.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/User/module/rtos/rtos.c.s
 .PHONY : User/module/rtos/rtos.c.s
 
+User/tools/filter/butterworth/butterworthfilter.obj: User/tools/filter/butterworth/butterworthfilter.c.obj
+.PHONY : User/tools/filter/butterworth/butterworthfilter.obj
+
+# target to build an object file
+User/tools/filter/butterworth/butterworthfilter.c.obj:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/User/tools/filter/butterworth/butterworthfilter.c.obj
+.PHONY : User/tools/filter/butterworth/butterworthfilter.c.obj
+
+User/tools/filter/butterworth/butterworthfilter.i: User/tools/filter/butterworth/butterworthfilter.c.i
+.PHONY : User/tools/filter/butterworth/butterworthfilter.i
+
+# target to preprocess a source file
+User/tools/filter/butterworth/butterworthfilter.c.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/User/tools/filter/butterworth/butterworthfilter.c.i
+.PHONY : User/tools/filter/butterworth/butterworthfilter.c.i
+
+User/tools/filter/butterworth/butterworthfilter.s: User/tools/filter/butterworth/butterworthfilter.c.s
+.PHONY : User/tools/filter/butterworth/butterworthfilter.s
+
+# target to generate assembly for a file
+User/tools/filter/butterworth/butterworthfilter.c.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/User/tools/filter/butterworth/butterworthfilter.c.s
+.PHONY : User/tools/filter/butterworth/butterworthfilter.c.s
+
 User/tools/filter/iir1/iir1.obj: User/tools/filter/iir1/iir1.c.obj
 .PHONY : User/tools/filter/iir1/iir1.obj
 
@@ -1244,6 +1268,9 @@ help:
 	@echo ... User/module/rtos/rtos.obj
 	@echo ... User/module/rtos/rtos.i
 	@echo ... User/module/rtos/rtos.s
+	@echo ... User/tools/filter/butterworth/butterworthfilter.obj
+	@echo ... User/tools/filter/butterworth/butterworthfilter.i
+	@echo ... User/tools/filter/butterworth/butterworthfilter.s
 	@echo ... User/tools/filter/iir1/iir1.obj
 	@echo ... User/tools/filter/iir1/iir1.i
 	@echo ... User/tools/filter/iir1/iir1.s

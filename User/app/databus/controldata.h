@@ -31,6 +31,13 @@ typedef enum {
     INSP_FLOW_10HZ,
     O2_FLOW_10HZ,
 
+    INSP_PRS_BWF,
+    MDIFF_PRS_BWF,
+    PEEP_PRS_BWF,
+    EXP_PRS_BWF,
+    INSP_FLOW_BWF,
+    O2_FLOW_BWF,
+
     INSP_PRS_FILTERED,
     MDIFF_PRS_FILTERED,
     PEEP_PRS_FILTERED,
@@ -38,9 +45,6 @@ typedef enum {
     INSP_FLOW_FILTERED,
     INSP_FLOW_TRIGER_FILTERED,
     O2_FLOW_FILTERED,
-
-
-    
     
     CONTROL_DATA_COUNT
 } ControlData_Index_EnumDef;

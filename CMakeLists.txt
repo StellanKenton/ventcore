@@ -46,6 +46,7 @@ add_executable(ventcore
     User/module/log/SEGGER/SEGGER_RTT.c
     User/module/rtos/rtos.c
     User/module/rtos/portrtos.c
+    User/tools/filter/butterworth/butterworthfilter.c
     User/tools/filter/iir1/iir1.c
     User/tools/filter/numfilter/numfilter.c
     User/tools/ringbuffer/ringbuffer.c
@@ -74,6 +75,7 @@ target_include_directories(ventcore PRIVATE
     User/module/log/consoleRegisted
     User/module/log/SEGGER
     User/module/rtos
+    User/tools/filter/butterworth
     User/tools/filter/iir1
     User/tools/filter/numfilter
     User/tools/ringbuffer

@@ -15,7 +15,7 @@ extern "C" {
 /* Store the latest sensor values and retain the preceding raw sample. */
 void controlDataRawProcess(void);
 
-/* Update the 10 Hz low-pass results from the latest raw sensor values. */
+/* Update moving-average, Butterworth, and cascaded low-pass results. */
 void controlDataFilterProcess(void);
 
 #ifdef __cplusplus
