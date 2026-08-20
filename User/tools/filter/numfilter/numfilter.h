@@ -23,6 +23,12 @@ extern "C" {
 
 #include "stdint.h"
 
+/** Return the greater of two values. */
+#define NUMFILTER_MAX(a, b)    (((a) > (b)) ? (a) : (b))
+
+/** Return the lesser of two values. */
+#define NUMFILTER_MIN(a, b)    (((a) < (b)) ? (a) : (b))
+
 /** 比例换算对象，满足 y = kx + b  */
 typedef struct _PROPORT_OBJ_
 {

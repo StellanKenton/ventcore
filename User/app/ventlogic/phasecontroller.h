@@ -14,6 +14,15 @@
 extern "C" {
 #endif
 
+typedef struct stPhaseController {
+    ePhaseControllerState runState;
+    float    runCMD;
+    uint16_t inspRiseTimeTicks;
+    uint16_t inspHoldTimeTicks;
+    uint16_t expReleaseTimeTicks;
+    uint16_t expPeepTimeTicks;
+} stPhaseController;
+
 typedef enum {
     PHASE_IDLE = 0,
     PHASE_INSP_RISE,

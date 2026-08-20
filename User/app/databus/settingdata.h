@@ -391,6 +391,10 @@ typedef struct stVentHfoSettings {
     uint32_t sighIntervalMs;
 } stVentHfoSettings;
 
+stVentLimitSettings *GetVentLimitSettings(void);
+stVentPatientSettings *GetVentPatientSettings(void);
+stVentPacSettings *GetVentPacSettings(void);
+
 #ifdef __cplusplus
 }
 #endif
