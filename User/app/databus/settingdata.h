@@ -13,7 +13,8 @@ extern "C" {
 #endif
 
 typedef enum {
-    VENT_MD_PAC = 0,
+    VENT_MD_IDLE = 0,
+    VENT_MD_PAC,
     VENT_MD_VAC,
     VENT_MD_CPAP_PSV,
     VENT_MD_PSV_ST,

@@ -11,15 +11,17 @@
 
 #include <stdbool.h>
 
-
+stBreathInfo gBreathInfo;
 
 int8_t breathSchedulerInit(void)
 {
-
+    gBreathInfo.runState = false;
+    gBreathInfo.currentMode = VENT_MD_IDLE;
+    return 0;
 }
 
 void breathSchedulerProcess(void)
 {
-
+    
 }
 /**************************End of file********************************/

@@ -575,6 +575,26 @@ CMakeFiles/ventcore.dir/User/app/system/taskmanager.c.obj
  D:/Space/Cosmos/ventcore/User/module/rtos/rtos.h
  D:/Space/Cosmos/ventcore/User/tools/ringbuffer/ringbuffer.h
 
+CMakeFiles/ventcore.dir/User/app/ventalgo/fio2controller.c.obj
+ D:/Space/Cosmos/ventcore/User/app/ventalgo/fio2controller.c
+ D:/Space/Cosmos/ventcore/User/app/ventalgo/fio2controller.h
+
+CMakeFiles/ventcore.dir/User/app/ventalgo/flowcontroller.c.obj
+ D:/Space/Cosmos/ventcore/User/app/ventalgo/flowcontroller.c
+ D:/Space/Cosmos/ventcore/User/app/ventalgo/flowcontroller.h
+
+CMakeFiles/ventcore.dir/User/app/ventalgo/peepcontroller.c.obj
+ D:/Space/Cosmos/ventcore/User/app/ventalgo/peepcontroller.c
+ D:/Space/Cosmos/ventcore/User/app/ventalgo/peepcontroller.h
+
+CMakeFiles/ventcore.dir/User/app/ventalgo/pressurecontroller.c.obj
+ D:/Space/Cosmos/ventcore/User/app/ventalgo/pressurecontroller.c
+ D:/Space/Cosmos/ventcore/User/app/ventalgo/pressurecontroller.h
+
+CMakeFiles/ventcore.dir/User/app/ventlogic/actuatorcontroller.c.obj
+ D:/Space/Cosmos/ventcore/User/app/ventlogic/actuatorcontroller.c
+ D:/Space/Cosmos/ventcore/User/app/ventlogic/actuatorcontroller.h
+
 CMakeFiles/ventcore.dir/User/app/ventlogic/breathscheduler.c.obj
  D:/Space/Cosmos/ventcore/User/app/ventlogic/breathscheduler.c
  C:/Program Files (x86)/Arm/GNU Toolchain mingw-w64-i686-arm-none-eabi/arm-none-eabi/include/_newlib_version.h
@@ -586,6 +606,18 @@ CMakeFiles/ventcore.dir/User/app/ventlogic/breathscheduler.c.obj
  C:/Program Files (x86)/Arm/GNU Toolchain mingw-w64-i686-arm-none-eabi/lib/gcc/arm-none-eabi/15.2.1/include/stdbool.h
  C:/Program Files (x86)/Arm/GNU Toolchain mingw-w64-i686-arm-none-eabi/lib/gcc/arm-none-eabi/15.2.1/include/stdint.h
  D:/Space/Cosmos/ventcore/User/app/ventlogic/breathscheduler.h
+
+CMakeFiles/ventcore.dir/User/app/ventlogic/cycleengine.c.obj
+ D:/Space/Cosmos/ventcore/User/app/ventlogic/cycleengine.c
+ D:/Space/Cosmos/ventcore/User/app/ventlogic/cycleengine.h
+
+CMakeFiles/ventcore.dir/User/app/ventlogic/monitorengine.c.obj
+ D:/Space/Cosmos/ventcore/User/app/ventlogic/monitorengine.c
+ D:/Space/Cosmos/ventcore/User/app/ventlogic/monitorengine.h
+
+CMakeFiles/ventcore.dir/User/app/ventlogic/triggerengine.c.obj
+ D:/Space/Cosmos/ventcore/User/app/ventlogic/triggerengine.c
+ D:/Space/Cosmos/ventcore/User/app/ventlogic/triggerengine.h
 
 CMakeFiles/ventcore.dir/User/bsp/adc/adc.c.obj
  D:/Space/Cosmos/ventcore/User/bsp/adc/adc.c

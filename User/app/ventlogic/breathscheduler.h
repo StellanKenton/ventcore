@@ -15,10 +15,14 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
+#include "settingdata.h"
 
 
-
-
+typedef struct stBreathInfo {
+    bool runState;
+    eVentMode currentMode;
+    
+} stBreathInfo;
 
 
 /* Configure the scheduler and leave it idle. */
