@@ -12,6 +12,7 @@
 #include <stddef.h>
 
 #include "blower_vcm.h"
+#include "breathscheduler.h"
 #include "databus.h"
 #include "log.h"
 #include "rtos.h"
@@ -92,7 +93,7 @@ static void ventTask(void *argument)
     uint32_t lPreviousWakeMs = repRtosGetTickMs();
 
     (void)argument;
-
+    
     for (;;) {
         controlDataFilterProcess();
         controlDataCalibrationProcess();

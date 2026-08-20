@@ -32,6 +32,15 @@ add_executable(ventcore
     User/app/databus/databus.c
     User/app/databus/settingdata.c
     User/app/system/taskmanager.c
+    User/app/ventalgo/fio2controller.c
+    User/app/ventalgo/flowcontroller.c
+    User/app/ventalgo/peepcontroller.c
+    User/app/ventalgo/pressurecontroller.c
+    User/app/ventlogic/actuatorcontroller.c
+    User/app/ventlogic/breathscheduler.c
+    User/app/ventlogic/cycleengine.c
+    User/app/ventlogic/monitorengine.c
+    User/app/ventlogic/triggerengine.c
     User/bsp/bspdebug.c
     User/bsp/adc/adc.c
     User/bsp/blower_vcm/blower_vcm.c
@@ -71,6 +80,8 @@ target_include_directories(ventcore PRIVATE
     User/app/calibration
     User/app/databus
     User/app/system
+    User/app/ventalgo
+    User/app/ventlogic
     User/bsp
     User/bsp/adc
     User/bsp/blower_vcm
