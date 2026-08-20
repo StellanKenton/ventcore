@@ -60,8 +60,8 @@ void breathSchedulerProcess(void)
                 breathControlSet(BREATH_PATIENT_TYPE, (float)lPatientSettings->Type);
                 breathControlSet(BREATH_IDEAL_BODY_WEIGHT, (float)lPatientSettings->IdealBodyWeightKg);
                 breathControlSet(BREATH_IDEAL_BODY_HEIGHT, (float)lPatientSettings->IdealBodyHeightCm);
-                breathControlSet(BREATH_INSP_PRESSURE, lPacSettings->inspPressure);
                 breathControlSet(BREATH_PEEP_PRESSURE, lPacSettings->peep);
+                breathControlSet(BREATH_INSP_PRESSURE, lPacSettings->DeltaPressure+lPacSettings->peep);
                 breathControlSet(BREATH_CONTROL_TYPE, (float)PRESSURE_CONTROL);
                 breathControlSet(BREATH_INSP_RISE_TIME, NUMFILTER_MIN((float)lPacSettings->inspiratoryTimeMs, (float)lPacSettings->riseTimeMs));
                 breathControlSet(BREATH_INSP_HOLD_TIME, NUMFILTER_MAX(0.0f, (float)(lPacSettings->inspiratoryTimeMs - lPacSettings->riseTimeMs)));

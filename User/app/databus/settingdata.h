@@ -84,7 +84,7 @@ typedef struct stVentPacSettings {
     float peep;
     float Rate;
     uint32_t inspiratoryTimeMs;
-    float inspPressure;
+    float DeltaPressure;
     uint32_t riseTimeMs;
     eVentTriggerType triggerType;
     float pressureTriggerCmh2o;

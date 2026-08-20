@@ -40,6 +40,7 @@ add_executable(ventcore
     User/app/ventlogic/breathscheduler.c
     User/app/ventlogic/cycleengine.c
     User/app/ventlogic/monitorengine.c
+    User/app/ventlogic/phasecontroller.c
     User/app/ventlogic/triggerengine.c
     User/bsp/bspdebug.c
     User/bsp/adc/adc.c
