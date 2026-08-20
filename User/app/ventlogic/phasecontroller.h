@@ -16,10 +16,8 @@ extern "C" {
 
 typedef struct stPhaseController {
     ePhaseControllerState runState;
-    float    runCMD;
     uint16_t inspRiseTimeTicks;
     uint16_t inspHoldTimeTicks;
-    uint16_t expReleaseTimeTicks;
     uint16_t expPeepTimeTicks;
 } stPhaseController;
 
@@ -27,7 +25,6 @@ typedef enum {
     PHASE_IDLE = 0,
     PHASE_INSP_RISE,
     PHASE_INSP_HOLD,
-    PHASE_EXP_RELEASE,
     PHASE_EXP_PEEP,
 } ePhaseControllerState;
 
@@ -35,7 +32,7 @@ typedef enum {
 void phaseControllerInit(void);
 
 /** Run one phase controller processing cycle. */
-void phaseControllerProcess(void);
+void phaseControllerProcess(uint8_t tickCount);
 
 #ifdef __cplusplus
 }

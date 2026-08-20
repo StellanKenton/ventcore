@@ -9,8 +9,6 @@
 ***********************************************************************************/
 #include "valve.h"
 
-#include <stddef.h>
-
 #include "gd32f4xx_gpio.h"
 #include "gd32f4xx_rcu.h"
 
@@ -78,18 +76,13 @@ int8_t valveControlSet(eValveIndex valveIndex, eValveLevel level)
     return VALVE_STATUS_OK;
 }
 
-int8_t valveStateGet(eValveIndex valveIndex, eValveLevel *level)
+eValveLevel valveStateGet(eValveIndex valveIndex)
 {
     if ((uint32_t)valveIndex >= (uint32_t)VALVE_COUNT) {
-        return VALVE_ERROR_INVALID_INDEX;
+        return VALVE_LEVEL_INVALID;
     }
-    if (level == NULL) {
-        return VALVE_ERROR_NULL_POINTER;
-    }
-
-    *level = (gpio_input_bit_get(gValveStatePorts[valveIndex], gValveStatePins[valveIndex]) == SET) ?
-             VALVE_LEVEL_HIGH : VALVE_LEVEL_LOW;
-    return VALVE_STATUS_OK;
+    return (gpio_input_bit_get(gValveStatePorts[valveIndex], gValveStatePins[valveIndex]) == SET) ?
+           VALVE_LEVEL_HIGH : VALVE_LEVEL_LOW;
 }
 
 /**************************End of file********************************/

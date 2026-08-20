@@ -10,7 +10,6 @@
 #include "breathscheduler.h"
 #include "settingdata.h"
 #include <stdbool.h>
-#include <stddef.h>
 #include "numfilter.h"
 
 stBreathInfo gBreathInfo;
@@ -32,13 +31,12 @@ int8_t breathControlSet(eBreathControlType type, float value) {
     return BREATH_CONTROL_SUCCESS;
 }
 
-int8_t breathControlGet(eBreathControlType type, float *value) {
-    if ((type <= BREATH_NONE) || (type >= BREATH_COUNT) || (value == NULL)) {
-        return BREATH_CONTROL_ERROR_PARAM;
+float breathControlGet(eBreathControlType type) {
+    if ((type <= BREATH_NONE) || (type >= BREATH_COUNT)) {
+        return 0.0F;
     }
 
-    *value = gBreathData[type];
-    return BREATH_CONTROL_SUCCESS;
+    return gBreathData[type];
 }
 
 void breathSchedulerProcess(void)

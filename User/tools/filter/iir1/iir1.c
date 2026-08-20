@@ -46,12 +46,9 @@ float iir1GetY1(stIir1 *filter)
     return (filter != NULL) ? filter->y1 : 0.0f;
 }
 
-void iir1GetDen(stIir1 *filter, float *pa1)
+float iir1GetDen(stIir1 *filter)
 {
-    if ((filter != NULL) && (pa1 != NULL))
-    {
-        *pa1 = filter->a1;
-    }
+    return (filter != NULL) ? filter->a1 : 0.0f;
 }
 
 void iir1GetState(stIir1 *filter, float *px1, float *py1)

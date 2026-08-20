@@ -19,7 +19,6 @@ extern "C" {
 #define VALVE_STATUS_OK                 ((int8_t)1)
 #define VALVE_ERROR_INVALID_INDEX       ((int8_t)-1)
 #define VALVE_ERROR_INVALID_LEVEL       ((int8_t)-2)
-#define VALVE_ERROR_NULL_POINTER        ((int8_t)-3)
 
 typedef enum eValveIndex {
     VALVE_IDX_INSP_PRESSURE_ZERO = 0,
@@ -30,13 +29,14 @@ typedef enum eValveIndex {
 } eValveIndex;
 
 typedef enum eValveLevel {
+    VALVE_LEVEL_INVALID = -1,
     VALVE_LEVEL_LOW = 0,
     VALVE_LEVEL_HIGH
 } eValveLevel;
 
 void valveInit(void);
 int8_t valveControlSet(eValveIndex valveIndex, eValveLevel level);
-int8_t valveStateGet(eValveIndex valveIndex, eValveLevel *level);
+eValveLevel valveStateGet(eValveIndex valveIndex);
 
 #ifdef __cplusplus
 }

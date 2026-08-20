@@ -56,7 +56,7 @@ float iir1GetX1(stIir1 *filter);
 float iir1GetY1(stIir1 *filter);
 
 /** 读取分母系数集合。 */
-void iir1GetDen(stIir1 *filter, float *pa1);
+float iir1GetDen(stIir1 *filter);
 
 /** 读取一阶滤波器状态量。 */
 void iir1GetState(stIir1 *filter, float *px1, float *py1);

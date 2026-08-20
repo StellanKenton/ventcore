@@ -222,9 +222,9 @@ static eConsoleCommandResult bspDebugValveCommand(const char *arguments)
     }
 
     if (!bspDebugTokenRead(&arguments, &lToken, &lLength)) {
-        lStatus = valveStateGet((eValveIndex)lIndex, &lLevel);
-        if (lStatus != VALVE_STATUS_OK) {
-            LOG_E(gBspDebugTag, "valve %s read failed: %d", gBspDebugValveNames[lIndex], (int)lStatus);
+        lLevel = valveStateGet((eValveIndex)lIndex);
+        if (lLevel == VALVE_LEVEL_INVALID) {
+            LOG_E(gBspDebugTag, "valve %s read failed", gBspDebugValveNames[lIndex]);
             return CONSOLE_COMMAND_RESULT_ERROR;
         }
         LOG_I(gBspDebugTag, "valve %s %u", gBspDebugValveNames[lIndex], (unsigned int)lLevel);

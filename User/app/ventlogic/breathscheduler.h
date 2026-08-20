@@ -62,7 +62,7 @@ int8_t breathSchedulerInit(void);
 int8_t breathControlSet(eBreathControlType type, float value);
 
 /* Get a breath control value selected by type. */
-int8_t breathControlGet(eBreathControlType type, float *value);
+float breathControlGet(eBreathControlType type);
 
 /* Advance the state machine using the current monotonic tick. */
 void breathSchedulerProcess(void);
