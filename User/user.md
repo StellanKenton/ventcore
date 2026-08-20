@@ -18,6 +18,7 @@
 | `module/log/` | RTT 日志、ringbuffer 输出队列和 `help/time/reboot` 控制台命令 |
 | `module/rtos/rtos.*` | 项目层任务、调度、固定周期 `DelayUntil`、tick 和临界区接口 |
 | `module/rtos/portrtos.*` | FreeRTOS 原生接口绑定 |
+| `tools/controller/` | 轻量控制算法；当前提供带输出限幅和积分抗饱和的固定周期浮点 PID |
 | `tools/ringbuffer/` | 日志输出使用的轻量级字节环形缓冲区 |
 | `develop/` | VS Code Device Tool 的 CMake 构建、烧录、复位与 RTT 工具 |
 | `FreeRTOSConfig.h` | FreeRTOS 工程配置 |
