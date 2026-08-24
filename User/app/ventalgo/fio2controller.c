@@ -11,10 +11,12 @@
 
 void fio2ControllerInit(void)
 {
+    
 }
 
 void fio2ControllerProcess(void)
 {
+
 }
 
 /**************************End of file********************************/

@@ -8,6 +8,7 @@
 | `app/calibration/` | 上电只读加载 EEPROM 中五类既有校准记录，校验记录头与 CRC-16，并提供有效性查询和运行期只读访问 |
 | `app/taskmanager.*` | 通过 `WorkerTasksRegister()` 创建 defaultTask、VentTask、SensorTask、HMITask、AlarmTask；全部任务使用绝对周期 `DelayUntil`，SensorTask 每 2 ms 采集两只 SFM3119 并处理风机反馈 |
 | `app/databus/` | 维护控制数据数组；SensorTask 保存当前及前一周期原始数据，VentTask 基于最新原始数据计算 10 Hz 滤波结果 |
+| `app/ventalgo/` | 聚合压力、流量、PEEP 和 FiO₂ 控制器，并由 VentTask 统一初始化和周期执行 |
 | `app/ventlogic/` | 维护呼吸时序逻辑；Breath Scheduler 在 VentTask 中按单调 tick 驱动吸气、呼气状态切换 |
 | `bsp/adc/adc.*` | 使用 ADC1 规则组扫描、连续转换和 DMA1 循环模式持续采集 14 路板级模拟量 |
 | `bsp/blower_vcm/blower_vcm.*` | 使用 UART4（板级 VCM UART5，PC12/PD2）和 DMA0 异步发送双控制帧、循环接收反馈；控制变化时立即发送并每 100 ms 保活重发，提供连接超时与通信统计 |
