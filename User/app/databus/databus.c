@@ -134,6 +134,7 @@ void controlDataCalibrationProcess(void) {
     }
     if (calibtransPeepPrs(controlDataGet(PEEP_PRS_BWF), &lConverted) == CALIBTRANS_STATUS_OK) {
         controlDataSet(PEEP_REAL_PRS, lConverted);
+        controlDataSet(PAT_REAL_PRS, lConverted);
     }
     if (calibtransExpPrs(controlDataGet(EXP_PRS_BWF), &lConverted) == CALIBTRANS_STATUS_OK) {
         controlDataSet(EXP_REAL_PRS, lConverted);

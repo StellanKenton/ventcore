@@ -8,18 +8,140 @@
 * @copyright: Copyright (c) 2050
 ***********************************************************************************/
 #include "breathscheduler.h"
-#include "settingdata.h"
-#include <stdbool.h>
-#include "numfilter.h"
 
-stBreathInfo gBreathInfo;
+#include <math.h>
+#include <stdbool.h>
+#include <stddef.h>
+
+#include "numfilter.h"
+#include "settingdata.h"
+
+static bool gBreathRunning = false;
+static eVentMode gBreathMode = VENT_MD_IDLE;
 static float gBreathData[BREATH_COUNT];
+
+/** Validate the PAC settings used to derive phase controller parameters. */
+static bool breathSchedulerPacSettingsValid(const stVentPatientSettings *patientSettings,
+                                            const stVentLimitSettings *limitSettings,
+                                            const stVentPacSettings *pacSettings)
+{
+    float lBreathPeriodMs;
+    float lInspPressure;
+
+    if ((patientSettings == NULL) || (limitSettings == NULL) || (pacSettings == NULL)) {
+        return false;
+    }
+    if (!isfinite(limitSettings->pressureLow) ||
+        !isfinite(limitSettings->pressureHigh) ||
+        (limitSettings->pressureLow > limitSettings->pressureHigh) ||
+        (limitSettings->o2PercentLow > limitSettings->o2PercentHigh) ||
+        (limitSettings->frequencyLow > limitSettings->frequencyHigh) ||
+        !isfinite(pacSettings->oxygen) ||
+        !isfinite(pacSettings->peep) ||
+        !isfinite(pacSettings->Rate) ||
+        !isfinite(pacSettings->DeltaPressure)) {
+        return false;
+    }
+    if ((patientSettings->Type >= VENT_PATIENT_TYPE_COUNT) ||
+        (patientSettings->IdealBodyWeightKg < 1U) ||
+        (patientSettings->IdealBodyWeightKg > 300U) ||
+        (patientSettings->IdealBodyHeightCm < 2U) ||
+        (patientSettings->IdealBodyHeightCm > 440U)) {
+        return false;
+    }
+    if ((pacSettings->oxygen < (float)limitSettings->o2PercentLow) ||
+        (pacSettings->oxygen > (float)limitSettings->o2PercentHigh) ||
+        (pacSettings->peep < limitSettings->pressureLow) ||
+        (pacSettings->Rate < (float)limitSettings->frequencyLow) ||
+        (pacSettings->Rate > (float)limitSettings->frequencyHigh) ||
+        (pacSettings->DeltaPressure < 0.0F) ||
+        (pacSettings->inspiratoryTimeMs == 0U) ||
+        (pacSettings->riseTimeMs > pacSettings->inspiratoryTimeMs) ||
+        (pacSettings->triggerType >= VENT_TRIGGER_COUNT)) {
+        return false;
+    }
+
+    lInspPressure = pacSettings->peep + pacSettings->DeltaPressure;
+    lBreathPeriodMs = 60000.0F / pacSettings->Rate;
+    return (lInspPressure <= limitSettings->pressureHigh) &&
+           (lBreathPeriodMs >= ((float)pacSettings->inspiratoryTimeMs + BREATH_PEEP_LOCK_TIME_MS));
+}
+
+/** Apply validated PAC settings to the phase controller data exchange. */
+static void breathSchedulerPacSettingsApply(const stVentPatientSettings *patientSettings,
+                                             const stVentPacSettings *pacSettings)
+{
+    float lBreathPeriodMs = 60000.0F / pacSettings->Rate;
+
+    (void)breathControlSet(BREATH_PATIENT_TYPE, (float)patientSettings->Type);
+    (void)breathControlSet(BREATH_IDEAL_BODY_WEIGHT, (float)patientSettings->IdealBodyWeightKg);
+    (void)breathControlSet(BREATH_IDEAL_BODY_HEIGHT, (float)patientSettings->IdealBodyHeightCm);
+    (void)breathControlSet(BREATH_PEEP_PRESSURE, pacSettings->peep);
+    (void)breathControlSet(BREATH_INSP_PRESSURE, pacSettings->DeltaPressure + pacSettings->peep);
+    (void)breathControlSet(BREATH_CONTROL_TYPE, (float)PRESSURE_CONTROL);
+    (void)breathControlSet(BREATH_INSP_RISE_TIME,
+                           NUMFILTER_MIN((float)pacSettings->inspiratoryTimeMs,
+                                         (float)pacSettings->riseTimeMs));
+    (void)breathControlSet(BREATH_INSP_HOLD_TIME,
+                           NUMFILTER_MAX(0.0F,
+                                         (float)(pacSettings->inspiratoryTimeMs - pacSettings->riseTimeMs)));
+    (void)breathControlSet(BREATH_INSP_PEEP_TIME,
+                           NUMFILTER_MAX(BREATH_PEEP_LOCK_TIME_MS,
+                                         lBreathPeriodMs - (float)pacSettings->inspiratoryTimeMs));
+    (void)breathControlSet(BREATH_FIO2, pacSettings->oxygen);
+}
 
 int8_t breathSchedulerInit(void)
 {
-    gBreathInfo.runState = false;
-    gBreathInfo.currentMode = VENT_MD_IDLE;
-    return 0;
+    gBreathRunning = false;
+    gBreathMode = VENT_MD_IDLE;
+    (void)breathControlSet(BREATH_RUN, 0.0F);
+    return BREATH_CONTROL_SUCCESS;
+}
+
+int8_t breathSchedulerStart(eVentMode mode)
+{
+    int8_t lStatus = breathSchedulerSettingsUpdate(mode);
+
+    if (lStatus != BREATH_CONTROL_SUCCESS) {
+        return lStatus;
+    }
+
+    gBreathRunning = true;
+    (void)breathControlSet(BREATH_RUN, 1.0F);
+    return BREATH_CONTROL_SUCCESS;
+}
+
+int8_t breathSchedulerStop(void)
+{
+    gBreathRunning = false;
+    (void)breathControlSet(BREATH_RUN, 0.0F);
+    return BREATH_CONTROL_SUCCESS;
+}
+
+int8_t breathSchedulerSettingsUpdate(eVentMode mode)
+{
+    stVentPatientSettings *lPatientSettings;
+    stVentLimitSettings *lLimitSettings;
+    stVentPacSettings *lPacSettings;
+
+    if ((mode <= VENT_MD_IDLE) || (mode >= VENT_MD_COUNT)) {
+        return BREATH_CONTROL_ERROR_PARAM;
+    }
+    if (mode != VENT_MD_PAC) {
+        return BREATH_CONTROL_ERROR_UNSUPPORTED;
+    }
+
+    lPatientSettings = GetVentPatientSettings();
+    lLimitSettings = GetVentLimitSettings();
+    lPacSettings = GetVentPacSettings();
+    if (!breathSchedulerPacSettingsValid(lPatientSettings, lLimitSettings, lPacSettings)) {
+        return BREATH_CONTROL_ERROR_SETTINGS;
+    }
+
+    breathSchedulerPacSettingsApply(lPatientSettings, lPacSettings);
+    gBreathMode = mode;
+    return BREATH_CONTROL_SUCCESS;
 }
 
 int8_t breathControlSet(eBreathControlType type, float value) {
@@ -41,76 +163,6 @@ float breathControlGet(eBreathControlType type) {
 
 void breathSchedulerProcess(void)
 {
-    if(gBreathInfo.runState != gBreathInfo.runPrevious)
-    {
-        stVentPatientSettings *lPatientSettings = GetVentPatientSettings();
-        gBreathInfo.runPrevious = gBreathInfo.runState;
-        switch(gBreathInfo.currentMode)
-        {
-            case VENT_MD_IDLE:
-                break;
-            case VENT_MD_PAC: {
-                stVentPacSettings *lPacSettings = GetVentPacSettings();
-                float lBreathPeriodMs = 0.0f;
-
-                if (lPacSettings->Rate > 0.0f) {
-                    lBreathPeriodMs = 60000.0f / lPacSettings->Rate;
-                }
-
-                breathControlSet(BREATH_PATIENT_TYPE, (float)lPatientSettings->Type);
-                breathControlSet(BREATH_IDEAL_BODY_WEIGHT, (float)lPatientSettings->IdealBodyWeightKg);
-                breathControlSet(BREATH_IDEAL_BODY_HEIGHT, (float)lPatientSettings->IdealBodyHeightCm);
-                breathControlSet(BREATH_PEEP_PRESSURE, lPacSettings->peep);
-                breathControlSet(BREATH_INSP_PRESSURE, lPacSettings->DeltaPressure+lPacSettings->peep);
-                breathControlSet(BREATH_CONTROL_TYPE, (float)PRESSURE_CONTROL);
-                breathControlSet(BREATH_INSP_RISE_TIME, NUMFILTER_MIN((float)lPacSettings->inspiratoryTimeMs, (float)lPacSettings->riseTimeMs));
-                breathControlSet(BREATH_INSP_HOLD_TIME, NUMFILTER_MAX(0.0f, (float)(lPacSettings->inspiratoryTimeMs - lPacSettings->riseTimeMs)));
-                breathControlSet(BREATH_INSP_PEEP_TIME, NUMFILTER_MAX(BREATH_PEEP_LOCK_TIME_MS, lBreathPeriodMs - (float)lPacSettings->inspiratoryTimeMs));
-                breathControlSet(BREATH_FIO2, lPacSettings->oxygen);
-                breathControlSet(BREATH_RUN, 1.0f);
-                break;
-            }
-            case VENT_MD_VAC:
-                break;
-            case VENT_MD_CPAP_PSV:
-                break;
-            case VENT_MD_PSV_ST:
-                break;
-            case VENT_MD_P_SIMV:
-                break;
-            case VENT_MD_V_SIMV:
-                break;
-            case VENT_MD_PRVC:
-                break;
-            case VENT_MD_PRVC_SIMV:
-                break;
-            case VENT_MD_VS:
-                break;
-            case VENT_MD_BAPAP:
-                break;
-            case VENT_MD_APRV:
-                break;
-            case VENT_MD_NCPAP:
-                break;
-            case VENT_MD_NCPAP_PC:
-                break;
-            case VENT_MD_NIPPV:
-                break;
-            case VENT_MD_SNIPPV:
-                break;
-            case VENT_MD_AMV:
-                break;
-            case VENT_MD_IAMV:
-                break;
-            case VENT_MD_PPS:
-                break;
-            case VENT_MD_CPRV:
-                break;
-            case VENT_MD_HFO:
-                break;
-            case VENT_MD_COUNT:
-                break;
-        }
-    }
+    (void)breathControlSet(BREATH_RUN, gBreathRunning ? 1.0F : 0.0F);
 }
 /**************************End of file********************************/

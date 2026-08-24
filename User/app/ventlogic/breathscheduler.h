@@ -10,7 +10,6 @@
 #ifndef USER_APP_VENTLOGIC_BREATHSCHEDULER_H
 #define USER_APP_VENTLOGIC_BREATHSCHEDULER_H
 
-#include <stdbool.h>
 #include <stdint.h>
 
 #ifdef __cplusplus
@@ -18,9 +17,11 @@ extern "C" {
 #endif
 #include "settingdata.h"
 
-#define BREATH_CONTROL_SUCCESS       1
-#define BREATH_CONTROL_ERROR_PARAM  (-1)
-#define BREATH_PEEP_LOCK_TIME_MS  192.0
+#define BREATH_CONTROL_SUCCESS              1
+#define BREATH_CONTROL_ERROR_PARAM         (-1)
+#define BREATH_CONTROL_ERROR_SETTINGS      (-2)
+#define BREATH_CONTROL_ERROR_UNSUPPORTED   (-3)
+#define BREATH_PEEP_LOCK_TIME_MS           192.0F
 
 typedef enum {
     PRESSURE_CONTROL = 0,
@@ -48,15 +49,17 @@ typedef enum {
 } eBreathControlType;
 
 
-typedef struct stBreathInfo {
-    bool runState;
-    bool runPrevious;
-    eVentMode currentMode;
-} stBreathInfo;
-
-
 /* Configure the scheduler and leave it idle. */
 int8_t breathSchedulerInit(void);
+
+/** Start ventilation after validating and applying the selected mode settings. */
+int8_t breathSchedulerStart(eVentMode mode);
+
+/** Stop ventilation immediately. */
+int8_t breathSchedulerStop(void);
+
+/** Validate and apply the latest settings for the selected ventilation mode. */
+int8_t breathSchedulerSettingsUpdate(eVentMode mode);
 
 /* Set a breath control value selected by type. */
 int8_t breathControlSet(eBreathControlType type, float value);

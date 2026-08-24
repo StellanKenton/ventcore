@@ -18,7 +18,7 @@
 #include "phasecontroller.h"
 #include "rtos.h"
 #include "sfm3119.h"
-#include "ventalgo.h"
+#include "actuatorcontroller.h"
 
 static const char *const gTaskManagerTag = "taskManager";
 static bool gWorkerTasksCreated = false;
@@ -97,14 +97,14 @@ static void ventTask(void *argument)
     (void)argument;
     breathSchedulerInit();
     phaseControllerInit();
-    ventAlgoInit();
+    actuatorControllerInit();
     
     for (;;) {
         controlDataFilterProcess();
         controlDataCalibrationProcess();
         breathSchedulerProcess();
         phaseControllerProcess((uint8_t)VENT_TASK_INTERVAL_MS);
-        ventAlgoProcess();
+        actuatorControllerProcess();
         (void)repRtosTaskDelayUntilMs(&lPreviousWakeMs, VENT_TASK_INTERVAL_MS);
     }
 }

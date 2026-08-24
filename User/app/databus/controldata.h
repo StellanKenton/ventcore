@@ -43,6 +43,7 @@ typedef enum {
     INSP_REAL_PRS,
     PEEP_REAL_PRS,
     EXP_REAL_PRS,
+    PAT_REAL_PRS,
     MDIFF_REAL_FLOW,
     
     CONTROL_DATA_COUNT

@@ -8,13 +8,23 @@
 * @copyright: Copyright (c) 2050
 ***********************************************************************************/
 #include "actuatorcontroller.h"
+#include "fio2controller.h"
+#include "flowcontroller.h"
+#include "peepcontroller.h"
+#include "pressurecontroller.h"
 
 void actuatorControllerInit(void)
 {
+    pressureControllerInit();
+    flowControllerInit();
+    fio2ControllerInit();
 }
 
 void actuatorControllerProcess(void)
 {
+    pressureControllerProcess();
+    flowControllerProcess();
+    fio2ControllerProcess();
 }
 
 /**************************End of file********************************/
