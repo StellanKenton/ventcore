@@ -115,24 +115,24 @@ static void pressureControllerInspirationProcess(void)
     float lEffort;
     float lBlower_feedforward;
 
-    // if (pressureControllerInspirationOuterLoopProcess(&lInspTarget) != PID_STATUS_OK) {
-    //     pressureControllerOutputClear();
-    //     return;
-    // }
+    if (pressureControllerInspirationOuterLoopProcess(&lInspTarget) != PID_STATUS_OK) {
+        pressureControllerOutputClear();
+        return;
+    }
 
-    if (pressureControllerInspirationInnerLoopProcess(phaseControlGet(PHASE_REF_PRESSURE), &lEffort) != PID_STATUS_OK) {
+    if (pressureControllerInspirationInnerLoopProcess(lInspTarget, &lEffort) != PID_STATUS_OK) {
         pressureControllerOutputClear();
         return;
     }
     calibtransPrsSpeed(phaseControlGet(PHASE_REF_FAST_PRESSURE), &lBlower_feedforward);
-    lEffort = lEffort + lBlower_feedforward;
+    lEffort = lEffort*PRESSURE_CONTROLLER_BLOWER_SPEED_SCALE + lBlower_feedforward*10;
 
     if (lEffort > PRESSURE_CONTROLLER_BLOWER_SPEED_SCALE) {
         lEffort = PRESSURE_CONTROLLER_BLOWER_SPEED_SCALE;
     }
 
     /* Inspiration never vents pressure through EXP; negative effort only stops the blower. */
-    gPressureBlowerTarget = (lEffort > 0.0F) ? (uint16_t)lEffort*PRESSURE_CONTROLLER_BLOWER_SPEED_SCALE: 0U;
+    gPressureBlowerTarget = (lEffort > 0.0F) ? (uint16_t)lEffort: 0U;
     gPressureExpValveDuty = PRESSURE_CONTROLLER_EXP_VALVE_CLOSED_DUTY;
 }
 

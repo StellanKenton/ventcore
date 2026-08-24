@@ -15,6 +15,7 @@
 #include "breathscheduler.h"
 #include "databus.h"
 #include "log.h"
+#include "monitordata.h"
 #include "phasecontroller.h"
 #include "rtos.h"
 #include "sfm3119.h"
@@ -105,6 +106,7 @@ static void ventTask(void *argument)
         breathSchedulerProcess();
         phaseControllerProcess((uint8_t)VENT_TASK_INTERVAL_MS);
         actuatorControllerProcess();
+        monitorDataUpdate();
         (void)repRtosTaskDelayUntilMs(&lPreviousWakeMs, VENT_TASK_INTERVAL_MS);
     }
 }
