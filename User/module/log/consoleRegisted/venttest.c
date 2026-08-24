@@ -67,12 +67,14 @@ static void ventTestUsageShow(void)
 static void ventTestStatusShow(void)
 {
     stBlowerVcmFeedback lBlowerFeedback;
+    stPressureControllerDiagnostic lDiagnostic;
 
+    pressureControllerDiagnosticGet(&lDiagnostic);
     if (blowerVcmGetFeedback(&lBlowerFeedback) != BLOWER_VCM_STATUS_OK) {
         lBlowerFeedback.speedScaled = 0U;
     }
     LOG_I(gVentTestTag,
-          "mode=%u run=%u phase=%u ref100=%ld patient100=%ld insp100=%ld exp100=%ld blower=%u speed10=%u valve=%u",
+          "mode=%u run=%u phase=%u ref100=%ld patient100=%ld insp100=%ld exp100=%ld flow100=%ld target100=%ld flowff100=%ld patfb100=%ld inner100=%ld blowerff10=%ld blower=%u speed10=%u valve=%u",
           (unsigned int)breathSchedulerModeGet(),
           (unsigned int)breathSchedulerRunningGet(),
           (unsigned int)phaseControllerStateGet(),
@@ -80,6 +82,12 @@ static void ventTestStatusShow(void)
           (long)ventTestPressureCenti(controlDataGet(PAT_REAL_PRS)),
           (long)ventTestPressureCenti(controlDataGet(INSP_REAL_PRS)),
           (long)ventTestPressureCenti(controlDataGet(EXP_REAL_PRS)),
+          (long)ventTestPressureCenti(controlDataGet(INSP_FLOW_FILTERED) * PRESSURE_CONTROLLER_FLOW_INPUT_SCALE),
+          (long)ventTestPressureCenti(lDiagnostic.inspTarget),
+          (long)ventTestPressureCenti(lDiagnostic.flowCompensation),
+          (long)ventTestPressureCenti(lDiagnostic.patientCorrection),
+          (long)ventTestPressureCenti(lDiagnostic.innerEffort),
+          (long)ventTestPressureCenti(lDiagnostic.blowerFeedforward * 0.1F),
           (unsigned int)pressureControllerBlowerTargetGet(),
           (unsigned int)lBlowerFeedback.speedScaled,
           (unsigned int)pressureControllerExpValveDutyGet());

@@ -9,6 +9,8 @@
 ***********************************************************************************/
 #include "pressurecontroller.h"
 
+#include <stddef.h>
+
 #include "breathscheduler.h"
 #include "controldata.h"
 #include "phasecontroller.h"
@@ -21,13 +23,34 @@ static stPid gPressurePeepPid;
 static uint16_t gPressureBlowerTarget;
 static uint8_t gPressureExpValveDuty;
 static uint8_t gPressureControllerReady;
-static uint8_t gPressureRiseBoostActive;
 static ePressureControllerState gPressureControllerState;
+static stPressureControllerDiagnostic gPressureDiagnostic;
+
+/** Clamp a pressure-controller value to a configured range. */
+static float pressureControllerClamp(float value, float minimum, float maximum) {
+    if (value > maximum) {
+        return maximum;
+    }
+    if (value < minimum) {
+        return minimum;
+    }
+    return value;
+}
+
+/** Clear the latest inspiratory-control diagnostic values. */
+static void pressureControllerDiagnosticClear(void) {
+    gPressureDiagnostic.inspTarget = 0.0F;
+    gPressureDiagnostic.flowCompensation = 0.0F;
+    gPressureDiagnostic.patientCorrection = 0.0F;
+    gPressureDiagnostic.innerEffort = 0.0F;
+    gPressureDiagnostic.blowerFeedforward = 0.0F;
+}
 
 static void pressureControllerOutputClear(void)
 {
     gPressureBlowerTarget = 0U;
     gPressureExpValveDuty = 0U;
+    pressureControllerDiagnosticClear();
 }
 
 static void pressureControllerPidsReset(void)
@@ -73,8 +96,8 @@ void pressureControllerInit(void)
                           PRESSURE_CONTROLLER_PEEP_KI,
                           PRESSURE_CONTROLLER_PEEP_KD,
                           PRESSURE_CONTROLLER_SAMPLE_PERIOD_S,
-                          PRESSURE_CONTROLLER_EFFORT_MIN,
-                          PRESSURE_CONTROLLER_EFFORT_MAX);
+                          PRESSURE_CONTROLLER_PEEP_EFFORT_MIN,
+                          PRESSURE_CONTROLLER_PEEP_EFFORT_MAX);
     gPressureControllerReady = (uint8_t)((lOuterStatus == PID_STATUS_OK) &&
                                          (lInnerStatus == PID_STATUS_OK) &&
                                          (lPeepStatus == PID_STATUS_OK));
@@ -85,18 +108,39 @@ void pressureControllerInit(void)
 /** Calculate the inspiratory-pressure target through the patient-pressure outer loop. */
 static int8_t pressureControllerInspirationOuterLoopProcess(float *inspTarget)
 {
+    float lFlow;
+    float lFlowCompensation;
     float lInspCorrection;
+    float lPatientReference;
     int8_t lStatus;
 
+    if (inspTarget == NULL) {
+        return PID_ERROR_PARAM;
+    }
+
+    lPatientReference = phaseControlGet(PHASE_REF_PRESSURE);
+    lFlow = controlDataGet(INSP_FLOW_FILTERED) * PRESSURE_CONTROLLER_FLOW_INPUT_SCALE;
+    lFlow = pressureControllerClamp(lFlow, 0.0F, PRESSURE_CONTROLLER_FLOW_INPUT_MAX);
+    lFlowCompensation = (PRESSURE_CONTROLLER_FLOW_FF_LINEAR * lFlow) +
+                        (PRESSURE_CONTROLLER_FLOW_FF_QUADRATIC * lFlow * lFlow);
+    lFlowCompensation = pressureControllerClamp(lFlowCompensation,
+                                                0.0F,
+                                                PRESSURE_CONTROLLER_FLOW_FF_MAX);
+
     lStatus = pidUpdate(&gPressureOuterPid,
-                        phaseControlGet(PHASE_REF_PRESSURE),
+                        lPatientReference,
                         controlDataGet(PAT_REAL_PRS),
                         &lInspCorrection);
     if (lStatus != PID_STATUS_OK) {
         return lStatus;
     }
 
-    *inspTarget = phaseControlGet(PHASE_REF_PRESSURE) + lInspCorrection;
+    *inspTarget = pressureControllerClamp(lPatientReference + lFlowCompensation + lInspCorrection,
+                                          PRESSURE_CONTROLLER_INSP_TARGET_MIN,
+                                          PRESSURE_CONTROLLER_INSP_TARGET_MAX);
+    gPressureDiagnostic.inspTarget = *inspTarget;
+    gPressureDiagnostic.flowCompensation = lFlowCompensation;
+    gPressureDiagnostic.patientCorrection = lInspCorrection;
     return PID_STATUS_OK;
 }
 
@@ -113,7 +157,7 @@ static void pressureControllerInspirationProcess(void)
 {
     float lInspTarget = 0.0F;
     float lEffort;
-    float lBlower_feedforward;
+    float lBlowerFeedforward;
 
     if (pressureControllerInspirationOuterLoopProcess(&lInspTarget) != PID_STATUS_OK) {
         pressureControllerOutputClear();
@@ -124,8 +168,14 @@ static void pressureControllerInspirationProcess(void)
         pressureControllerOutputClear();
         return;
     }
-    calibtransPrsSpeed(phaseControlGet(PHASE_REF_FAST_PRESSURE), &lBlower_feedforward);
-    lEffort = lEffort*PRESSURE_CONTROLLER_BLOWER_SPEED_SCALE + lBlower_feedforward*10;
+    if (calibtransPrsSpeed(lInspTarget, &lBlowerFeedforward) != CALIBTRANS_STATUS_OK) {
+        pressureControllerOutputClear();
+        return;
+    }
+    gPressureDiagnostic.innerEffort = lEffort;
+    gPressureDiagnostic.blowerFeedforward = lBlowerFeedforward;
+    lEffort = (lEffort * PRESSURE_CONTROLLER_BLOWER_SPEED_SCALE) +
+              (lBlowerFeedforward * 10.0F);
 
     if (lEffort > PRESSURE_CONTROLLER_BLOWER_SPEED_SCALE) {
         lEffort = PRESSURE_CONTROLLER_BLOWER_SPEED_SCALE;
@@ -134,6 +184,26 @@ static void pressureControllerInspirationProcess(void)
     /* Inspiration never vents pressure through EXP; negative effort only stops the blower. */
     gPressureBlowerTarget = (lEffort > 0.0F) ? (uint16_t)lEffort: 0U;
     gPressureExpValveDuty = PRESSURE_CONTROLLER_EXP_VALVE_CLOSED_DUTY;
+}
+
+/** Proportionally vent excess patient pressure during the inspiratory hold only. */
+static void pressureControllerHoldReliefProcess(void)
+{
+    float lExcessPressure;
+    float lValveOpening;
+
+    lExcessPressure = controlDataGet(PAT_REAL_PRS) - phaseControlGet(PHASE_REF_PRESSURE);
+    if (lExcessPressure <= PRESSURE_CONTROLLER_HOLD_RELIEF_DEADBAND) {
+        return;
+    }
+
+    lValveOpening = (lExcessPressure - PRESSURE_CONTROLLER_HOLD_RELIEF_DEADBAND) *
+                    PRESSURE_CONTROLLER_HOLD_RELIEF_GAIN;
+    lValveOpening = pressureControllerClamp(lValveOpening,
+                                             0.0F,
+                                             PRESSURE_CONTROLLER_HOLD_RELIEF_MAX_OPENING);
+    gPressureExpValveDuty = (uint8_t)((float)PRESSURE_CONTROLLER_EXP_VALVE_CLOSED_DUTY -
+                                      lValveOpening);
 }
 
 static void pressureControllerPeepProcess(void)
@@ -151,8 +221,8 @@ static void pressureControllerPeepProcess(void)
 
     if (lEffort >= 0.0F) {
         lEffort += 25.0F; /* Add a feedforward term to keep the blower spooled during PEEP. */
-        if (lEffort > PRESSURE_CONTROLLER_EFFORT_MAX) {
-            lEffort = PRESSURE_CONTROLLER_EFFORT_MAX;
+        if (lEffort > PRESSURE_CONTROLLER_PEEP_EFFORT_MAX) {
+            lEffort = PRESSURE_CONTROLLER_PEEP_EFFORT_MAX;
         }
         pressureControllerEffortApply(lEffort);
         if (gPressureBlowerTarget < PRESSURE_CONTROLLER_PEEP_SPIN_BLOWER_TARGET) {
@@ -205,6 +275,7 @@ static void pressureControllerStateEnter(ePressureControllerState state)
             break;
         case PRESSURE_CONTROLLER_EXP_RELEASE:
             pressureControllerPidsReset();
+            pressureControllerDiagnosticClear();
             break;
         case PRESSURE_CONTROLLER_EXP_PEEP:
             (void)pidReset(&gPressurePeepPid);
@@ -234,8 +305,11 @@ void pressureControllerProcess(void)
 
     switch (gPressureControllerState) {
         case PRESSURE_CONTROLLER_INSP_RISE:
+            pressureControllerInspirationProcess();
+            break;
         case PRESSURE_CONTROLLER_INSP_HOLD:
             pressureControllerInspirationProcess();
+            pressureControllerHoldReliefProcess();
             break;
         case PRESSURE_CONTROLLER_EXP_RELEASE:
             gPressureBlowerTarget = 0U;
@@ -259,6 +333,13 @@ uint16_t pressureControllerBlowerTargetGet(void)
 uint8_t pressureControllerExpValveDutyGet(void)
 {
     return gPressureExpValveDuty;
+}
+
+void pressureControllerDiagnosticGet(stPressureControllerDiagnostic *diagnostic) {
+    if (diagnostic == NULL) {
+        return;
+    }
+    *diagnostic = gPressureDiagnostic;
 }
 
 /**************************End of file********************************/
