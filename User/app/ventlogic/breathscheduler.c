@@ -12,6 +12,7 @@
 #include <math.h>
 #include <stdbool.h>
 #include <stddef.h>
+#include <string.h>
 
 #include "numfilter.h"
 #include "calibration.h"
@@ -20,6 +21,25 @@
 static volatile bool gBreathRunning = false;
 static volatile eVentMode gBreathMode = VENT_MD_IDLE;
 static float gBreathData[BREATH_COUNT];
+static bool gBreathSettingsApplied = false;
+static stVentPatientSettings gBreathAppliedPatientSettings;
+static stVentLimitSettings gBreathAppliedLimitSettings;
+static stVentPacSettings gBreathAppliedPacSettings;
+
+/** Return true when the PAC source settings differ from the last applied snapshot. */
+static bool breathSchedulerPacSettingsChanged(void)
+{
+    return !gBreathSettingsApplied ||
+           (memcmp(&gBreathAppliedPatientSettings,
+                   GetVentPatientSettings(),
+                   sizeof(gBreathAppliedPatientSettings)) != 0) ||
+           (memcmp(&gBreathAppliedLimitSettings,
+                   GetVentLimitSettings(),
+                   sizeof(gBreathAppliedLimitSettings)) != 0) ||
+           (memcmp(&gBreathAppliedPacSettings,
+                   GetVentPacSettings(),
+                   sizeof(gBreathAppliedPacSettings)) != 0);
+}
 
 /** Validate the PAC settings used to derive phase controller parameters. */
 static bool breathSchedulerPacSettingsValid(const stVentPatientSettings *patientSettings,
@@ -96,6 +116,7 @@ int8_t breathSchedulerInit(void)
 {
     gBreathRunning = false;
     gBreathMode = VENT_MD_IDLE;
+    gBreathSettingsApplied = false;
     (void)breathControlSet(BREATH_RUN, 0.0F);
     return BREATH_CONTROL_SUCCESS;
 }
@@ -154,9 +175,9 @@ uint8_t breathSchedulerRunningGet(void)
 
 int8_t breathSchedulerSettingsUpdate(eVentMode mode)
 {
-    stVentPatientSettings *lPatientSettings;
-    stVentLimitSettings *lLimitSettings;
-    stVentPacSettings *lPacSettings;
+    stVentPatientSettings lPatientSettings;
+    stVentLimitSettings lLimitSettings;
+    stVentPacSettings lPacSettings;
 
     if ((mode <= VENT_MD_IDLE) || (mode >= VENT_MD_COUNT)) {
         return BREATH_CONTROL_ERROR_PARAM;
@@ -169,14 +190,18 @@ int8_t breathSchedulerSettingsUpdate(eVentMode mode)
         return BREATH_CONTROL_ERROR_SETTINGS;
     }
 
-    lPatientSettings = GetVentPatientSettings();
-    lLimitSettings = GetVentLimitSettings();
-    lPacSettings = GetVentPacSettings();
-    if (!breathSchedulerPacSettingsValid(lPatientSettings, lLimitSettings, lPacSettings)) {
+    lPatientSettings = *GetVentPatientSettings();
+    lLimitSettings = *GetVentLimitSettings();
+    lPacSettings = *GetVentPacSettings();
+    if (!breathSchedulerPacSettingsValid(&lPatientSettings, &lLimitSettings, &lPacSettings)) {
         return BREATH_CONTROL_ERROR_SETTINGS;
     }
 
-    breathSchedulerPacSettingsApply(lPatientSettings, lPacSettings);
+    breathSchedulerPacSettingsApply(&lPatientSettings, &lPacSettings);
+    gBreathAppliedPatientSettings = lPatientSettings;
+    gBreathAppliedLimitSettings = lLimitSettings;
+    gBreathAppliedPacSettings = lPacSettings;
+    gBreathSettingsApplied = true;
     gBreathMode = mode;
     return BREATH_CONTROL_SUCCESS;
 }
@@ -202,6 +227,10 @@ void breathSchedulerProcess(void)
 {
     bool lPacRunning = gBreathRunning && (gBreathMode == VENT_MD_PAC);
 
+    if (lPacRunning && breathSchedulerPacSettingsChanged()) {
+        /* Invalid live edits leave the last validated controller settings active. */
+        (void)breathSchedulerSettingsUpdate(VENT_MD_PAC);
+    }
     (void)breathControlSet(BREATH_RUN, lPacRunning ? 1.0F : 0.0F);
 }
 /**************************End of file********************************/
