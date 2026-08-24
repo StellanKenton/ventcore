@@ -19,6 +19,8 @@ extern "C" {
 #define PHASE_CONTROL_SUCCESS       1
 #define PHASE_CONTROL_ERROR_PARAM  (-1)
 #define PHASE_INSP_FAST_RAMP_GAIN   0.8F
+#define PHASE_EXP_PEEP_ENTRY_MARGIN (-1.0F)
+#define PHASE_EXP_RELEASE_MAX_TIME_MS 1200U
 
 typedef enum {
     PHASE_NONE = 0,
@@ -51,6 +53,9 @@ int8_t phaseControlSet(ePhaseControlType type, float value);
 
 /** Get a phase control value selected by type. */
 float phaseControlGet(ePhaseControlType type);
+
+/** Get the current breath phase. */
+ePhaseControllerState phaseControllerStateGet(void);
 
 /** Run one phase controller processing cycle. */
 void phaseControllerProcess(uint8_t tickCount);

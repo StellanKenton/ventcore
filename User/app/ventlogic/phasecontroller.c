@@ -17,7 +17,7 @@ static float gPhaseData[PHASE_COUNT];
 /** Start an inspiratory rise from the current patient pressure. */
 static void phaseControllerStartInspRise(void)
 {
-    float lPatientPressure = controlDataGet(INSP_REAL_PRS);
+    float lPatientPressure = controlDataGet(PAT_REAL_PRS);
 
     gPhaseController.inspRiseTimeTicks = 0U;
     gPhaseController.inspHoldTimeTicks = 0U;
@@ -57,8 +57,22 @@ float phaseControlGet(ePhaseControlType type)
     return gPhaseData[type];
 }
 
+ePhaseControllerState phaseControllerStateGet(void)
+{
+    return gPhaseController.runState;
+}
+
 void phaseControllerProcess(uint8_t tickCount)
 {
+    if (breathControlGet(BREATH_RUN) != 1.0F) {
+        gPhaseController.runState = PHASE_IDLE;
+        gPhaseController.inspRiseTimeTicks = 0U;
+        gPhaseController.inspHoldTimeTicks = 0U;
+        gPhaseController.expPeepTimeTicks = 0U;
+        (void)phaseControlSet(PHASE_REF_PRESSURE, 0.0F);
+        return;
+    }
+
     switch (gPhaseController.runState)
     {
         case PHASE_IDLE:
@@ -101,12 +115,18 @@ void phaseControllerProcess(uint8_t tickCount)
             }
             break;
         case PHASE_EXP_RELEASE:
-            (void)phaseControlSet(PHASE_REF_PRESSURE, breathControlGet(BREATH_PEEP_PRESSURE));
+        {
+            float lPeepPressure = breathControlGet(BREATH_PEEP_PRESSURE);
+            float lPatientPressure = controlDataGet(PAT_REAL_PRS);
+
+            (void)phaseControlSet(PHASE_REF_PRESSURE, lPeepPressure);
             gPhaseController.expPeepTimeTicks += tickCount;
-            if(gPhaseController.expPeepTimeTicks >= BREATH_PEEP_LOCK_TIME_MS){
+            if ((lPatientPressure <= (lPeepPressure + PHASE_EXP_PEEP_ENTRY_MARGIN)) ||
+                (gPhaseController.expPeepTimeTicks >= PHASE_EXP_RELEASE_MAX_TIME_MS)) {
                 gPhaseController.runState = PHASE_EXP_PEEP;
             }
             break;
+        }
         case PHASE_EXP_PEEP:
             gPhaseController.expPeepTimeTicks += tickCount;
             if(gPhaseController.expPeepTimeTicks >= (uint16_t)breathControlGet(BREATH_INSP_PEEP_TIME)){
@@ -118,9 +138,6 @@ void phaseControllerProcess(uint8_t tickCount)
             break;
     }
 
-    if(breathControlGet(BREATH_RUN) == 0.0f){
-        gPhaseController.runState = PHASE_IDLE;
-    }
 }
 
 /**************************End of file********************************/

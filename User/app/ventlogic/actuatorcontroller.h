@@ -14,6 +14,9 @@
 extern "C" {
 #endif
 
+#define ACTUATOR_CONTROLLER_RELIEF_OPEN_DUTY     0U
+#define ACTUATOR_CONTROLLER_RELIEF_CLOSED_DUTY   100U
+
 /** Initialize the actuator controller. */
 void actuatorControllerInit(void);
 

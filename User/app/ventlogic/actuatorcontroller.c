@@ -8,9 +8,11 @@
 * @copyright: Copyright (c) 2050
 ***********************************************************************************/
 #include "actuatorcontroller.h"
+#include "blower_vcm.h"
+#include "breathscheduler.h"
+#include "dvalve.h"
 #include "fio2controller.h"
 #include "flowcontroller.h"
-#include "peepcontroller.h"
 #include "pressurecontroller.h"
 
 void actuatorControllerInit(void)
@@ -18,6 +20,7 @@ void actuatorControllerInit(void)
     pressureControllerInit();
     flowControllerInit();
     fio2ControllerInit();
+    (void)dvalveDutySet(DVALVE_IDX_RELIEF,ACTUATOR_CONTROLLER_RELIEF_CLOSED_DUTY);
 }
 
 void actuatorControllerProcess(void)
@@ -25,6 +28,10 @@ void actuatorControllerProcess(void)
     pressureControllerProcess();
     flowControllerProcess();
     fio2ControllerProcess();
+
+    (void)blowerVcmSendControl(BLOWER_CTRL_PWM,pressureControllerBlowerTargetGet(),0U);
+    (void)dvalveDutySet(DVALVE_IDX_EXP,pressureControllerExpValveDutyGet());
+
 }
 
 /**************************End of file********************************/

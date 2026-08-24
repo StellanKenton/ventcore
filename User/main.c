@@ -16,6 +16,7 @@
 #include "calibration.h"
 #include "dvalve.h"
 #include "valve.h"
+#include "venttest.h"
 
 int main(void)
 {
@@ -28,6 +29,9 @@ int main(void)
     }
     if (!bspDebugConsoleRegister()) {
         LOG_W("main", "bspdebug console registration failed");
+    }
+    if (!ventTestConsoleRegister()) {
+        LOG_W("main", "venttest console registration failed");
     }
 #endif
 

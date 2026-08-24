@@ -14,10 +14,11 @@
 #include <stddef.h>
 
 #include "numfilter.h"
+#include "calibration.h"
 #include "settingdata.h"
 
-static bool gBreathRunning = false;
-static eVentMode gBreathMode = VENT_MD_IDLE;
+static volatile bool gBreathRunning = false;
+static volatile eVentMode gBreathMode = VENT_MD_IDLE;
 static float gBreathData[BREATH_COUNT];
 
 /** Validate the PAC settings used to derive phase controller parameters. */
@@ -119,6 +120,38 @@ int8_t breathSchedulerStop(void)
     return BREATH_CONTROL_SUCCESS;
 }
 
+int8_t breathSchedulerTestModeSet(uint8_t mode)
+{
+    if (mode != (uint8_t)VENT_MD_PAC) {
+        return BREATH_CONTROL_ERROR_PARAM;
+    }
+
+    return breathSchedulerSettingsUpdate(VENT_MD_PAC);
+}
+
+int8_t breathSchedulerTestRunSet(uint8_t run)
+{
+    if (run > 1U) {
+        return BREATH_CONTROL_ERROR_PARAM;
+    }
+
+    if (run == 0U) {
+        return breathSchedulerStop();
+    }
+
+    return breathSchedulerStart(gBreathMode);
+}
+
+eVentMode breathSchedulerModeGet(void)
+{
+    return gBreathMode;
+}
+
+uint8_t breathSchedulerRunningGet(void)
+{
+    return gBreathRunning ? 1U : 0U;
+}
+
 int8_t breathSchedulerSettingsUpdate(eVentMode mode)
 {
     stVentPatientSettings *lPatientSettings;
@@ -130,6 +163,10 @@ int8_t breathSchedulerSettingsUpdate(eVentMode mode)
     }
     if (mode != VENT_MD_PAC) {
         return BREATH_CONTROL_ERROR_UNSUPPORTED;
+    }
+    if ((calibrationIsValid(CALIBRATION_TYPE_ZERO) == 0U) ||
+        (calibrationIsValid(CALIBRATION_TYPE_PRESSURE) == 0U)) {
+        return BREATH_CONTROL_ERROR_SETTINGS;
     }
 
     lPatientSettings = GetVentPatientSettings();
@@ -163,6 +200,8 @@ float breathControlGet(eBreathControlType type) {
 
 void breathSchedulerProcess(void)
 {
-    (void)breathControlSet(BREATH_RUN, gBreathRunning ? 1.0F : 0.0F);
+    bool lPacRunning = gBreathRunning && (gBreathMode == VENT_MD_PAC);
+
+    (void)breathControlSet(BREATH_RUN, lPacRunning ? 1.0F : 0.0F);
 }
 /**************************End of file********************************/

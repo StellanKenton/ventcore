@@ -34,9 +34,7 @@ add_executable(ventcore
     User/app/system/taskmanager.c
     User/app/ventalgo/fio2controller.c
     User/app/ventalgo/flowcontroller.c
-    User/app/ventalgo/peepcontroller.c
     User/app/ventalgo/pressurecontroller.c
-    User/app/ventalgo/ventalgo.c
     User/app/ventlogic/actuatorcontroller.c
     User/app/ventlogic/breathscheduler.c
     User/app/ventlogic/cycleengine.c
@@ -56,6 +54,7 @@ add_executable(ventcore
     User/bsp/valve/valve.c
     User/module/log/console.c
     User/module/log/consoleRegisted/sysdebug.c
+    User/module/log/consoleRegisted/venttest.c
     User/module/log/log.c
     User/module/log/portLog.c
     User/module/log/SEGGER/SEGGER_RTT.c
