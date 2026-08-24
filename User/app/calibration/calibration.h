@@ -29,7 +29,6 @@ extern "C" {
 #define CALIBRATION_OXYGEN_VALVE_ADDRESS    0x8800U
 #define CALIBRATION_AIR_OXYGEN_MIX_ADDRESS  0x8A00U
 #define CALIBRATION_PRESSURE_POINT_COUNT          8U
-#define CALIBRATION_PRESSURE_CHANNEL_COUNT        3U
 #define CALIBRATION_DIFF_FLOW_POINT_COUNT        32U
 #define CALIBRATION_MIX_POINT_COUNT              16U
 
@@ -52,7 +51,9 @@ typedef struct stCalibrationZero {
 
 typedef struct stCalibrationPressure {
     float speedRps[CALIBRATION_PRESSURE_POINT_COUNT];
-    float adcValues[CALIBRATION_PRESSURE_CHANNEL_COUNT][CALIBRATION_PRESSURE_POINT_COUNT];
+    float peepAdcValues[CALIBRATION_PRESSURE_POINT_COUNT];
+    float inspAdcValues[CALIBRATION_PRESSURE_POINT_COUNT];
+    float expAdcValues[CALIBRATION_PRESSURE_POINT_COUNT];
     float pressureValues[CALIBRATION_PRESSURE_POINT_COUNT];
 } stCalibrationPressure;
 

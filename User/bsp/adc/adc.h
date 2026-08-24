@@ -26,13 +26,14 @@ typedef enum eAdcChannelIndex {
     ADC_IDX_PEEP_VALVE_CURRENT,
     ADC_IDX_INSP_PRS,
     ADC_IDX_AVDD5V,
-    ADC_IDX_EXP_PRS,    // 硬件上这个实际是peep
-    ADC_IDX_PEEP_PRS,   // 硬件上这个实际是exp
+    ADC_IDX_EXP_PRS,    
+    ADC_IDX_PEEP_PRS,   
     ADC_IDX_MDIFF_PRS,
     ADC_IDX_O2_VALVE_CURRENT,
     ADC_IDX_VDD_26V,
     ADC_CH_COUNT
 } eAdcChannelIndex;
+// 硬件上以及旧ad中，peep和exp反
 
 extern volatile uint16_t adc_value[ADC_CH_COUNT];
 

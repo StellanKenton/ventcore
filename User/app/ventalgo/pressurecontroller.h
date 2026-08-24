@@ -48,6 +48,14 @@ extern "C" {
 #define PRESSURE_CONTROLLER_EXP_RELEASE_DUTY           PRESSURE_CONTROLLER_EXP_VALVE_OPEN_DUTY
 #define PRESSURE_CONTROLLER_BLOWER_PWM_SCALE          100U
 
+typedef enum {
+    PRESSURE_CONTROLLER_IDLE = 0,
+    PRESSURE_CONTROLLER_INSP_RISE,
+    PRESSURE_CONTROLLER_INSP_HOLD,
+    PRESSURE_CONTROLLER_EXP_RELEASE,
+    PRESSURE_CONTROLLER_EXP_PEEP,
+} ePressureControllerState;
+
 /** Initialize the pressure controller. */
 void pressureControllerInit(void);
 

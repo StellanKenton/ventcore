@@ -21,7 +21,7 @@ static uint16_t gPressureBlowerTarget;
 static uint8_t gPressureExpValveDuty;
 static uint8_t gPressureControllerReady;
 static uint8_t gPressureRiseBoostActive;
-static ePhaseControllerState gPressurePreviousPhase;
+static ePressureControllerState gPressureControllerState;
 
 static void pressureControllerOutputClear(void)
 {
@@ -78,7 +78,7 @@ void pressureControllerInit(void)
     gPressureControllerReady = (uint8_t)((lOuterStatus == PID_STATUS_OK) &&
                                          (lInnerStatus == PID_STATUS_OK) &&
                                          (lPeepStatus == PID_STATUS_OK));
-    gPressurePreviousPhase = PHASE_IDLE;
+    gPressureControllerState = PRESSURE_CONTROLLER_IDLE;
     pressureControllerOutputClear();
 }
 
@@ -172,9 +172,59 @@ static void pressureControllerPeepProcess(float referencePressure, float patient
     gPressureExpValveDuty = (uint8_t)lValveDuty;
 }
 
+static ePressureControllerState pressureControllerStateResolve(void)
+{
+    if (breathControlGet(BREATH_RUN) != 1.0F) {
+        return PRESSURE_CONTROLLER_IDLE;
+    }
+
+    switch (phaseControllerStateGet()) {
+        case PHASE_INSP_RISE:
+            return PRESSURE_CONTROLLER_INSP_RISE;
+        case PHASE_INSP_HOLD:
+            return PRESSURE_CONTROLLER_INSP_HOLD;
+        case PHASE_EXP_RELEASE:
+            return PRESSURE_CONTROLLER_EXP_RELEASE;
+        case PHASE_EXP_PEEP:
+            return PRESSURE_CONTROLLER_EXP_PEEP;
+        case PHASE_IDLE:
+        default:
+            return PRESSURE_CONTROLLER_IDLE;
+    }
+}
+
+static void pressureControllerStateEnter(ePressureControllerState state)
+{
+    if(gPressureControllerState == state) {
+        return;
+    }
+    gPressureControllerState = state;
+    switch (state) {
+        case PRESSURE_CONTROLLER_INSP_RISE:
+            (void)pidReset(&gPressureOuterPid);
+            (void)pidReset(&gPressureInnerPid);
+            gPressureRiseBoostActive = 1U;
+            break;
+        case PRESSURE_CONTROLLER_EXP_RELEASE:
+            pressureControllerPidsReset();
+            gPressureRiseBoostActive = 0U;
+            break;
+        case PRESSURE_CONTROLLER_EXP_PEEP:
+            (void)pidReset(&gPressurePeepPid);
+            break;
+        case PRESSURE_CONTROLLER_IDLE:
+            pressureControllerPidsReset();
+            gPressureRiseBoostActive = 0U;
+            break;
+        case PRESSURE_CONTROLLER_INSP_HOLD:
+        default:
+            break;
+    }
+}
+
 void pressureControllerProcess(void)
 {
-    ePhaseControllerState lPhase;
+    ePressureControllerState lState;
     float lReferencePressure;
     float lPatientPressure;
 
@@ -183,52 +233,34 @@ void pressureControllerProcess(void)
         return;
     }
 
-    if (breathControlGet(BREATH_RUN) != 1.0F) {
-        if (gPressurePreviousPhase != PHASE_IDLE) {
-            pressureControllerPidsReset();
-            gPressurePreviousPhase = PHASE_IDLE;
-        }
-        pressureControllerOutputClear();
-        return;
-    }
-
-    lPhase = phaseControllerStateGet();
-    if (lPhase != gPressurePreviousPhase) {
-        if (lPhase == PHASE_INSP_RISE) {
-            (void)pidReset(&gPressureOuterPid);
-            (void)pidReset(&gPressureInnerPid);
-            gPressureRiseBoostActive = 1U;
-        } else if (lPhase == PHASE_EXP_RELEASE) {
-            pressureControllerPidsReset();
-        } else if (lPhase == PHASE_EXP_PEEP) {
-            (void)pidReset(&gPressurePeepPid);
-        }
-        gPressurePreviousPhase = lPhase;
+    lState = pressureControllerStateResolve();
+    if (lState != gPressureControllerState) {
+        pressureControllerStateEnter(lState);
     }
 
     lReferencePressure = phaseControlGet(PHASE_REF_PRESSURE);
     lPatientPressure = controlDataGet(PAT_REAL_PRS);
 
-    switch (lPhase) {
-        case PHASE_INSP_RISE:
+    switch (gPressureControllerState) {
+        case PRESSURE_CONTROLLER_INSP_RISE:
             pressureControllerInspirationRiseProcess(breathControlGet(BREATH_INSP_PRESSURE),
                                                       lPatientPressure);
             break;
-        case PHASE_INSP_HOLD:
+        case PRESSURE_CONTROLLER_INSP_HOLD:
             if (gPressureRiseBoostActive != 0U) {
                 pressureControllerInspirationRiseProcess(lReferencePressure, lPatientPressure);
             } else {
                 pressureControllerInspirationProcess(lReferencePressure, lPatientPressure);
             }
             break;
-        case PHASE_EXP_RELEASE:
+        case PRESSURE_CONTROLLER_EXP_RELEASE:
             gPressureBlowerTarget = 0U;
             gPressureExpValveDuty = PRESSURE_CONTROLLER_EXP_RELEASE_DUTY;
             break;
-        case PHASE_EXP_PEEP:
+        case PRESSURE_CONTROLLER_EXP_PEEP:
             pressureControllerPeepProcess(lReferencePressure, lPatientPressure);
             break;
-        case PHASE_IDLE:
+        case PRESSURE_CONTROLLER_IDLE:
         default:
             pressureControllerOutputClear();
             break;

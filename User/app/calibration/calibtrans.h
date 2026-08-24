@@ -46,6 +46,14 @@ int8_t calibtransPeepPrs(float adcValue, float *pressureValue);
 int8_t calibtransExpPrs(float adcValue, float *pressureValue);
 
 /**
+ * @brief Convert pressure to blower speed.
+ * @param pressureValue Pressure value to convert.
+ * @param speedRps Converted blower speed output in revolutions per second.
+ * @return CALIBTRANS_STATUS_OK on success, otherwise a negative error code.
+ */
+int8_t calibtransPrsSpeed(float pressureValue, float *speedRps);
+
+/**
  * @brief Convert an adult proximal-flow ADC value to flow.
  * @param adcValue ADC value to convert.
  * @param flowValue Converted flow output.

@@ -95,21 +95,18 @@ static int8_t calibtransInterpolate(const float *inputValues, const float *outpu
     return CALIBTRANS_ERROR_TABLE;
 }
 
-static int8_t calibtransPressure(uint8_t channelIndex, uint16_t currentZeroAd,
-                                 float adcValue, float *pressureValue) {
-    const stCalibrationPressure *lCalibration;
+static int8_t calibtransPressure(const float *calibrationAdcValues, uint16_t currentZeroAd,
+                                 const float *calibrationPressureValues, float adcValue,
+                                 float *pressureValue) {
     float lCompensatedAd;
 
-    if ((channelIndex >= CALIBRATION_PRESSURE_CHANNEL_COUNT) || (pressureValue == NULL)) {
+    if ((calibrationAdcValues == NULL) || (calibrationPressureValues == NULL) ||
+        (pressureValue == NULL)) {
         return CALIBTRANS_ERROR_ARGUMENT;
     }
-    lCalibration = calibrationGetPressure();
-    if (lCalibration == NULL) {
-        return CALIBTRANS_ERROR_NOT_READY;
-    }
-    lCompensatedAd = adcValue - (float)currentZeroAd + lCalibration->adcValues[channelIndex][0U];
-    return calibtransInterpolate(lCalibration->adcValues[channelIndex],
-                                 lCalibration->pressureValues, NULL,
+    lCompensatedAd = adcValue - (float)currentZeroAd + calibrationAdcValues[0U];
+    return calibtransInterpolate(calibrationAdcValues,
+                                 calibrationPressureValues, NULL,
                                  CALIBRATION_PRESSURE_POINT_COUNT,
                                  CALIBRATION_PRESSURE_POINT_COUNT,
                                  lCompensatedAd, pressureValue);
@@ -117,41 +114,66 @@ static int8_t calibtransPressure(uint8_t channelIndex, uint16_t currentZeroAd,
 
 int8_t calibtransInspPrs(float adcValue, float *pressureValue) {
     const stCalibrationZero *lZero;
+    const stCalibrationPressure *lCalibration;
 
     if (pressureValue == NULL) {
         return CALIBTRANS_ERROR_ARGUMENT;
     }
     lZero = calibrationGetZero();
-    if (lZero == NULL) {
+    lCalibration = calibrationGetPressure();
+    if ((lZero == NULL) || (lCalibration == NULL)) {
         return CALIBTRANS_ERROR_NOT_READY;
     }
-    return calibtransPressure(1U, lZero->inspPressureAd, adcValue, pressureValue);
+    return calibtransPressure(lCalibration->inspAdcValues, lZero->inspPressureAd,
+                              lCalibration->pressureValues, adcValue, pressureValue);
 }
 
 int8_t calibtransPeepPrs(float adcValue, float *pressureValue) {
     const stCalibrationZero *lZero;
+    const stCalibrationPressure *lCalibration;
 
     if (pressureValue == NULL) {
         return CALIBTRANS_ERROR_ARGUMENT;
     }
     lZero = calibrationGetZero();
-    if (lZero == NULL) {
+    lCalibration = calibrationGetPressure();
+    if ((lZero == NULL) || (lCalibration == NULL)) {
         return CALIBTRANS_ERROR_NOT_READY;
     }
-    return calibtransPressure(0U, lZero->peepPressureAd, adcValue, pressureValue);
+    return calibtransPressure(lCalibration->peepAdcValues, lZero->peepPressureAd,
+                              lCalibration->pressureValues, adcValue, pressureValue);
 }
 
 int8_t calibtransExpPrs(float adcValue, float *pressureValue) {
     const stCalibrationZero *lZero;
+    const stCalibrationPressure *lCalibration;
 
     if (pressureValue == NULL) {
         return CALIBTRANS_ERROR_ARGUMENT;
     }
     lZero = calibrationGetZero();
-    if (lZero == NULL) {
+    lCalibration = calibrationGetPressure();
+    if ((lZero == NULL) || (lCalibration == NULL)) {
         return CALIBTRANS_ERROR_NOT_READY;
     }
-    return calibtransPressure(2U, lZero->expPressureAd, adcValue, pressureValue);
+    return calibtransPressure(lCalibration->expAdcValues, lZero->expPressureAd,
+                              lCalibration->pressureValues, adcValue, pressureValue);
+}
+
+int8_t calibtransPrsSpeed(float pressureValue, float *speedRps) {
+    const stCalibrationPressure *lCalibration;
+
+    if (speedRps == NULL) {
+        return CALIBTRANS_ERROR_ARGUMENT;
+    }
+    lCalibration = calibrationGetPressure();
+    if (lCalibration == NULL) {
+        return CALIBTRANS_ERROR_NOT_READY;
+    }
+    return calibtransInterpolate(lCalibration->pressureValues, lCalibration->speedRps,
+                                 NULL, CALIBRATION_PRESSURE_POINT_COUNT,
+                                 CALIBRATION_PRESSURE_POINT_COUNT,
+                                 pressureValue, speedRps);
 }
 
 int8_t calibtransAdultProxFlow(float adcValue, float *flowValue) {
