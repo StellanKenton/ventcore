@@ -29,7 +29,7 @@ void actuatorControllerProcess(void)
     flowControllerProcess();
     fio2ControllerProcess();
 
-    (void)blowerVcmSendControl(BLOWER_CTRL_PWM,pressureControllerBlowerTargetGet(),0U);
+    (void)blowerVcmSendControl(BLOWER_CTRL_SPEED,pressureControllerBlowerTargetGet(),0U);
     (void)dvalveDutySet(DVALVE_IDX_EXP,pressureControllerExpValveDutyGet());
 
 }

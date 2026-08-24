@@ -13,6 +13,7 @@
 #include "controldata.h"
 #include "phasecontroller.h"
 #include "pid.h"
+#include "calibtrans.h"
 
 static stPid gPressureOuterPid;
 static stPid gPressureInnerPid;
@@ -39,8 +40,7 @@ static void pressureControllerPidsReset(void)
 static void pressureControllerEffortApply(float effort)
 {
     if (effort >= 0.0F) {
-        gPressureBlowerTarget = (uint16_t)(effort *
-                                           (float)PRESSURE_CONTROLLER_BLOWER_PWM_SCALE);
+        gPressureBlowerTarget = 0;//(uint16_t)(effort *(float)PRESSURE_CONTROLLER_BLOWER_SPEED_SCALE);
         gPressureExpValveDuty = PRESSURE_CONTROLLER_INSP_EXP_DUTY;
     } else {
         gPressureBlowerTarget = 0U;
@@ -82,76 +82,75 @@ void pressureControllerInit(void)
     pressureControllerOutputClear();
 }
 
-static void pressureControllerInspirationProcess(float referencePressure, float patientPressure)
+/** Calculate the inspiratory-pressure target through the patient-pressure outer loop. */
+static int8_t pressureControllerInspirationOuterLoopProcess(float *inspTarget)
 {
-    float lInspPressure;
     float lInspCorrection;
-    float lInspTarget;
+    int8_t lStatus;
+
+    lStatus = pidUpdate(&gPressureOuterPid,
+                        phaseControlGet(PHASE_REF_PRESSURE),
+                        controlDataGet(PAT_REAL_PRS),
+                        &lInspCorrection);
+    if (lStatus != PID_STATUS_OK) {
+        return lStatus;
+    }
+
+    *inspTarget = phaseControlGet(PHASE_REF_PRESSURE) + lInspCorrection;
+    return PID_STATUS_OK;
+}
+
+/** Calculate the actuator effort through the inspiratory-pressure inner loop. */
+static int8_t pressureControllerInspirationInnerLoopProcess(float inspTarget, float *effort)
+{
+    return pidUpdate(&gPressureInnerPid,
+                     inspTarget,
+                     controlDataGet(INSP_REAL_PRS),
+                     effort);
+}
+
+static void pressureControllerInspirationProcess(void)
+{
+    float lInspTarget = 0.0F;
     float lEffort;
+    float lBlower_feedforward;
 
-    lInspPressure = controlDataGet(INSP_REAL_PRS);
+    // if (pressureControllerInspirationOuterLoopProcess(&lInspTarget) != PID_STATUS_OK) {
+    //     pressureControllerOutputClear();
+    //     return;
+    // }
 
-    /* The patient-pressure loop trims the target of the faster inspiratory-pressure loop. */
-    if (pidUpdate(&gPressureOuterPid,
-                  referencePressure,
-                  patientPressure,
-                  &lInspCorrection) != PID_STATUS_OK) {
+    if (pressureControllerInspirationInnerLoopProcess(phaseControlGet(PHASE_REF_PRESSURE), &lEffort) != PID_STATUS_OK) {
         pressureControllerOutputClear();
         return;
     }
+    calibtransPrsSpeed(phaseControlGet(PHASE_REF_FAST_PRESSURE), &lBlower_feedforward);
+    lEffort = lEffort + lBlower_feedforward;
 
-    lInspTarget = referencePressure + lInspCorrection;
-    if (pidUpdate(&gPressureInnerPid,
-                  lInspTarget,
-                  lInspPressure,
-                  &lEffort) != PID_STATUS_OK) {
-        pressureControllerOutputClear();
-        return;
-    }
-
-    lEffort += PRESSURE_CONTROLLER_INSP_FEEDFORWARD;
-    if (lEffort > PRESSURE_CONTROLLER_EFFORT_MAX) {
-        lEffort = PRESSURE_CONTROLLER_EFFORT_MAX;
+    if (lEffort > PRESSURE_CONTROLLER_BLOWER_SPEED_SCALE) {
+        lEffort = PRESSURE_CONTROLLER_BLOWER_SPEED_SCALE;
     }
 
     /* Inspiration never vents pressure through EXP; negative effort only stops the blower. */
-    gPressureBlowerTarget = (lEffort > 0.0F) ?
-                             (uint16_t)(lEffort * (float)PRESSURE_CONTROLLER_BLOWER_PWM_SCALE) : 0U;
+    gPressureBlowerTarget = (lEffort > 0.0F) ? (uint16_t)lEffort*PRESSURE_CONTROLLER_BLOWER_SPEED_SCALE: 0U;
     gPressureExpValveDuty = PRESSURE_CONTROLLER_EXP_VALVE_CLOSED_DUTY;
 }
 
-static void pressureControllerInspirationRiseProcess(float referencePressure, float patientPressure)
-{
-    if ((gPressureRiseBoostActive != 0U) &&
-        (patientPressure < (referencePressure - PRESSURE_CONTROLLER_RISE_BOOST_EXIT_MARGIN))) {
-        gPressureBlowerTarget = PRESSURE_CONTROLLER_RISE_BOOST_BLOWER_TARGET;
-        gPressureExpValveDuty = PRESSURE_CONTROLLER_EXP_VALVE_CLOSED_DUTY;
-        return;
-    }
-
-    if (gPressureRiseBoostActive != 0U) {
-        gPressureRiseBoostActive = 0U;
-        (void)pidReset(&gPressureOuterPid);
-        (void)pidReset(&gPressureInnerPid);
-    }
-    pressureControllerInspirationProcess(referencePressure, patientPressure);
-}
-
-static void pressureControllerPeepProcess(float referencePressure, float patientPressure)
+static void pressureControllerPeepProcess(void)
 {
     float lEffort;
     float lValveDuty;
 
     if (pidUpdate(&gPressurePeepPid,
-                  referencePressure,
-                  patientPressure,
+                  phaseControlGet(PHASE_REF_PRESSURE),
+                  controlDataGet(PAT_REAL_PRS),
                   &lEffort) != PID_STATUS_OK) {
         pressureControllerOutputClear();
         return;
     }
 
     if (lEffort >= 0.0F) {
-        lEffort += PRESSURE_CONTROLLER_PEEP_FEEDFORWARD;
+        lEffort += 25.0F; /* Add a feedforward term to keep the blower spooled during PEEP. */
         if (lEffort > PRESSURE_CONTROLLER_EFFORT_MAX) {
             lEffort = PRESSURE_CONTROLLER_EFFORT_MAX;
         }
@@ -203,18 +202,15 @@ static void pressureControllerStateEnter(ePressureControllerState state)
         case PRESSURE_CONTROLLER_INSP_RISE:
             (void)pidReset(&gPressureOuterPid);
             (void)pidReset(&gPressureInnerPid);
-            gPressureRiseBoostActive = 1U;
             break;
         case PRESSURE_CONTROLLER_EXP_RELEASE:
             pressureControllerPidsReset();
-            gPressureRiseBoostActive = 0U;
             break;
         case PRESSURE_CONTROLLER_EXP_PEEP:
             (void)pidReset(&gPressurePeepPid);
             break;
         case PRESSURE_CONTROLLER_IDLE:
             pressureControllerPidsReset();
-            gPressureRiseBoostActive = 0U;
             break;
         case PRESSURE_CONTROLLER_INSP_HOLD:
         default:
@@ -225,8 +221,6 @@ static void pressureControllerStateEnter(ePressureControllerState state)
 void pressureControllerProcess(void)
 {
     ePressureControllerState lState;
-    float lReferencePressure;
-    float lPatientPressure;
 
     if (gPressureControllerReady == 0U) {
         pressureControllerOutputClear();
@@ -238,27 +232,17 @@ void pressureControllerProcess(void)
         pressureControllerStateEnter(lState);
     }
 
-    lReferencePressure = phaseControlGet(PHASE_REF_PRESSURE);
-    lPatientPressure = controlDataGet(PAT_REAL_PRS);
-
     switch (gPressureControllerState) {
         case PRESSURE_CONTROLLER_INSP_RISE:
-            pressureControllerInspirationRiseProcess(breathControlGet(BREATH_INSP_PRESSURE),
-                                                      lPatientPressure);
-            break;
         case PRESSURE_CONTROLLER_INSP_HOLD:
-            if (gPressureRiseBoostActive != 0U) {
-                pressureControllerInspirationRiseProcess(lReferencePressure, lPatientPressure);
-            } else {
-                pressureControllerInspirationProcess(lReferencePressure, lPatientPressure);
-            }
+            pressureControllerInspirationProcess();
             break;
         case PRESSURE_CONTROLLER_EXP_RELEASE:
             gPressureBlowerTarget = 0U;
             gPressureExpValveDuty = PRESSURE_CONTROLLER_EXP_RELEASE_DUTY;
             break;
         case PRESSURE_CONTROLLER_EXP_PEEP:
-            pressureControllerPeepProcess(lReferencePressure, lPatientPressure);
+            pressureControllerPeepProcess();
             break;
         case PRESSURE_CONTROLLER_IDLE:
         default:

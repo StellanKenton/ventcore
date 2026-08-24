@@ -18,13 +18,13 @@ extern "C" {
 
 #define PHASE_CONTROL_SUCCESS       1
 #define PHASE_CONTROL_ERROR_PARAM  (-1)
-#define PHASE_INSP_FAST_RAMP_GAIN   0.8F
 #define PHASE_EXP_PEEP_ENTRY_MARGIN (-1.0F)
 #define PHASE_EXP_RELEASE_MAX_TIME_MS 1200U
 
 typedef enum {
     PHASE_NONE = 0,
     PHASE_REF_PRESSURE,
+    PHASE_REF_FAST_PRESSURE,
     PHASE_COUNT,
 } ePhaseControlType;
 
@@ -42,7 +42,6 @@ typedef struct stPhaseController {
     uint16_t inspHoldTimeTicks;
     uint16_t expPeepTimeTicks;
     float inspRiseStartPressure;
-    float inspRiseFastPressure;
 } stPhaseController;
 
 /** Initialize the phase controller. */

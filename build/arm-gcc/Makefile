@@ -736,30 +736,6 @@ User/app/ventalgo/flowcontroller.c.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/User/app/ventalgo/flowcontroller.c.s
 .PHONY : User/app/ventalgo/flowcontroller.c.s
 
-User/app/ventalgo/peepcontroller.obj: User/app/ventalgo/peepcontroller.c.obj
-.PHONY : User/app/ventalgo/peepcontroller.obj
-
-# target to build an object file
-User/app/ventalgo/peepcontroller.c.obj:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/User/app/ventalgo/peepcontroller.c.obj
-.PHONY : User/app/ventalgo/peepcontroller.c.obj
-
-User/app/ventalgo/peepcontroller.i: User/app/ventalgo/peepcontroller.c.i
-.PHONY : User/app/ventalgo/peepcontroller.i
-
-# target to preprocess a source file
-User/app/ventalgo/peepcontroller.c.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/User/app/ventalgo/peepcontroller.c.i
-.PHONY : User/app/ventalgo/peepcontroller.c.i
-
-User/app/ventalgo/peepcontroller.s: User/app/ventalgo/peepcontroller.c.s
-.PHONY : User/app/ventalgo/peepcontroller.s
-
-# target to generate assembly for a file
-User/app/ventalgo/peepcontroller.c.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/User/app/ventalgo/peepcontroller.c.s
-.PHONY : User/app/ventalgo/peepcontroller.c.s
-
 User/app/ventalgo/pressurecontroller.obj: User/app/ventalgo/pressurecontroller.c.obj
 .PHONY : User/app/ventalgo/pressurecontroller.obj
 
@@ -879,6 +855,30 @@ User/app/ventlogic/monitorengine.s: User/app/ventlogic/monitorengine.c.s
 User/app/ventlogic/monitorengine.c.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/User/app/ventlogic/monitorengine.c.s
 .PHONY : User/app/ventlogic/monitorengine.c.s
+
+User/app/ventlogic/phasecontroller.obj: User/app/ventlogic/phasecontroller.c.obj
+.PHONY : User/app/ventlogic/phasecontroller.obj
+
+# target to build an object file
+User/app/ventlogic/phasecontroller.c.obj:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/User/app/ventlogic/phasecontroller.c.obj
+.PHONY : User/app/ventlogic/phasecontroller.c.obj
+
+User/app/ventlogic/phasecontroller.i: User/app/ventlogic/phasecontroller.c.i
+.PHONY : User/app/ventlogic/phasecontroller.i
+
+# target to preprocess a source file
+User/app/ventlogic/phasecontroller.c.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/User/app/ventlogic/phasecontroller.c.i
+.PHONY : User/app/ventlogic/phasecontroller.c.i
+
+User/app/ventlogic/phasecontroller.s: User/app/ventlogic/phasecontroller.c.s
+.PHONY : User/app/ventlogic/phasecontroller.s
+
+# target to generate assembly for a file
+User/app/ventlogic/phasecontroller.c.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/User/app/ventlogic/phasecontroller.c.s
+.PHONY : User/app/ventlogic/phasecontroller.c.s
 
 User/app/ventlogic/triggerengine.obj: User/app/ventlogic/triggerengine.c.obj
 .PHONY : User/app/ventlogic/triggerengine.obj
@@ -1264,6 +1264,30 @@ User/module/log/consoleRegisted/sysdebug.c.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/User/module/log/consoleRegisted/sysdebug.c.s
 .PHONY : User/module/log/consoleRegisted/sysdebug.c.s
 
+User/module/log/consoleRegisted/venttest.obj: User/module/log/consoleRegisted/venttest.c.obj
+.PHONY : User/module/log/consoleRegisted/venttest.obj
+
+# target to build an object file
+User/module/log/consoleRegisted/venttest.c.obj:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/User/module/log/consoleRegisted/venttest.c.obj
+.PHONY : User/module/log/consoleRegisted/venttest.c.obj
+
+User/module/log/consoleRegisted/venttest.i: User/module/log/consoleRegisted/venttest.c.i
+.PHONY : User/module/log/consoleRegisted/venttest.i
+
+# target to preprocess a source file
+User/module/log/consoleRegisted/venttest.c.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/User/module/log/consoleRegisted/venttest.c.i
+.PHONY : User/module/log/consoleRegisted/venttest.c.i
+
+User/module/log/consoleRegisted/venttest.s: User/module/log/consoleRegisted/venttest.c.s
+.PHONY : User/module/log/consoleRegisted/venttest.s
+
+# target to generate assembly for a file
+User/module/log/consoleRegisted/venttest.c.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/User/module/log/consoleRegisted/venttest.c.s
+.PHONY : User/module/log/consoleRegisted/venttest.c.s
+
 User/module/log/log.obj: User/module/log/log.c.obj
 .PHONY : User/module/log/log.obj
 
@@ -1565,9 +1589,6 @@ help:
 	@echo ... User/app/ventalgo/flowcontroller.obj
 	@echo ... User/app/ventalgo/flowcontroller.i
 	@echo ... User/app/ventalgo/flowcontroller.s
-	@echo ... User/app/ventalgo/peepcontroller.obj
-	@echo ... User/app/ventalgo/peepcontroller.i
-	@echo ... User/app/ventalgo/peepcontroller.s
 	@echo ... User/app/ventalgo/pressurecontroller.obj
 	@echo ... User/app/ventalgo/pressurecontroller.i
 	@echo ... User/app/ventalgo/pressurecontroller.s
@@ -1583,6 +1604,9 @@ help:
 	@echo ... User/app/ventlogic/monitorengine.obj
 	@echo ... User/app/ventlogic/monitorengine.i
 	@echo ... User/app/ventlogic/monitorengine.s
+	@echo ... User/app/ventlogic/phasecontroller.obj
+	@echo ... User/app/ventlogic/phasecontroller.i
+	@echo ... User/app/ventlogic/phasecontroller.s
 	@echo ... User/app/ventlogic/triggerengine.obj
 	@echo ... User/app/ventlogic/triggerengine.i
 	@echo ... User/app/ventlogic/triggerengine.s
@@ -1631,6 +1655,9 @@ help:
 	@echo ... User/module/log/consoleRegisted/sysdebug.obj
 	@echo ... User/module/log/consoleRegisted/sysdebug.i
 	@echo ... User/module/log/consoleRegisted/sysdebug.s
+	@echo ... User/module/log/consoleRegisted/venttest.obj
+	@echo ... User/module/log/consoleRegisted/venttest.i
+	@echo ... User/module/log/consoleRegisted/venttest.s
 	@echo ... User/module/log/log.obj
 	@echo ... User/module/log/log.i
 	@echo ... User/module/log/log.s
