@@ -93,17 +93,15 @@ typedef struct stVentPacSettings {
 
 /* Volume assist/control ventilation. */
 typedef struct stVentVacSettings {
-    float oxygenPercent;
-    float peepCmh2o;
-    float pressureLimitCmh2o;
-    float respiratoryRateBpm;
-    uint32_t inspiratoryTimeMs;
-    float tidalVolumeMl;
-    float inspiratoryFlowLpm;
-    eVentFlowPattern flowPattern;
-    eVentTriggerType triggerType;
+    float oxygen;
+    float peep;
+    float freq;
+    uint32_t inspTimeMs;
+    float tidalVolume;
     float pressureTriggerCmh2o;
     float flowTriggerLpm;
+    eVentTriggerType triggerType;
+    float inspPausePct;
 } stVentVacSettings;
 
 /* Continuous positive airway pressure with pressure support. */
@@ -394,6 +392,7 @@ typedef struct stVentHfoSettings {
 stVentLimitSettings *GetVentLimitSettings(void);
 stVentPatientSettings *GetVentPatientSettings(void);
 stVentPacSettings *GetVentPacSettings(void);
+stVentVacSettings *GetVentVacSettings(void);
 
 #ifdef __cplusplus
 }
