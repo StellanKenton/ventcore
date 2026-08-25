@@ -42,6 +42,8 @@ file(REMOVE_RECURSE
   "CMakeFiles/ventcore.dir/User/app/databus/controldata.c.obj.d"
   "CMakeFiles/ventcore.dir/User/app/databus/databus.c.obj"
   "CMakeFiles/ventcore.dir/User/app/databus/databus.c.obj.d"
+  "CMakeFiles/ventcore.dir/User/app/databus/monitordata.c.obj"
+  "CMakeFiles/ventcore.dir/User/app/databus/monitordata.c.obj.d"
   "CMakeFiles/ventcore.dir/User/app/databus/settingdata.c.obj"
   "CMakeFiles/ventcore.dir/User/app/databus/settingdata.c.obj.d"
   "CMakeFiles/ventcore.dir/User/app/system/taskmanager.c.obj"

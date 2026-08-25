@@ -25,7 +25,7 @@ static int8_t monitorEngineSet(eMonitorDataType type, float value) {
 }
 
 /** Integrate signed patient flow into the selected volume. */
-static void monitorEngineTidaVolIntegrate(eMonitorDataType type, float flow) {
+static void monitorEngineTidaVolIntegrate(eMonitorDataType type, float flow) {  
     gMonitorData[type] += flow * MONITOR_FLOW_SAMPLE_VOLUME_ML;
 }
 

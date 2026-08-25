@@ -71,6 +71,7 @@ set(CMAKE_DEPENDS_DEPENDENCY_FILES
   "D:/Space/Cosmos/ventcore/User/app/calibration/calibtrans.c" "CMakeFiles/ventcore.dir/User/app/calibration/calibtrans.c.obj" "gcc" "CMakeFiles/ventcore.dir/User/app/calibration/calibtrans.c.obj.d"
   "D:/Space/Cosmos/ventcore/User/app/databus/controldata.c" "CMakeFiles/ventcore.dir/User/app/databus/controldata.c.obj" "gcc" "CMakeFiles/ventcore.dir/User/app/databus/controldata.c.obj.d"
   "D:/Space/Cosmos/ventcore/User/app/databus/databus.c" "CMakeFiles/ventcore.dir/User/app/databus/databus.c.obj" "gcc" "CMakeFiles/ventcore.dir/User/app/databus/databus.c.obj.d"
+  "D:/Space/Cosmos/ventcore/User/app/databus/monitordata.c" "CMakeFiles/ventcore.dir/User/app/databus/monitordata.c.obj" "gcc" "CMakeFiles/ventcore.dir/User/app/databus/monitordata.c.obj.d"
   "D:/Space/Cosmos/ventcore/User/app/databus/settingdata.c" "CMakeFiles/ventcore.dir/User/app/databus/settingdata.c.obj" "gcc" "CMakeFiles/ventcore.dir/User/app/databus/settingdata.c.obj.d"
   "D:/Space/Cosmos/ventcore/User/app/system/taskmanager.c" "CMakeFiles/ventcore.dir/User/app/system/taskmanager.c.obj" "gcc" "CMakeFiles/ventcore.dir/User/app/system/taskmanager.c.obj.d"
   "D:/Space/Cosmos/ventcore/User/app/ventalgo/fio2controller.c" "CMakeFiles/ventcore.dir/User/app/ventalgo/fio2controller.c.obj" "gcc" "CMakeFiles/ventcore.dir/User/app/ventalgo/fio2controller.c.obj.d"

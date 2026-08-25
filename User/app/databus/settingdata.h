@@ -57,6 +57,17 @@ typedef enum {
     VENT_PATIENT_TYPE_COUNT
 } eVentPatientType;
 
+typedef enum {
+    VENT_GAS_BTPS = 0,  /* Body temperature and pressure, saturated with water vapor. */
+    VENT_GAS_ATP,       /* Ambient temperature and pressure. */
+    VENT_GAS_ATPD,      /* Ambient temperature and pressure, dry. */
+    VENT_GAS_ATPS,      /* Ambient temperature and pressure, saturated with water vapor. */
+    VENT_GAS_STP,       /* Standard temperature and pressure. */
+    VENT_GAS_STPD,      /* Standard temperature and pressure, dry. */
+    VENT_GAS_BTPD,      /* Body temperature and pressure, dry. */
+    VENT_GAS_COUNT,     /* Number of supported gas condition types. */
+} eVentGasType;
+
 typedef struct stVentLimitSettings {
     float pressureLow;          // min 1.0
     float pressureHigh;         // max 100.0
@@ -74,6 +85,7 @@ typedef struct stVentLimitSettings {
 
 typedef struct stVentPatientSettings {
     eVentPatientType Type;
+    eVentGasType Gas;
     uint16_t IdealBodyWeightKg;  // min 1, max 300
     uint16_t IdealBodyHeightCm;  // min 2, max 440
 }stVentPatientSettings;

@@ -13,6 +13,7 @@
 #include <stdint.h>
 
 #include "adc.h"
+#include "actuatorcontroller.h"
 #include "blower_vcm.h"
 #include "console.h"
 #include "dvalve.h"
@@ -169,8 +170,8 @@ static void bspDebugUsageShow(void)
 {
     LOG_I(gBspDebugTag, "adc: bsp a|adc <sfcur|flow|hw|3v3|temp|24v|peepcur|insp|5v|peep|exp|mdiff|o2cur|26v>");
     LOG_I(gBspDebugTag, "valve: bsp v|valve <insp|exp|diff|flush> [0|1]");
-    LOG_I(gBspDebugTag, "dvalve: bsp d|dv|dvalve <o2|relief|exp> <0-100>");
-    LOG_I(gBspDebugTag, "blower: bsp blower <speed 0-1000|pwm 0-100|stats>");
+    LOG_I(gBspDebugTag, "dvalve: bsp d|dv|dvalve <o2|relief> <0-100> | exp <0-100|auto>");
+    LOG_I(gBspDebugTag, "blower: bsp blower <speed 0-1000|pwm 0-100|auto|stats>");
 }
 
 /**
@@ -265,13 +266,28 @@ static eConsoleCommandResult bspDebugDvalveCommand(const char *arguments)
         return CONSOLE_COMMAND_RESULT_INVALID_ARGUMENT;
     }
     lIndex = bspDebugNameFind(lToken, lLength, gBspDebugDvalveNames, (uint32_t)DVALVE_COUNT);
-    if ((lIndex < 0) || !bspDebugTokenRead(&arguments, &lToken, &lLength) ||
-        !bspDebugUint16Parse(lToken, lLength, DVALVE_DUTY_MAX_PERCENT, &lDuty) ||
+    if ((lIndex < 0) || !bspDebugTokenRead(&arguments, &lToken, &lLength)) {
+        bspDebugUsageShow();
+        return CONSOLE_COMMAND_RESULT_INVALID_ARGUMENT;
+    }
+    if ((lIndex == (int32_t)DVALVE_IDX_EXP) &&
+        bspDebugTokenEqual(lToken, lLength, "auto") &&
+        !bspDebugTokenRead(&arguments, &lToken, &lLength)) {
+        actuatorControllerExpValveManualClear();
+        LOG_I(gBspDebugTag, "dvalve exp auto");
+        return CONSOLE_COMMAND_RESULT_OK;
+    }
+    if (!bspDebugUint16Parse(lToken, lLength, DVALVE_DUTY_MAX_PERCENT, &lDuty) ||
         bspDebugTokenRead(&arguments, &lToken, &lLength)) {
         bspDebugUsageShow();
         return CONSOLE_COMMAND_RESULT_INVALID_ARGUMENT;
     }
 
+    if (lIndex == (int32_t)DVALVE_IDX_EXP) {
+        actuatorControllerExpValveManualSet((uint8_t)lDuty);
+        LOG_I(gBspDebugTag, "dvalve exp %u%%", (unsigned int)lDuty);
+        return CONSOLE_COMMAND_RESULT_OK;
+    }
     lStatus = dvalveDutySet((eDvalveIndex)lIndex, (uint8_t)lDuty);
     if (lStatus != DVALVE_STATUS_OK) {
         LOG_E(gBspDebugTag, "dvalve %s set failed: %d", gBspDebugDvalveNames[lIndex], (int)lStatus);
@@ -295,7 +311,6 @@ static eConsoleCommandResult bspDebugBlowerCommand(const char *arguments)
     uint16_t lValue;
     uint16_t lTarget;
     eBlowerVcmControlMode lMode;
-    int8_t lStatus;
     stBlowerVcmStats lStats;
     stBlowerVcmFeedback lFeedback;
 
@@ -309,9 +324,10 @@ static eConsoleCommandResult bspDebugBlowerCommand(const char *arguments)
         (void)blowerVcmGetStats(&lStats);
         (void)blowerVcmGetFeedback(&lFeedback);
         LOG_I(gBspDebugTag,
-              "blower link connected=%u valid=%u speed_x10=%u rx_bytes=%lu rx_frames=%lu tx_frames=%lu",
+              "blower link connected=%u valid=%u manual=%u speed_x10=%u rx_bytes=%lu rx_frames=%lu tx_frames=%lu",
               blowerVcmIsConnected(repRtosGetTickMs()) ? 1U : 0U,
               lFeedback.valid ? 1U : 0U,
+              actuatorControllerBlowerManualIsActive() ? 1U : 0U,
               (unsigned int)lFeedback.speedScaled,
               (unsigned long)lStats.rxByteCount,
               (unsigned long)lStats.rxFrameCount,
@@ -327,6 +343,12 @@ static eConsoleCommandResult bspDebugBlowerCommand(const char *arguments)
               (unsigned long)lStats.uartErrorCount,
               (unsigned long)lStats.dmaErrorCount,
               (unsigned long)lStats.txBusyDropCount);
+        return CONSOLE_COMMAND_RESULT_OK;
+    }
+    if (bspDebugTokenEqual(lModeToken, lModeLength, "auto") &&
+        !bspDebugTokenRead(&arguments, &lValueToken, &lValueLength)) {
+        actuatorControllerBlowerManualClear();
+        LOG_I(gBspDebugTag, "blower auto");
         return CONSOLE_COMMAND_RESULT_OK;
     }
     if (!bspDebugTokenRead(&arguments, &lValueToken, &lValueLength) ||
@@ -348,11 +370,7 @@ static eConsoleCommandResult bspDebugBlowerCommand(const char *arguments)
         return CONSOLE_COMMAND_RESULT_INVALID_ARGUMENT;
     }
 
-    lStatus = blowerVcmSendControl(lMode, lTarget, 0U);
-    if (lStatus != BLOWER_VCM_STATUS_OK) {
-        LOG_E(gBspDebugTag, "blower control failed: %d", (int)lStatus);
-        return CONSOLE_COMMAND_RESULT_ERROR;
-    }
+    actuatorControllerBlowerManualSet(lMode, lTarget, 0U);
     LOG_I(gBspDebugTag, "blower %s %u", (lMode == BLOWER_CTRL_SPEED) ? "speed" : "pwm",
           (unsigned int)lValue);
     return CONSOLE_COMMAND_RESULT_OK;

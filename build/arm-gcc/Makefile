@@ -640,6 +640,30 @@ User/app/databus/databus.c.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/User/app/databus/databus.c.s
 .PHONY : User/app/databus/databus.c.s
 
+User/app/databus/monitordata.obj: User/app/databus/monitordata.c.obj
+.PHONY : User/app/databus/monitordata.obj
+
+# target to build an object file
+User/app/databus/monitordata.c.obj:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/User/app/databus/monitordata.c.obj
+.PHONY : User/app/databus/monitordata.c.obj
+
+User/app/databus/monitordata.i: User/app/databus/monitordata.c.i
+.PHONY : User/app/databus/monitordata.i
+
+# target to preprocess a source file
+User/app/databus/monitordata.c.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/User/app/databus/monitordata.c.i
+.PHONY : User/app/databus/monitordata.c.i
+
+User/app/databus/monitordata.s: User/app/databus/monitordata.c.s
+.PHONY : User/app/databus/monitordata.s
+
+# target to generate assembly for a file
+User/app/databus/monitordata.c.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/User/app/databus/monitordata.c.s
+.PHONY : User/app/databus/monitordata.c.s
+
 User/app/databus/settingdata.obj: User/app/databus/settingdata.c.obj
 .PHONY : User/app/databus/settingdata.obj
 
@@ -1577,6 +1601,9 @@ help:
 	@echo ... User/app/databus/databus.obj
 	@echo ... User/app/databus/databus.i
 	@echo ... User/app/databus/databus.s
+	@echo ... User/app/databus/monitordata.obj
+	@echo ... User/app/databus/monitordata.i
+	@echo ... User/app/databus/monitordata.s
 	@echo ... User/app/databus/settingdata.obj
 	@echo ... User/app/databus/settingdata.i
 	@echo ... User/app/databus/settingdata.s

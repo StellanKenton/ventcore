@@ -14,9 +14,19 @@
 #include "fio2controller.h"
 #include "flowcontroller.h"
 #include "pressurecontroller.h"
+#include "rtos.h"
+
+static bool gActuatorControllerBlowerManualActive = false;
+static eBlowerVcmControlMode gActuatorControllerBlowerManualMode = BLOWER_CTRL_INIT;
+static uint16_t gActuatorControllerBlowerManualTarget = 0U;
+static uint8_t gActuatorControllerBlowerManualSaturation = 0U;
+static bool gActuatorControllerExpValveManualActive = false;
+static uint8_t gActuatorControllerExpValveManualDuty = 0U;
 
 void actuatorControllerInit(void)
 {
+    actuatorControllerBlowerManualClear();
+    actuatorControllerExpValveManualClear();
     pressureControllerInit();
     flowControllerInit();
     fio2ControllerInit();
@@ -25,13 +35,81 @@ void actuatorControllerInit(void)
 
 void actuatorControllerProcess(void)
 {
+    bool lBlowerManualActive;
+    eBlowerVcmControlMode lBlowerMode;
+    uint16_t lBlowerTarget;
+    uint8_t lBlowerSaturation;
+    bool lExpValveManualActive;
+    uint8_t lExpValveDuty;
+
     pressureControllerProcess();
     flowControllerProcess();
     fio2ControllerProcess();
 
-    (void)blowerVcmSendControl(BLOWER_CTRL_SPEED,pressureControllerBlowerTargetGet(),0U);
-    (void)dvalveDutySet(DVALVE_IDX_EXP,pressureControllerExpValveDutyGet());
+    repRtosEnterCritical();
+    lBlowerManualActive = gActuatorControllerBlowerManualActive;
+    lBlowerMode = gActuatorControllerBlowerManualMode;
+    lBlowerTarget = gActuatorControllerBlowerManualTarget;
+    lBlowerSaturation = gActuatorControllerBlowerManualSaturation;
+    lExpValveManualActive = gActuatorControllerExpValveManualActive;
+    lExpValveDuty = gActuatorControllerExpValveManualDuty;
+    repRtosExitCritical();
 
+    if (!lBlowerManualActive) {
+        lBlowerMode = BLOWER_CTRL_SPEED;
+        lBlowerTarget = pressureControllerBlowerTargetGet();
+        lBlowerSaturation = 0U;
+    }
+    if (!lExpValveManualActive) {
+        lExpValveDuty = pressureControllerExpValveDutyGet();
+    }
+    (void)blowerVcmSendControl(lBlowerMode, lBlowerTarget, lBlowerSaturation);
+    (void)dvalveDutySet(DVALVE_IDX_EXP, lExpValveDuty);
+
+}
+
+void actuatorControllerBlowerManualSet(eBlowerVcmControlMode mode,
+                                       uint16_t targetValue,
+                                       uint8_t vcmSaturation)
+{
+    repRtosEnterCritical();
+    gActuatorControllerBlowerManualMode = mode;
+    gActuatorControllerBlowerManualTarget = targetValue;
+    gActuatorControllerBlowerManualSaturation = vcmSaturation;
+    gActuatorControllerBlowerManualActive = true;
+    repRtosExitCritical();
+}
+
+void actuatorControllerBlowerManualClear(void)
+{
+    repRtosEnterCritical();
+    gActuatorControllerBlowerManualActive = false;
+    repRtosExitCritical();
+}
+
+bool actuatorControllerBlowerManualIsActive(void)
+{
+    bool lActive;
+
+    repRtosEnterCritical();
+    lActive = gActuatorControllerBlowerManualActive;
+    repRtosExitCritical();
+    return lActive;
+}
+
+void actuatorControllerExpValveManualSet(uint8_t dutyPercent)
+{
+    repRtosEnterCritical();
+    gActuatorControllerExpValveManualDuty = dutyPercent;
+    gActuatorControllerExpValveManualActive = true;
+    repRtosExitCritical();
+}
+
+void actuatorControllerExpValveManualClear(void)
+{
+    repRtosEnterCritical();
+    gActuatorControllerExpValveManualActive = false;
+    repRtosExitCritical();
 }
 
 /**************************End of file********************************/
