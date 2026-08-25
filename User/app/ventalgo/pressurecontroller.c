@@ -26,6 +26,7 @@ static uint8_t gPressureControllerReady;
 static ePressureControllerState gPressureControllerState;
 static stPressureControllerDiagnostic gPressureDiagnostic;
 static float gPressureFlowCompensation;
+static uint16_t gPressurePeepEntryElapsedMs;
 
 /** Clamp a pressure-controller value to a configured range. */
 static float pressureControllerClamp(float value, float minimum, float maximum) {
@@ -36,6 +37,18 @@ static float pressureControllerClamp(float value, float minimum, float maximum) 
         return minimum;
     }
     return value;
+}
+
+/** Move an actuator command toward its target by a bounded amount. */
+static float pressureControllerMoveTowards(float current, float target, float maximumStep)
+{
+    if (target > (current + maximumStep)) {
+        return current + maximumStep;
+    }
+    if (target < (current - maximumStep)) {
+        return current - maximumStep;
+    }
+    return target;
 }
 
 /** Clear the latest inspiratory-control diagnostic values. */
@@ -166,15 +179,91 @@ static int8_t pressureControllerInspirationInnerLoopProcess(float inspTarget, fl
 
 static void pressureControllerReleaseProcess(void)
 {
-    float lrealPatPrs = controlDataGet(PAT_REAL_PRS);
-    float lRefPrs = phaseControlGet(PHASE_REF_PRESSURE);
-    float lBlowerFeedforward; 
-    gPressureExpValveDuty = PRESSURE_CONTROLLER_EXP_RELEASE_DUTY;
-    if(lrealPatPrs < lRefPrs) {
-        calibtransPrsSpeed(lRefPrs, &lBlowerFeedforward); 
-        gPressureBlowerTarget = (uint16_t)(lBlowerFeedforward * 10.0F);
-    } else {
+    float lBlowerFeedforward;
+    float lBlowerProgress;
+    float lBlowerTarget;
+    float lPatientPressure = controlDataGet(PAT_REAL_PRS);
+    float lPeepPressure = phaseControlGet(PHASE_REF_PRESSURE);
+    float lPressureError = lPatientPressure - lPeepPressure;
+    float lMinimumProgress;
+    float lPeepProgressFactor;
+    float lProgress;
+    float lPeepSoftMargin;
+    float lSoftMarginMaximum;
+    float lSoftMarginRatio;
+    float lSoftMargin;
+    float lValveTarget;
+
+    lSoftMarginRatio = pressureControllerClamp(
+        lPeepPressure * PRESSURE_CONTROLLER_RELEASE_SOFT_MARGIN_RATIO_PEEP_SCALE,
+        PRESSURE_CONTROLLER_RELEASE_SOFT_MARGIN_RATIO_MIN,
+        1.0F);
+    lSoftMargin = (breathControlGet(BREATH_INSP_PRESSURE) - lPeepPressure) *
+                  lSoftMarginRatio;
+    lPeepSoftMargin = lPeepPressure * PRESSURE_CONTROLLER_RELEASE_PEEP_MARGIN_RATIO;
+    if (lSoftMargin < lPeepSoftMargin) {
+        lSoftMargin = lPeepSoftMargin;
+    }
+    lSoftMarginMaximum = pressureControllerClamp(
+        lPeepPressure * PRESSURE_CONTROLLER_RELEASE_SOFT_MARGIN_MAX_PEEP_RATIO,
+        PRESSURE_CONTROLLER_RELEASE_SOFT_MARGIN_MAX_MIN,
+        PRESSURE_CONTROLLER_RELEASE_SOFT_MARGIN_MAX_LIMIT);
+    lSoftMargin = pressureControllerClamp(lSoftMargin,
+                                           PRESSURE_CONTROLLER_RELEASE_SOFT_MARGIN_MIN,
+                                           lSoftMarginMaximum);
+    lPeepProgressFactor = pressureControllerClamp(
+        (lPeepPressure - PRESSURE_CONTROLLER_RELEASE_BLOWER_FLOOR_PEEP_OFFSET) *
+        PRESSURE_CONTROLLER_RELEASE_BLOWER_FLOOR_PEEP_GAIN,
+        0.0F,
+        1.0F);
+    lMinimumProgress = lPeepProgressFactor * pressureControllerClamp(
+        PRESSURE_CONTROLLER_RELEASE_PROGRESS_FLOOR_BASE +
+        ((breathControlGet(BREATH_INSP_PRESSURE) - lPeepPressure) *
+         PRESSURE_CONTROLLER_RELEASE_PROGRESS_FLOOR_DELTA_GAIN),
+        0.0F,
+        PRESSURE_CONTROLLER_RELEASE_PROGRESS_FLOOR_MAX);
+    if ((lPressureError >= lSoftMargin) && (lMinimumProgress <= 0.0F)) {
         gPressureBlowerTarget = 0U;
+        gPressureExpValveDuty = PRESSURE_CONTROLLER_EXP_RELEASE_DUTY;
+        return;
+    }
+    if (calibtransPrsSpeed(lPeepPressure, &lBlowerFeedforward) != CALIBTRANS_STATUS_OK) {
+        pressureControllerOutputClear();
+        return;
+    }
+
+    lProgress = (lSoftMargin - lPressureError) /
+                (lSoftMargin - PRESSURE_CONTROLLER_PEEP_ENTRY_MARGIN);
+    lProgress = pressureControllerClamp(lProgress, 0.0F, 1.0F);
+    if (lProgress < lMinimumProgress) {
+        lProgress = lMinimumProgress;
+    }
+    lBlowerProgress = pressureControllerClamp(
+        lProgress * PRESSURE_CONTROLLER_RELEASE_BLOWER_PROGRESS_GAIN,
+        0.0F,
+        1.0F);
+    lMinimumProgress = pressureControllerClamp(
+        (lPeepPressure - PRESSURE_CONTROLLER_RELEASE_BLOWER_FLOOR_PEEP_OFFSET) *
+        PRESSURE_CONTROLLER_RELEASE_BLOWER_FLOOR_PEEP_GAIN,
+        0.0F,
+        1.0F);
+    if (lBlowerProgress < lMinimumProgress) {
+        lBlowerProgress = lMinimumProgress;
+    }
+    lBlowerTarget = lBlowerFeedforward * 10.0F * lBlowerProgress;
+    lValveTarget = PRESSURE_CONTROLLER_RELEASE_VALVE_DUTY_MAX * lProgress;
+
+    gPressureBlowerTarget = (uint16_t)pressureControllerMoveTowards(
+        (float)gPressureBlowerTarget,
+        lBlowerTarget,
+        PRESSURE_CONTROLLER_RELEASE_BLOWER_MAX_STEP);
+    if (lValveTarget < (float)gPressureExpValveDuty) {
+        gPressureExpValveDuty = (uint8_t)lValveTarget;
+    } else {
+        gPressureExpValveDuty = (uint8_t)pressureControllerMoveTowards(
+            (float)gPressureExpValveDuty,
+            lValveTarget,
+            PRESSURE_CONTROLLER_EXP_VALVE_CAPTURE_STEP);
     }
 }
 
@@ -239,6 +328,9 @@ static void pressureControllerPeepProcess(void)
     float lExcessPressure;
     float lValveOpening;
     float lValveDuty;
+    float lEntryValveDuty;
+    float lValveDutyMaximum;
+    float lEntryProgress;
 
     if (pidUpdate(&gPressurePeepPid,
                   phaseControlGet(PHASE_REF_PRESSURE),
@@ -265,8 +357,34 @@ static void pressureControllerPeepProcess(void)
                                              0.0F,
                                              PRESSURE_CONTROLLER_PEEP_RELIEF_MAX_OPENING);
     lValveDuty = (float)PRESSURE_CONTROLLER_EXP_VALVE_CLOSED_DUTY - lValveOpening;
-    gPressureBlowerTarget = (uint16_t)lBlowerTarget;
-    gPressureExpValveDuty = (uint8_t)lValveDuty;
+    lEntryProgress = pressureControllerClamp(
+        (float)gPressurePeepEntryElapsedMs / PRESSURE_CONTROLLER_PEEP_ENTRY_RAMP_TIME_MS,
+        0.0F,
+        1.0F);
+    lEntryValveDuty = pressureControllerClamp(
+        PRESSURE_CONTROLLER_PEEP_ENTRY_VALVE_BASE_DUTY + phaseControlGet(PHASE_REF_PRESSURE),
+        PRESSURE_CONTROLLER_PEEP_ENTRY_VALVE_DUTY_MIN,
+        PRESSURE_CONTROLLER_PEEP_ENTRY_VALVE_DUTY_MAX);
+    lValveDutyMaximum = lEntryValveDuty +
+                        (((float)PRESSURE_CONTROLLER_EXP_VALVE_CLOSED_DUTY -
+                          lEntryValveDuty) * lEntryProgress);
+    lValveDuty = pressureControllerClamp(lValveDuty, 0.0F, lValveDutyMaximum);
+    gPressureBlowerTarget = (uint16_t)pressureControllerMoveTowards(
+        (float)gPressureBlowerTarget,
+        lBlowerTarget,
+        PRESSURE_CONTROLLER_BLOWER_MAX_STEP);
+    if (lValveDuty < (float)gPressureExpValveDuty) {
+        /* Excess pressure may open EXP immediately; only closing is rate limited. */
+        gPressureExpValveDuty = (uint8_t)lValveDuty;
+    } else {
+        gPressureExpValveDuty = (uint8_t)pressureControllerMoveTowards(
+            (float)gPressureExpValveDuty,
+            lValveDuty,
+            PRESSURE_CONTROLLER_EXP_VALVE_CLOSE_MAX_STEP);
+    }
+    if (gPressurePeepEntryElapsedMs < (uint16_t)PRESSURE_CONTROLLER_PEEP_ENTRY_RAMP_TIME_MS) {
+        gPressurePeepEntryElapsedMs += (uint16_t)(PRESSURE_CONTROLLER_SAMPLE_PERIOD_S * 1000.0F);
+    }
 }
 
 static ePressureControllerState pressureControllerStateResolve(void)
@@ -308,6 +426,7 @@ static void pressureControllerStateEnter(ePressureControllerState state)
             break;
         case PRESSURE_CONTROLLER_EXP_PEEP:
             (void)pidReset(&gPressurePeepPid);
+            gPressurePeepEntryElapsedMs = 0U;
             break;
         case PRESSURE_CONTROLLER_INSP_HOLD:
             break;

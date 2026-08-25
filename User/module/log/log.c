@@ -24,8 +24,6 @@
 
 static stRingBuffer gLogOutputQueue;
 static uint8_t gLogOutputQueueStorage[LOG_OUTPUT_QUEUE_SIZE];
-static char gLogRttInputBuffer[LOG_INPUT_BUFFER_SIZE];
-static char gLogRttOutputBuffer[LOG_OUTPUT_BUFFER_SIZE];
 static char gLogFormatBuffer[LOG_OUTPUT_MAX_FRAME_SIZE];
 static uint8_t gLogFlushBuffer[LOG_OUTPUT_BUFFER_SIZE];
 static bool gLogReady = false;
@@ -109,16 +107,8 @@ bool logInit(void)
     }
 
     SEGGER_RTT_Init();
-    (void)SEGGER_RTT_ConfigUpBuffer(0U,
-                                    "Terminal",
-                                    gLogRttOutputBuffer,
-                                    (unsigned)sizeof(gLogRttOutputBuffer),
-                                    SEGGER_RTT_MODE_NO_BLOCK_TRIM);
-    (void)SEGGER_RTT_ConfigDownBuffer(0U,
-                                      "Terminal",
-                                      gLogRttInputBuffer,
-                                      (unsigned)sizeof(gLogRttInputBuffer),
-                                      SEGGER_RTT_MODE_NO_BLOCK_TRIM);
+    (void)SEGGER_RTT_SetFlagsUpBuffer(0U, SEGGER_RTT_MODE_NO_BLOCK_TRIM);
+    (void)SEGGER_RTT_SetFlagsDownBuffer(0U, SEGGER_RTT_MODE_NO_BLOCK_TRIM);
 
     gLogReady = true;
     return true;
