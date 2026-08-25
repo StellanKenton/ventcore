@@ -16,6 +16,7 @@
 #include "databus.h"
 #include "log.h"
 #include "monitordata.h"
+#include "monitorengine.h"
 #include "phasecontroller.h"
 #include "rtos.h"
 #include "sfm3119.h"
@@ -99,6 +100,7 @@ static void ventTask(void *argument)
     (void)argument;
     breathSchedulerInit();
     phaseControllerInit();
+    monitorEngineInit();
     actuatorControllerInit();
     
     for (;;) {
@@ -106,6 +108,7 @@ static void ventTask(void *argument)
         controlDataCalibrationProcess();
         breathSchedulerProcess();
         phaseControllerProcess((uint8_t)VENT_TASK_INTERVAL_MS);
+        monitorEngineProcess();
         actuatorControllerProcess();
         ventTestTransientRecord();
         monitorDataUpdate();

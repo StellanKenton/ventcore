@@ -1,7 +1,7 @@
 /************************************************************************************
 * @file     : venttest.h
 * @brief    : Ventilation test console command.
-* @details  : Declares the ventilation test command registration entry.
+* @details  : Declares ventilation test commands and incremental transient logging.
 * @author   :
 * @date     :
 * @version  :

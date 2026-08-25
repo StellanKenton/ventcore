@@ -6,6 +6,7 @@
 
 #include "controldata.h"
 #include "phasecontroller.h"
+#include "monitorengine.h"
 
 volatile stMonitorWaveformData gMonitorWaveformData;
 
@@ -20,6 +21,7 @@ void monitorDataUpdate(void) {
     gMonitorWaveformData.blowerSpeed = controlDataGet(RAW_BLOWER_SPEED)/10.0F;
     gMonitorWaveformData.patientRefPressure = phaseControlGet(PHASE_REF_PRESSURE);
     gMonitorWaveformData.patientFastRefPressure = phaseControlGet(PHASE_REF_FAST_PRESSURE);
+    gMonitorWaveformData.tidalVolume = monitorEngineGet(MONITOR_TIDA_VOL)/10.0f;
 }
 
 /**************************End of file********************************/

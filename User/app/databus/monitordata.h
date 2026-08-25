@@ -21,6 +21,7 @@ typedef struct stMonitorWaveformData {
     float blowerSpeed;
     float patientRefPressure;
     float patientFastRefPressure;
+    float tidalVolume;
 } stMonitorWaveformData;
 
 /* Volatile storage allows debugger waveform tools to observe every update. */
