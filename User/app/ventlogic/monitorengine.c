@@ -24,27 +24,9 @@ static int8_t monitorEngineSet(eMonitorDataType type, float value) {
     return MONITOR_ENGINE_SUCCESS;
 }
 
-/** Integrate signed patient flow during inspiration. */
-static void monitorEngineTidaVolProcess(void) {
-    float lFlow = controlDataGet(MDIFF_REAL_FLOW);
-
-    if ((lFlow > -MONITOR_FLOW_DEADBAND_LPM) &&
-        (lFlow < MONITOR_FLOW_DEADBAND_LPM)) {
-        return;
-    }
-
-    gMonitorData[MONITOR_TIDA_VOL] += lFlow * MONITOR_FLOW_SAMPLE_VOLUME_ML;
-}
-
-/** Integrate negative patient flow during expiration. */
-static void monitorEngineExpTidaVolProcess(void) {
-    float lFlow = controlDataGet(MDIFF_REAL_FLOW);
-
-    if (lFlow > -MONITOR_FLOW_DEADBAND_LPM) {
-        return;
-    }
-
-    gMonitorData[MONITOR_TIDA_VOL] += lFlow * MONITOR_FLOW_SAMPLE_VOLUME_ML;
+/** Integrate signed patient flow into the selected volume. */
+static void monitorEngineTidaVolIntegrate(eMonitorDataType type, float flow) {
+    gMonitorData[type] += flow * MONITOR_FLOW_SAMPLE_VOLUME_ML;
 }
 
 /** Convert the breath phase to the corresponding monitor state. */
@@ -67,6 +49,8 @@ static eMonitorEngineState monitorEngineStateFromPhase(ePhaseControllerState pha
 void monitorEngineInit(void) {
     gMonitorEngine.runState = MONITOR_STATE_IDLE;
     (void)monitorEngineSet(MONITOR_TIDA_VOL, 0.0F);
+    (void)monitorEngineSet(MONITOR_TIDA_VOL_INSP, 0.0F);
+    (void)monitorEngineSet(MONITOR_TIDA_VOL_EXP, 0.0F);
 }
 
 float monitorEngineGet(eMonitorDataType type) {
@@ -79,22 +63,39 @@ float monitorEngineGet(eMonitorDataType type) {
 
 void monitorEngineProcess(void) {
     eMonitorEngineState lNextState = monitorEngineStateFromPhase(phaseControllerStateGet());
+    float lFlow;
 
     if ((lNextState == MONITOR_STATE_INSP_RISE) &&
         (gMonitorEngine.runState != MONITOR_STATE_INSP_RISE)) {
+        (void)monitorEngineSet(MONITOR_TIDA_VOL_INSP, 0.0F);
         (void)monitorEngineSet(MONITOR_TIDA_VOL, 0.0F);
+    } else if ((lNextState == MONITOR_STATE_EXP_RELEASE) &&
+               (gMonitorEngine.runState != MONITOR_STATE_EXP_RELEASE)) {
+        (void)monitorEngineSet(MONITOR_TIDA_VOL_EXP, 0.0F);
     }
     gMonitorEngine.runState = lNextState;
+
+    if (gMonitorEngine.runState == MONITOR_STATE_IDLE) {
+        return;
+    }
+
+    lFlow = controlDataGet(MDIFF_REAL_FLOW);
+    if ((lFlow > -MONITOR_FLOW_DEADBAND_LPM) &&
+        (lFlow < MONITOR_FLOW_DEADBAND_LPM)) {
+        return;
+    }
+
+    monitorEngineTidaVolIntegrate(MONITOR_TIDA_VOL, lFlow);
 
     switch (gMonitorEngine.runState) {
         case MONITOR_STATE_INSP_RISE:
         case MONITOR_STATE_INSP_HOLD:
-            monitorEngineTidaVolProcess();
+            monitorEngineTidaVolIntegrate(MONITOR_TIDA_VOL_INSP, lFlow);
             break;
 
         case MONITOR_STATE_EXP_RELEASE:
         case MONITOR_STATE_EXP_PEEP:
-            monitorEngineExpTidaVolProcess();
+            monitorEngineTidaVolIntegrate(MONITOR_TIDA_VOL_EXP, -lFlow);
             break;
 
         case MONITOR_STATE_IDLE:

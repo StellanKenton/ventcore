@@ -22,6 +22,8 @@ void monitorDataUpdate(void) {
     gMonitorWaveformData.patientRefPressure = phaseControlGet(PHASE_REF_PRESSURE);
     gMonitorWaveformData.patientFastRefPressure = phaseControlGet(PHASE_REF_FAST_PRESSURE);
     gMonitorWaveformData.tidalVolume = monitorEngineGet(MONITOR_TIDA_VOL)/10.0f;
+    gMonitorWaveformData.tidalVolumeInsp = monitorEngineGet(MONITOR_TIDA_VOL_INSP)/10.0f;
+    gMonitorWaveformData.tidalVolumeExp = monitorEngineGet(MONITOR_TIDA_VOL_EXP)/10.0f;
 }
 
 /**************************End of file********************************/

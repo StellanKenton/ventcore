@@ -24,6 +24,8 @@ extern "C" {
 typedef enum {
     MONITOR_DATA_NONE = 0,
     MONITOR_TIDA_VOL,
+    MONITOR_TIDA_VOL_INSP,
+    MONITOR_TIDA_VOL_EXP,
     MONITOR_DATA_COUNT,
 } eMonitorDataType;
 
