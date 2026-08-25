@@ -164,6 +164,20 @@ static int8_t pressureControllerInspirationInnerLoopProcess(float inspTarget, fl
                      effort);
 }
 
+static void pressureControllerReleaseProcess(void)
+{
+    float lrealPatPrs = controlDataGet(PAT_REAL_PRS);
+    float lRefPrs = phaseControlGet(PHASE_REF_PRESSURE);
+    float lBlowerFeedforward; 
+    gPressureExpValveDuty = PRESSURE_CONTROLLER_EXP_RELEASE_DUTY;
+    if(lrealPatPrs < lRefPrs) {
+        calibtransPrsSpeed(lRefPrs, &lBlowerFeedforward); 
+        gPressureBlowerTarget = (uint16_t)(lBlowerFeedforward * 10.0F);
+    } else {
+        gPressureBlowerTarget = 0U;
+    }
+}
+
 static void pressureControllerInspirationProcess(void)
 {
     float lInspTarget = 0.0F;
@@ -328,8 +342,7 @@ void pressureControllerProcess(void)
             pressureControllerHoldReliefProcess();
             break;
         case PRESSURE_CONTROLLER_EXP_RELEASE:
-            gPressureBlowerTarget = 0U;
-            gPressureExpValveDuty = PRESSURE_CONTROLLER_EXP_RELEASE_DUTY;
+            pressureControllerReleaseProcess();
             break;
         case PRESSURE_CONTROLLER_EXP_PEEP:
             pressureControllerPeepProcess();
