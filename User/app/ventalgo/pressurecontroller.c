@@ -25,6 +25,7 @@ static uint8_t gPressureExpValveDuty;
 static uint8_t gPressureControllerReady;
 static ePressureControllerState gPressureControllerState;
 static stPressureControllerDiagnostic gPressureDiagnostic;
+static float gPressureFlowCompensation;
 
 /** Clamp a pressure-controller value to a configured range. */
 static float pressureControllerClamp(float value, float minimum, float maximum) {
@@ -58,17 +59,6 @@ static void pressureControllerPidsReset(void)
     (void)pidReset(&gPressureOuterPid);
     (void)pidReset(&gPressureInnerPid);
     (void)pidReset(&gPressurePeepPid);
-}
-
-static void pressureControllerEffortApply(float effort)
-{
-    if (effort >= 0.0F) {
-        gPressureBlowerTarget = 0;//(uint16_t)(effort *(float)PRESSURE_CONTROLLER_BLOWER_SPEED_SCALE);
-        gPressureExpValveDuty = PRESSURE_CONTROLLER_INSP_EXP_DUTY;
-    } else {
-        gPressureBlowerTarget = 0U;
-        gPressureExpValveDuty = (uint8_t)((float)PRESSURE_CONTROLLER_EXP_VALVE_CLOSED_DUTY + effort);
-    }
 }
 
 void pressureControllerInit(void)
@@ -110,7 +100,9 @@ static int8_t pressureControllerInspirationOuterLoopProcess(float *inspTarget)
 {
     float lFlow;
     float lFlowCompensation;
+    float lFlowCompensationMaximum;
     float lInspCorrection;
+    float lPatientPressure;
     float lPatientReference;
     int8_t lStatus;
 
@@ -119,17 +111,36 @@ static int8_t pressureControllerInspirationOuterLoopProcess(float *inspTarget)
     }
 
     lPatientReference = phaseControlGet(PHASE_REF_PRESSURE);
+    lPatientPressure = controlDataGet(PAT_REAL_PRS);
     lFlow = controlDataGet(INSP_FLOW_FILTERED) * PRESSURE_CONTROLLER_FLOW_INPUT_SCALE;
     lFlow = pressureControllerClamp(lFlow, 0.0F, PRESSURE_CONTROLLER_FLOW_INPUT_MAX);
     lFlowCompensation = (PRESSURE_CONTROLLER_FLOW_FF_LINEAR * lFlow) +
                         (PRESSURE_CONTROLLER_FLOW_FF_QUADRATIC * lFlow * lFlow);
+    lFlowCompensationMaximum = (breathControlGet(BREATH_INSP_PRESSURE) -
+                                breathControlGet(BREATH_PEEP_PRESSURE)) *
+                               PRESSURE_CONTROLLER_FLOW_FF_DELTA_RATIO;
+    lFlowCompensationMaximum = pressureControllerClamp(lFlowCompensationMaximum,
+                                                        0.0F,
+                                                        PRESSURE_CONTROLLER_FLOW_FF_MAX);
     lFlowCompensation = pressureControllerClamp(lFlowCompensation,
                                                 0.0F,
-                                                PRESSURE_CONTROLLER_FLOW_FF_MAX);
+                                                lFlowCompensationMaximum);
+    if ((gPressureControllerState == PRESSURE_CONTROLLER_INSP_HOLD) &&
+        (lFlowCompensation > gPressureFlowCompensation)) {
+        lFlowCompensation = gPressureFlowCompensation;
+    }
+    if (gPressureControllerState == PRESSURE_CONTROLLER_INSP_HOLD) {
+        gPressureFlowCompensation += PRESSURE_CONTROLLER_FLOW_FF_HOLD_FILTER_GAIN *
+                                     (lFlowCompensation - gPressureFlowCompensation);
+    } else {
+        gPressureFlowCompensation += PRESSURE_CONTROLLER_FLOW_FF_RISE_FILTER_GAIN *
+                                     (lFlowCompensation - gPressureFlowCompensation);
+    }
+    lFlowCompensation = gPressureFlowCompensation;
 
     lStatus = pidUpdate(&gPressureOuterPid,
                         lPatientReference,
-                        controlDataGet(PAT_REAL_PRS),
+                        lPatientPressure,
                         &lInspCorrection);
     if (lStatus != PID_STATUS_OK) {
         return lStatus;
@@ -208,7 +219,11 @@ static void pressureControllerHoldReliefProcess(void)
 
 static void pressureControllerPeepProcess(void)
 {
+    float lBlowerFeedforward;
+    float lBlowerTarget;
     float lEffort;
+    float lExcessPressure;
+    float lValveOpening;
     float lValveDuty;
 
     if (pidUpdate(&gPressurePeepPid,
@@ -218,26 +233,25 @@ static void pressureControllerPeepProcess(void)
         pressureControllerOutputClear();
         return;
     }
-
-    if (lEffort >= 0.0F) {
-        lEffort += 25.0F; /* Add a feedforward term to keep the blower spooled during PEEP. */
-        if (lEffort > PRESSURE_CONTROLLER_PEEP_EFFORT_MAX) {
-            lEffort = PRESSURE_CONTROLLER_PEEP_EFFORT_MAX;
-        }
-        pressureControllerEffortApply(lEffort);
-        if (gPressureBlowerTarget < PRESSURE_CONTROLLER_PEEP_SPIN_BLOWER_TARGET) {
-            gPressureBlowerTarget = PRESSURE_CONTROLLER_PEEP_SPIN_BLOWER_TARGET;
-        }
+    if (calibtransPrsSpeed(phaseControlGet(PHASE_REF_PRESSURE),
+                           &lBlowerFeedforward) != CALIBTRANS_STATUS_OK) {
+        pressureControllerOutputClear();
         return;
     }
 
-    lValveDuty = (float)PRESSURE_CONTROLLER_EXP_VALVE_CLOSED_DUTY +
-                 (lEffort * PRESSURE_CONTROLLER_PEEP_EXP_GAIN);
-    if (lValveDuty < (float)PRESSURE_CONTROLLER_EXP_VALVE_OPEN_DUTY) {
-        lValveDuty = (float)PRESSURE_CONTROLLER_EXP_VALVE_OPEN_DUTY;
-    }
-    /* Keep the blower spooled during PEEP and balance its flow with EXP. */
-    gPressureBlowerTarget = PRESSURE_CONTROLLER_PEEP_SPIN_BLOWER_TARGET;
+    lBlowerTarget = (lBlowerFeedforward * 10.0F) +
+                    (lEffort * PRESSURE_CONTROLLER_PEEP_BLOWER_CORRECTION);
+    lBlowerTarget = pressureControllerClamp(lBlowerTarget,
+                                             0.0F,
+                                             (float)PRESSURE_CONTROLLER_BLOWER_SPEED_SCALE);
+    lExcessPressure = controlDataGet(PAT_REAL_PRS) - phaseControlGet(PHASE_REF_PRESSURE);
+    lValveOpening = (lExcessPressure - PRESSURE_CONTROLLER_PEEP_RELIEF_DEADBAND) *
+                    PRESSURE_CONTROLLER_PEEP_RELIEF_GAIN;
+    lValveOpening = pressureControllerClamp(lValveOpening,
+                                             0.0F,
+                                             PRESSURE_CONTROLLER_PEEP_RELIEF_MAX_OPENING);
+    lValveDuty = (float)PRESSURE_CONTROLLER_EXP_VALVE_CLOSED_DUTY - lValveOpening;
+    gPressureBlowerTarget = (uint16_t)lBlowerTarget;
     gPressureExpValveDuty = (uint8_t)lValveDuty;
 }
 
@@ -272,6 +286,7 @@ static void pressureControllerStateEnter(ePressureControllerState state)
         case PRESSURE_CONTROLLER_INSP_RISE:
             (void)pidReset(&gPressureOuterPid);
             (void)pidReset(&gPressureInnerPid);
+            gPressureFlowCompensation = 0.0F;
             break;
         case PRESSURE_CONTROLLER_EXP_RELEASE:
             pressureControllerPidsReset();
@@ -280,10 +295,11 @@ static void pressureControllerStateEnter(ePressureControllerState state)
         case PRESSURE_CONTROLLER_EXP_PEEP:
             (void)pidReset(&gPressurePeepPid);
             break;
+        case PRESSURE_CONTROLLER_INSP_HOLD:
+            break;
         case PRESSURE_CONTROLLER_IDLE:
             pressureControllerPidsReset();
             break;
-        case PRESSURE_CONTROLLER_INSP_HOLD:
         default:
             break;
     }
@@ -323,6 +339,7 @@ void pressureControllerProcess(void)
             pressureControllerOutputClear();
             break;
     }
+
 }
 
 uint16_t pressureControllerBlowerTargetGet(void)

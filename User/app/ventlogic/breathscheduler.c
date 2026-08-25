@@ -46,8 +46,11 @@ static bool breathSchedulerPacSettingsValid(const stVentPatientSettings *patient
                                             const stVentLimitSettings *limitSettings,
                                             const stVentPacSettings *pacSettings)
 {
+    const stCalibrationPressure *lPressureCalibration;
     float lBreathPeriodMs;
+    float lCalibratedPressureMaximum;
     float lInspPressure;
+    uint8_t lIndex;
 
     if ((patientSettings == NULL) || (limitSettings == NULL) || (pacSettings == NULL)) {
         return false;
@@ -84,7 +87,18 @@ static bool breathSchedulerPacSettingsValid(const stVentPatientSettings *patient
 
     lInspPressure = pacSettings->peep + pacSettings->DeltaPressure;
     lBreathPeriodMs = 60000.0F / pacSettings->Rate;
+    lPressureCalibration = calibrationGetPressure();
+    if (lPressureCalibration == NULL) {
+        return false;
+    }
+    lCalibratedPressureMaximum = lPressureCalibration->pressureValues[0U];
+    for (lIndex = 1U; lIndex < CALIBRATION_PRESSURE_POINT_COUNT; lIndex++) {
+        if (lPressureCalibration->pressureValues[lIndex] > lCalibratedPressureMaximum) {
+            lCalibratedPressureMaximum = lPressureCalibration->pressureValues[lIndex];
+        }
+    }
     return (lInspPressure <= limitSettings->pressureHigh) &&
+           (lInspPressure <= (lCalibratedPressureMaximum - BREATH_PRESSURE_CONTROL_HEADROOM)) &&
            (lBreathPeriodMs >= ((float)pacSettings->inspiratoryTimeMs + BREATH_PEEP_LOCK_TIME_MS));
 }
 
@@ -93,6 +107,14 @@ static void breathSchedulerPacSettingsApply(const stVentPatientSettings *patient
                                              const stVentPacSettings *pacSettings)
 {
     float lBreathPeriodMs = 60000.0F / pacSettings->Rate;
+    float lEffectiveRiseTime = (float)pacSettings->riseTimeMs;
+
+    if (pacSettings->DeltaPressure > BREATH_RISE_DELTA_REFERENCE) {
+        lEffectiveRiseTime += (pacSettings->DeltaPressure - BREATH_RISE_DELTA_REFERENCE) *
+                              BREATH_RISE_EXTRA_MS_PER_CMH2O;
+    }
+    lEffectiveRiseTime = NUMFILTER_MIN((float)pacSettings->inspiratoryTimeMs,
+                                       lEffectiveRiseTime);
 
     (void)breathControlSet(BREATH_PATIENT_TYPE, (float)patientSettings->Type);
     (void)breathControlSet(BREATH_IDEAL_BODY_WEIGHT, (float)patientSettings->IdealBodyWeightKg);
@@ -100,12 +122,10 @@ static void breathSchedulerPacSettingsApply(const stVentPatientSettings *patient
     (void)breathControlSet(BREATH_PEEP_PRESSURE, pacSettings->peep);
     (void)breathControlSet(BREATH_INSP_PRESSURE, pacSettings->DeltaPressure + pacSettings->peep);
     (void)breathControlSet(BREATH_CONTROL_TYPE, (float)PRESSURE_CONTROL);
-    (void)breathControlSet(BREATH_INSP_RISE_TIME,
-                           NUMFILTER_MIN((float)pacSettings->inspiratoryTimeMs,
-                                         (float)pacSettings->riseTimeMs));
+    (void)breathControlSet(BREATH_INSP_RISE_TIME, lEffectiveRiseTime);
     (void)breathControlSet(BREATH_INSP_HOLD_TIME,
                            NUMFILTER_MAX(0.0F,
-                                         (float)(pacSettings->inspiratoryTimeMs - pacSettings->riseTimeMs)));
+                                         (float)pacSettings->inspiratoryTimeMs - lEffectiveRiseTime));
     (void)breathControlSet(BREATH_INSP_PEEP_TIME,
                            NUMFILTER_MAX(BREATH_PEEP_LOCK_TIME_MS,
                                          lBreathPeriodMs - (float)pacSettings->inspiratoryTimeMs));

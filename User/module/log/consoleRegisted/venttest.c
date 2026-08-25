@@ -57,10 +57,35 @@ static bool ventTestTokenMatch(const char **arguments, const char *expected)
     return true;
 }
 
+/** Parse one unsigned decimal test argument. */
+static bool ventTestUnsignedParse(const char **arguments, uint16_t *value)
+{
+    const char *lArgument = ventTestSkipSpaces(*arguments);
+    uint32_t lValue = 0U;
+    uint8_t lDigitFound = 0U;
+
+    while ((lArgument[0] >= '0') && (lArgument[0] <= '9')) {
+        lDigitFound = 1U;
+        lValue = (lValue * 10U) + (uint32_t)(lArgument[0] - '0');
+        if (lValue > UINT16_MAX) {
+            return false;
+        }
+        lArgument++;
+    }
+    if ((lDigitFound == 0U) ||
+        ((lArgument[0] != '\0') && (lArgument[0] != ' ') && (lArgument[0] != '\t'))) {
+        return false;
+    }
+
+    *arguments = lArgument;
+    *value = (uint16_t)lValue;
+    return true;
+}
+
 /** Show the supported ventilation test commands. */
 static void ventTestUsageShow(void)
 {
-    LOG_I(gVentTestTag, "usage: vt mode 1 | run <0|1> | pac | status");
+    LOG_I(gVentTestTag, "usage: vt mode 1 | run <0|1> | pac | set <peep> <delta> | status");
 }
 
 /** Show the PAC scheduling and pressure-control chain. */
@@ -96,7 +121,11 @@ static void ventTestStatusShow(void)
 /** Dispatch a ventilation test command. */
 static eConsoleCommandResult ventTestConsoleCommand(const char *arguments)
 {
+    stVentPacSettings lPreviousSettings;
+    stVentPacSettings *lPacSettings;
     int8_t lStatus;
+    uint16_t lDeltaPressure;
+    uint16_t lPeep;
     uint8_t lRun;
 
     if (ventTestTokenMatch(&arguments, "pac") &&
@@ -107,6 +136,26 @@ static eConsoleCommandResult ventTestConsoleCommand(const char *arguments)
                (*ventTestSkipSpaces(arguments) == '\0')) {
         ventTestStatusShow();
         return CONSOLE_COMMAND_RESULT_OK;
+    } else if (ventTestTokenMatch(&arguments, "set") &&
+               ventTestUnsignedParse(&arguments, &lPeep) &&
+               ventTestUnsignedParse(&arguments, &lDeltaPressure) &&
+               (*ventTestSkipSpaces(arguments) == '\0')) {
+        (void)breathSchedulerStop();
+        lPacSettings = GetVentPacSettings();
+        lPreviousSettings = *lPacSettings;
+        lPacSettings->peep = (float)lPeep;
+        lPacSettings->DeltaPressure = (float)lDeltaPressure;
+        lStatus = breathSchedulerTestModeSet((uint8_t)VENT_MD_PAC);
+        if (lStatus != BREATH_CONTROL_SUCCESS) {
+            *lPacSettings = lPreviousSettings;
+            (void)breathSchedulerTestModeSet((uint8_t)VENT_MD_PAC);
+        }
+        LOG_I(gVentTestTag,
+              "set peep100=%u delta100=%u target100=%u status=%d",
+              (unsigned int)(lPeep * 100U),
+              (unsigned int)(lDeltaPressure * 100U),
+              (unsigned int)((lPeep + lDeltaPressure) * 100U),
+              (int)lStatus);
     } else if (ventTestTokenMatch(&arguments, "mode") &&
         ventTestTokenMatch(&arguments, "1") &&
         (*ventTestSkipSpaces(arguments) == '\0')) {

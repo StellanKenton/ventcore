@@ -142,10 +142,15 @@ void phaseControllerProcess(uint8_t tickCount)
         {
             float lPeepPressure = breathControlGet(BREATH_PEEP_PRESSURE);
             float lPatientPressure = controlDataGet(PAT_REAL_PRS);
+            float lEntryMargin = lPeepPressure * PHASE_EXP_PEEP_ENTRY_MARGIN_RATIO;
+
+            if (lEntryMargin > PHASE_EXP_PEEP_ENTRY_MARGIN_MAX) {
+                lEntryMargin = PHASE_EXP_PEEP_ENTRY_MARGIN_MAX;
+            }
 
             (void)phaseControlSet(PHASE_REF_PRESSURE, lPeepPressure);
             gPhaseController.expPeepTimeTicks += tickCount;
-            if ((lPatientPressure <= (lPeepPressure + PHASE_EXP_PEEP_ENTRY_MARGIN)) ||
+            if ((lPatientPressure <= (lPeepPressure + lEntryMargin)) ||
                 (gPhaseController.expPeepTimeTicks >= PHASE_EXP_RELEASE_MAX_TIME_MS)) {
                 gPhaseController.runState = PHASE_EXP_PEEP;
             }
