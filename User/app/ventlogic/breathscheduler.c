@@ -200,11 +200,11 @@ int8_t breathSchedulerStop(void)
 
 int8_t breathSchedulerTestModeSet(uint8_t mode)
 {
-    if (mode != (uint8_t)VENT_MD_PAC) {
+    if ((mode <= (uint8_t)VENT_MD_IDLE) || (mode >= (uint8_t)VENT_MD_COUNT)) {
         return BREATH_CONTROL_ERROR_PARAM;
     }
 
-    return breathSchedulerSettingsUpdate(VENT_MD_PAC);
+    return breathSchedulerSettingsUpdate((eVentMode)mode);
 }
 
 int8_t breathSchedulerTestRunSet(uint8_t run)

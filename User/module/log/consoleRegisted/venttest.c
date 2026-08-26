@@ -1,7 +1,7 @@
 /************************************************************************************
 * @file     : venttest.c
 * @brief    : Ventilation test console command implementation.
-* @details  : Provides direct PAC mode and running-state test controls.
+* @details  : Provides direct ventilation mode and running-state test controls.
 * @author   :
 * @date     :
 * @version  :
@@ -90,7 +90,7 @@ static bool ventTestUnsignedParse(const char **arguments, uint16_t *value)
 /** Show the supported ventilation test commands. */
 static void ventTestUsageShow(void)
 {
-    LOG_I(gVentTestTag, "usage: vt mode 1 | run <0|1> | pac | set <peep> <delta> | status");
+    LOG_I(gVentTestTag, "usage: vt mode <x> | run <0|1> | pac | vac | stop | set <peep> <delta> | status");
 }
 
 /** Upload only samples recorded since the previous status command. */
@@ -178,6 +178,7 @@ static eConsoleCommandResult ventTestConsoleCommand(const char *arguments)
     stVentPacSettings *lPacSettings;
     int8_t lStatus;
     uint16_t lDeltaPressure;
+    uint16_t lMode;
     uint16_t lPeep;
     uint8_t lRun;
 
@@ -185,6 +186,14 @@ static eConsoleCommandResult ventTestConsoleCommand(const char *arguments)
         (*ventTestSkipSpaces(arguments) == '\0')) {
         lStatus = breathSchedulerStart(VENT_MD_PAC);
         LOG_I(gVentTestTag, "PAC start status=%d", (int)lStatus);
+    } else if (ventTestTokenMatch(&arguments, "vac") &&
+               (*ventTestSkipSpaces(arguments) == '\0')) {
+        lStatus = breathSchedulerStart(VENT_MD_VAC);
+        LOG_I(gVentTestTag, "VAC start status=%d", (int)lStatus);
+    } else if (ventTestTokenMatch(&arguments, "stop") &&
+               (*ventTestSkipSpaces(arguments) == '\0')) {
+        lStatus = breathSchedulerTestRunSet(0U);
+        LOG_I(gVentTestTag, "stop status=%d", (int)lStatus);
     } else if (ventTestTokenMatch(&arguments, "status") &&
                (*ventTestSkipSpaces(arguments) == '\0')) {
         ventTestStatusShow();
@@ -210,10 +219,11 @@ static eConsoleCommandResult ventTestConsoleCommand(const char *arguments)
               (unsigned int)((lPeep + lDeltaPressure) * 100U),
               (int)lStatus);
     } else if (ventTestTokenMatch(&arguments, "mode") &&
-        ventTestTokenMatch(&arguments, "1") &&
-        (*ventTestSkipSpaces(arguments) == '\0')) {
-        lStatus = breathSchedulerTestModeSet(1U);
-        LOG_I(gVentTestTag, "mode PAC status=%d", (int)lStatus);
+               ventTestUnsignedParse(&arguments, &lMode) &&
+               (lMode <= UINT8_MAX) &&
+               (*ventTestSkipSpaces(arguments) == '\0')) {
+        lStatus = breathSchedulerTestModeSet((uint8_t)lMode);
+        LOG_I(gVentTestTag, "mode %u status=%d", (unsigned int)lMode, (int)lStatus);
     } else if (ventTestTokenMatch(&arguments, "run")) {
         arguments = ventTestSkipSpaces(arguments);
         if (((arguments[0] != '0') && (arguments[0] != '1')) ||
@@ -234,7 +244,7 @@ static eConsoleCommandResult ventTestConsoleCommand(const char *arguments)
 
 static const stConsoleCommand gVentTestConsoleCommand = {
     "vt",
-    "Ventilation test: set PAC mode or running state",
+    "Ventilation test: select mode or running state",
     ventTestConsoleCommand
 };
 

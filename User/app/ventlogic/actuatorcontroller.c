@@ -42,8 +42,11 @@ void actuatorControllerProcess(void)
     bool lExpValveManualActive;
     uint8_t lExpValveDuty;
 
-    pressureControllerProcess();
-    flowControllerProcess();
+    if (breathControlGet(BREATH_CONTROL_TYPE) == (float)PRESSURE_CONTROL) {
+        pressureControllerProcess();
+    } else {
+        flowControllerProcess();
+    }
     fio2ControllerProcess();
 
     repRtosEnterCritical();
@@ -57,11 +60,19 @@ void actuatorControllerProcess(void)
 
     if (!lBlowerManualActive) {
         lBlowerMode = BLOWER_CTRL_SPEED;
-        lBlowerTarget = pressureControllerBlowerTargetGet();
+        if (breathControlGet(BREATH_CONTROL_TYPE) == (float)PRESSURE_CONTROL) {
+            lBlowerTarget = pressureControllerBlowerTargetGet();
+        } else {
+            lBlowerTarget = flowControllerBlowerTargetGet();
+        }
         lBlowerSaturation = 0U;
     }
     if (!lExpValveManualActive) {
-        lExpValveDuty = pressureControllerExpValveDutyGet();
+        if (breathControlGet(BREATH_CONTROL_TYPE) == (float)PRESSURE_CONTROL) {
+            lExpValveDuty = pressureControllerExpValveDutyGet();
+        } else {
+            lExpValveDuty = flowControllerExpValveDutyGet();
+        }
     }
     (void)blowerVcmSendControl(lBlowerMode, lBlowerTarget, lBlowerSaturation);
     (void)dvalveDutySet(DVALVE_IDX_EXP, lExpValveDuty);

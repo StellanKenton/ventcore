@@ -66,7 +66,7 @@ int8_t breathSchedulerStart(eVentMode mode);
 /** Stop ventilation immediately. */
 int8_t breathSchedulerStop(void);
 
-/** Set the PAC mode directly for the venttest console command. */
+/** Set a ventilation mode directly for the venttest console command. */
 int8_t breathSchedulerTestModeSet(uint8_t mode);
 
 /** Set the running state directly for the venttest console command. */
