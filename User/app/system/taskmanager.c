@@ -21,6 +21,7 @@
 #include "rtos.h"
 #include "sfm3119.h"
 #include "actuatorcontroller.h"
+#include "triggerengine.h"
 #include "venttest.h"
 
 static const char *const gTaskManagerTag = "taskManager";
@@ -96,10 +97,12 @@ static void defaultTask(void *argument)
 static void ventTask(void *argument)
 {
     uint32_t lPreviousWakeMs = repRtosGetTickMs();
+    uint32_t lNowMs;
 
     (void)argument;
     breathSchedulerInit();
     phaseControllerInit();
+    triggerEngineInit();
     monitorEngineInit();
     actuatorControllerInit();
     
@@ -107,8 +110,10 @@ static void ventTask(void *argument)
         controlDataFilterProcess();
         controlDataCalibrationProcess();
         breathSchedulerProcess();
-        phaseControllerProcess((uint8_t)VENT_TASK_INTERVAL_MS);
-        monitorEngineProcess();
+        lNowMs = repRtosGetTickMs();
+        phaseControllerProcess(lNowMs);
+        triggerEngineProcess(lNowMs);
+        monitorEngineProcess(lNowMs);
         actuatorControllerProcess();
         ventTestTransientRecord();
         monitorDataUpdate();

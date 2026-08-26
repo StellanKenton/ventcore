@@ -1,35 +1,40 @@
 # PAC 功能开发建议
 
-本文基于 2026-08-24 工作区中的实际代码，说明 PAC（Pressure Assist/Control，压力辅助/控制）模式下一步应如何实现。本文是开发和台架联调建议，不替代产品需求、风险管理、临床参数定义或法规验证，也不能作为患者使用放行依据。
+本文基于 2026-08-26 工作区中的实际代码，说明 PAC（Pressure Assist/Control，压力辅助/控制）模式下一步应如何实现。本文是开发和台架联调建议，不替代产品需求、风险管理、临床参数定义或法规验证，也不能作为患者使用放行依据。
 
 ## 1. 当前结论
 
-PAC 主链路已经搭出框架，但尚未形成可运行的闭环：
+PAC 的计划、相位和执行器主链已经形成：
 
 ```text
 settingdata
-    -> breathScheduler（参数校验与装载）
-    -> phaseController（生成压力参考值）
-    -> pressureController（当前为空）
-    -> actuatorController（当前只轮询四个空控制器）
+    -> breathScheduler（参数校验并逐次生成 stBreathPlan）
+    -> phaseController（执行 BreathPlan 并生成参考轨迹）
+    -> pressureController / expirationController
+    -> stActuatorRequest
+    -> actuatorController（按字段 ownership 仲裁）
     -> blower / expiratory valve / oxygen valve
+
+monitorEngine
+    -> stBreathResult（VTi、VTe、Ppeak、PEEP、触发原因和周期）
 ```
 
-现阶段可以继续沿用这个分层，不建议再增加新的 manager。`breathScheduler` 负责模式和参数，`phaseController` 负责时序和参考轨迹，`ventalgo` 下的控制器负责计算控制请求，`actuatorController` 是唯一的执行器写入者。
+现阶段继续沿用这个分层，不增加新的 manager。`breathScheduler` 决定下一次 breath，`phaseController` 只执行计划，`ventalgo` 下的控制器只生成统一请求，`actuatorController` 是唯一的执行器写入者。当前已接入 PAC 压力/流量患者触发检测；快速安全监督和独立报警闭环仍未完成，因此不能用于患者。
 
 ## 2. 现状检查
 
 | 项目 | 当前状态 | 影响 |
 | --- | --- | --- |
 | PAC 参数结构 | `stVentPacSettings` 已存在，并有默认值 | 可以继续使用，但字段命名和单位不统一，需要先固定 contract |
-| 参数校验 | 已校验压力、频率、吸气时间、上升时间和部分患者信息 | 未校验触发阈值的有限性与范围，运行期更新也没有原子提交语义 |
-| 启停 API | 已有 `breathSchedulerStart/Stop/SettingsUpdate` | 仓库中没有调用者，固件启动后不会真正开始 PAC |
-| 呼吸时序 | 已有 `IDLE/Rise/Hold/Release/PEEP` 状态和压力斜坡 | 只支持时间触发；患者触发参数尚未接入，停机后参考值和执行器安全态未定义 |
-| 压力闭环 | `pressurecontroller.c` 为空 | 压力参考值不能转化为风机或阀门控制量 |
-| 执行器层 | 风机、氧阀、泄压阀、呼气阀 BSP 已有接口 | 业务控制器尚未调用；四个控制器若各自写硬件会产生所有权冲突 |
-| 监测与报警 | `monitorengine` 和 `AlarmTask` 为空 | 高压、传感器失效、风机掉线等没有形成联锁 |
-| 构建配置 | `ventalgo.c/.h` 已删除，但 `CMakeLists.txt` 仍列出 `ventalgo.c` | 当前 CMake 构建会因源文件不存在而失败，必须先修正 |
-| 调度周期 | `SensorTask` 为 3 ms，`VentTask` 为 6 ms | PID 采样周期应使用 0.006 s；现有 `User/user.md` 中的 2 ms 和 10 Hz 描述已过期 |
+| 参数校验 | 已校验主要有限值、压力、频率、吸气时间、上升时间、暂停比例和触发枚举 | 运行期设置源仍是全局可写对象，尚无 pending/active 原子提交语义 |
+| 启停 API | `venttest` 已接入 PAC/VAC start/stop | 仅供台架调试，不能作为产品控制入口 |
+| 呼吸时序 | Scheduler 逐次产生 `stBreathPlan`，Phase Controller 用 32 位单调 tick 执行 Rise/Hold/Release/PEEP | PAC 已支持 PEEP 期压力/流量触发，阈值和滤波参数仍需台架整定 |
+| 压力闭环 | `pressureController` 实现吸气压力级联控制 | 增益和前馈仍需肺模型台架确认 |
+| 公共呼气控制 | `expirationController` 统一实现 Release 和 PEEP | 安全阀位和故障策略仍需风险分析确认 |
+| 执行器层 | 压力、流量和呼气控制器统一生成 `stActuatorRequest`，只有 `actuatorController` 写 BSP | 尚未接入高压、传感器和风机故障的最高优先级覆盖 |
+| 监测与报警 | `monitorEngine` 已发布逐次 `stBreathResult`；`AlarmTask` 仍为空 | 已有结果 contract，但快速安全联锁和报警锁存尚未实现 |
+| 构建配置 | 新增 `expirationcontroller.c` 并纳入 CMake | Device Tool Build 已通过 |
+| 调度周期 | `SensorTask` 为 3 ms，`VentTask` 为 6 ms | 控制器固定采样周期为 0.006 s |
 
 ## 3. 先固定 PAC 数据 contract
 
@@ -44,7 +49,7 @@ settingdata
 | `DeltaPressure` | cmH2O | PEEP 之上的驱动压力 | 有限且不小于 0，`peep + DeltaPressure` 不超过高压限制 |
 | `riseTimeMs` | ms | 从当前压力上升到吸气压力的时间 | 不大于 `inspiratoryTimeMs` |
 | `triggerType` | 枚举 | 关闭、压力触发或流量触发 | 必须小于 `VENT_TRIGGER_COUNT` |
-| `pressureTriggerCmh2o` | cmH2O | 相对稳定基线的压力下降阈值 | 压力触发时必须为有限值，方向和允许范围由产品需求固定 |
+| `pressureTriggerCmh2o` | cmH2O | 相对稳定基线的压力下降阈值 | 压力触发时必须为有限非零值；当前检测取其绝对值，推荐设置保存为负值 |
 | `flowTriggerLpm` | L/min | 患者吸气流量阈值 | 流量触发时必须为有限正值，允许范围由产品需求固定 |
 
 建议尽快把设置访问从“返回全局可写指针”改为“复制快照 + 校验 + 一次提交”。HMI 或 console 只写 pending 设置，VentTask 在一个明确的周期边界提交 active 设置。这样 `Rate`、吸气时间和压力不会在同一个呼吸周期内读到不同版本。临界区只能通过 `rtos.h` 中的项目接口实现。
@@ -54,26 +59,26 @@ settingdata
 | 模块 | 应负责 | 不应负责 |
 | --- | --- | --- |
 | `settingdata.*` | 设置快照、默认值、读写和版本号 | 呼吸状态机、硬件输出 |
-| `breathscheduler.*` | 模式校验、启停、将 PAC 设置转换为本周期参数 | PID、直接写阀门或风机 |
-| `phasecontroller.*` | 呼吸相位切换、压力参考轨迹、相位查询 | 读取 HMI 可变设置、直接写硬件 |
+| `breathscheduler.*` | 模式校验、启停、决定下一次 breath 并生成不可变 `stBreathPlan` | PID、直接写阀门或风机 |
+| `phasecontroller.*` | 执行 `stBreathPlan`、呼吸相位切换、参考轨迹和触发入口 | 判断 PAC/VAC 模式、读取 HMI 可变设置、直接写硬件 |
 | `triggerengine.*` | 压力/流量基线、去抖、锁定期和单次触发事件 | 改模式参数、直接开始执行器输出 |
-| `pressurecontroller.*` | 参考压力与实测压力之间的闭环计算 | 同时控制 FiO2 或决定呼吸相位 |
-| `peepcontroller.*` | 呼气阶段的 PEEP 控制请求 | 与压力控制器同时写同一个硬件 |
+| `pressurecontroller.*` | 吸气参考压力与实测压力之间的闭环，生成 `stActuatorRequest` | Release、PEEP、FiO2 或呼吸相位 |
+| `expirationcontroller.*` | 所有普通 breath 共用的 Release 和 PEEP 请求 | 判断当前通气模式或直接写 BSP |
 | `fio2controller.*` | 根据空气流量和氧气流量形成混氧请求 | 改变呼吸时序 |
 | `actuatorcontroller.*` | 请求仲裁、限幅、斜率限制、唯一写入 BSP、安全态 | 保存模式设置或复制状态机 |
-| `monitorengine.*` | 计算峰压、PEEP、潮气量、频率等监测结果 | 直接改变正常闭环输出 |
+| `monitorengine.*` | 连续监测并在呼吸边界发布不可变 `stBreathResult` | 直接改变正常闭环输出 |
 | `AlarmTask` 或安全监督模块 | 独立检查高压、传感器、风机连接和超时，触发安全停机 | 代替正常模式控制器 |
 
-关键原则是执行器单一所有权：`pressureController`、`peepController` 和 `fio2Controller` 只产生请求，只有 `actuatorController` 能调用 `blowerVcmSendControl()` 和 `dvalveDutySet()`。当前四个控制器每 6 ms 无条件依次运行的结构，需要增加“按相位选择控制器 + 集中提交输出”，否则后执行的控制器可能覆盖前一个控制器。
+关键原则是执行器单一所有权：`pressureController`、`flowController`、`expirationController` 和 `fio2Controller` 只产生带字段有效位的请求，只有 `actuatorController` 能调用 `blowerVcmSendControl()` 和 `dvalveDutySet()`。当前已经按 phase 和 breath type 选择唯一的主要控制器，未实现的 FiO2 输出不会声明氧阀 ownership。
 
 ## 5. 推荐实现顺序
 
-### 阶段 0：恢复可构建基线
+### 阶段 0：可构建基线（已完成）
 
 | 修改位置 | 建议 | 完成标准 |
 | --- | --- | --- |
-| `CMakeLists.txt` | 按当前方向移除已删除的 `User/app/ventalgo/ventalgo.c`，保留 `actuatorController` 作为聚合入口 | Device Tool Build 成功 |
-| `User/user.md` | 后续同步真实任务名和 3 ms/6 ms 周期 | 文档与 `taskmanager.h` 一致 |
+| `CMakeLists.txt` | 保留 `actuatorController` 作为聚合入口并加入公共 expiration controller | Device Tool Build 成功 |
+| `User/user.md` | 同步 BreathPlan、ActuatorRequest、BreathResult 和 3 ms/6 ms 周期 | 文档与实现一致 |
 | 启动入口 | 先增加仅供台架使用的 PAC start/stop 命令或 HMI 调用 | 能观察到 start/stop 返回码，非法设置不能启动 |
 
 不要在 `main()` 中用默认参数自动启动通气。上电应保持安全 idle，只有设置校验成功且收到明确启动命令后才进入 PAC。
@@ -131,7 +136,7 @@ IDLE
 
 这些安全状态必须由硬件和产品风险分析确认，不能仅凭软件命名推断阀门通断含义。
 
-### 阶段 4：接入患者触发
+### 阶段 4：接入患者触发（第一版已完成）
 
 `triggerengine` 应在 `PHASE_EXP_PEEP` 中工作，输入优先使用已校准且专门滤波的数据：
 
@@ -141,6 +146,20 @@ IDLE
 | 流量触发 | `MDIFF_REAL_FLOW`；如该通道不满足触发带宽，再评估专用滤波链 | 零漂补偿、方向确认、连续样本确认、泄漏抑制、触发后锁定 |
 
 当前 `INSP_FLOW_TRIGER_FILTERED` 仍是未校准的 SFM 吸气流量，不能在没有单位和方向验证的情况下直接当作患者触发量。触发成功后应向 `phaseController` 发送事件，不要由 `triggerengine` 自己修改全局相位对象。
+
+当前实现仅在 PAC 的 `PHASE_EXP_PEEP` 中建立基线和检测事件：进入 PEEP 后先用 8 个 VentTask 样本（约 48 ms）稳定基线，压力下降或近端吸气流量增量达到阈值并连续保持 3 个样本（约 18 ms）后，调用 `phaseControllerTrigger()`。候选成立期间冻结基线；相位控制器继续负责最小呼气锁定和触发类型校验。成功进入吸气后立即清除候选，因此一次努力只产生一次触发。
+
+RTT 台架命令如下，阈值参数使用百分之一单位，配置命令会先停止通气：
+
+```text
+vt trigger pressure 200   # 压力下降 2.00 cmH2O
+vt trigger flow 300       # 流量增加 3.00 L/min
+vt trigger off
+vt pac
+vt status                 # BREATH_RESULT 中 trigger=2 为压力，trigger=3 为流量
+```
+
+8/3 个样本和基线增益 `0.10` 是第一版工程参数，不是临床定值。上板前必须用肺模型确认近端流量正方向、泄漏下的基线稳定性、噪声误触发率和锁定期行为。
 
 ### 阶段 5：FiO2、监测和报警
 
@@ -165,8 +184,8 @@ VentTask 每 6 ms 的建议顺序如下：
 更新滤波/校准数据
     -> 快速安全检查
     -> scheduler 处理设置提交与启停命令
-    -> triggerEngine 产生一次性触发事件
-    -> phaseController 更新相位和压力参考
+    -> phaseController 先处理时间边界并更新相位
+    -> triggerEngine 在仍处于 PEEP 时产生一次性触发事件
     -> 按当前相位运行 pressure 或 PEEP 控制器
     -> FiO2 控制器产生混氧请求
     -> actuatorController 仲裁、限幅并一次性提交硬件输出

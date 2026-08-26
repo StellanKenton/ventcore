@@ -1,7 +1,7 @@
 /************************************************************************************
 * @file     : monitorengine.h
-* @brief    : Breath monitor engine interface.
-* @details  : Declares monitor engine initialization and periodic processing.
+* @brief    : Breath monitor and completed-result interface.
+* @details  : Integrates breath signals and publishes one immutable result per cycle.
 * @author   :
 * @date     : 2026-08-20
 * @version  : V1.0.0
@@ -12,14 +12,23 @@
 
 #include <stdint.h>
 
+#include "breathscheduler.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-#define MONITOR_ENGINE_SUCCESS              1
-#define MONITOR_ENGINE_ERROR_PARAM         (-1)
-#define MONITOR_FLOW_DEADBAND_LPM            0.5F
-#define MONITOR_FLOW_SAMPLE_VOLUME_ML        0.1F
+#define MONITOR_ENGINE_SUCCESS                  1
+#define MONITOR_ENGINE_ERROR_PARAM             (-1)
+#define MONITOR_ENGINE_ERROR_STATE             (-2)
+#define MONITOR_FLOW_DEADBAND_LPM                0.5F
+#define MONITOR_FLOW_SAMPLE_VOLUME_ML            0.1F
+#define BREATH_RESULT_VALID_COMPLETE             (1UL << 0)
+#define BREATH_RESULT_VALID_VTI                  (1UL << 1)
+#define BREATH_RESULT_VALID_VTE                  (1UL << 2)
+#define BREATH_RESULT_VALID_PPEAK                (1UL << 3)
+#define BREATH_RESULT_VALID_PEEP                 (1UL << 4)
+#define BREATH_RESULT_VALID_CYCLE_TIME           (1UL << 5)
 
 typedef enum {
     MONITOR_DATA_NONE = 0,
@@ -37,18 +46,38 @@ typedef enum {
     MONITOR_STATE_EXP_PEEP,
 } eMonitorEngineState;
 
+typedef struct stBreathResult {
+    uint32_t sequence;
+    eVentMode mode;
+    eBreathType breathType;
+    eBreathTriggerReason triggerReason;
+    float vtiMl;
+    float vteMl;
+    float ppeakCmh2o;
+    float peepCmh2o;
+    uint32_t cycleTimeMs;
+    uint32_t validMask;
+} stBreathResult;
+
 typedef struct stMonitorEngine {
     eMonitorEngineState runState;
+    uint32_t breathStartedMs;
+    float peakPressureCmh2o;
+    uint8_t breathActive;
+    stBreathPlan breathPlan;
 } stMonitorEngine;
 
-/** Initialize the monitor engine. */
+/** Initialize waveform monitoring and completed-breath publication. */
 void monitorEngineInit(void);
 
-/** Get a monitor result selected by type. */
+/** Get a continuously updated monitor value selected by type. */
 float monitorEngineGet(eMonitorDataType type);
 
-/** Run one monitor engine processing cycle. */
-void monitorEngineProcess(void);
+/** Copy the latest completed breath result. */
+int8_t monitorEngineBreathResultGet(stBreathResult *result);
+
+/** Update monitoring and publish a result when the next inspiration begins. */
+void monitorEngineProcess(uint32_t nowMs);
 
 #ifdef __cplusplus
 }

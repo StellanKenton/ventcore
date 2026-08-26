@@ -33,6 +33,7 @@ add_executable(ventcore
     User/app/databus/monitordata.c
     User/app/databus/settingdata.c
     User/app/system/taskmanager.c
+    User/app/ventalgo/expirationcontroller.c
     User/app/ventalgo/fio2controller.c
     User/app/ventalgo/flowcontroller.c
     User/app/ventalgo/pressurecontroller.c

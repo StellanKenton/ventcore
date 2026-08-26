@@ -1,36 +1,52 @@
 /************************************************************************************
 * @file     : monitorengine.c
-* @brief    : Breath monitor engine.
-* @details  : Provides monitor engine initialization and periodic processing.
+* @brief    : Breath monitor and completed-result publisher.
+* @details  : Integrates VTi/VTe and publishes one result at each breath boundary.
 * @author   :
 * @date     : 2026-08-20
 * @version  : V1.0.0
 * @copyright: Copyright (c) 2050
 ***********************************************************************************/
 #include "monitorengine.h"
+
+#include <float.h>
+#include <stddef.h>
+#include <string.h>
+
 #include "controldata.h"
 #include "phasecontroller.h"
+#include "rtos.h"
 
-stMonitorEngine gMonitorEngine;
+static stMonitorEngine gMonitorEngine;
 static float gMonitorData[MONITOR_DATA_COUNT];
+static stBreathResult gMonitorLatestBreathResult;
+static uint8_t gMonitorBreathResultAvailable;
+
+/** Return true for a finite single-precision measurement. */
+static uint8_t monitorEngineFinite(float value)
+{
+    return (uint8_t)((value >= -FLT_MAX) && (value <= FLT_MAX));
+}
 
 /** Store a monitor result selected by type. */
-static int8_t monitorEngineSet(eMonitorDataType type, float value) {
+static int8_t monitorEngineSet(eMonitorDataType type, float value)
+{
     if ((type <= MONITOR_DATA_NONE) || (type >= MONITOR_DATA_COUNT)) {
         return MONITOR_ENGINE_ERROR_PARAM;
     }
-
     gMonitorData[type] = value;
     return MONITOR_ENGINE_SUCCESS;
 }
 
-/** Integrate signed patient flow into the selected volume. */
-static void monitorEngineTidaVolIntegrate(eMonitorDataType type, float flow) {  
+/** Integrate patient flow in litres per minute into millilitres. */
+static void monitorEngineTidalVolumeIntegrate(eMonitorDataType type, float flow)
+{
     gMonitorData[type] += flow * MONITOR_FLOW_SAMPLE_VOLUME_ML;
 }
 
-/** Convert the breath phase to the corresponding monitor state. */
-static eMonitorEngineState monitorEngineStateFromPhase(ePhaseControllerState phaseState) {
+/** Convert the shared phase to the local monitoring state. */
+static eMonitorEngineState monitorEngineStateFromPhase(ePhaseControllerState phaseState)
+{
     switch (phaseState) {
         case PHASE_INSP_RISE:
             return MONITOR_STATE_INSP_RISE;
@@ -46,66 +62,149 @@ static eMonitorEngineState monitorEngineStateFromPhase(ePhaseControllerState pha
     }
 }
 
-void monitorEngineInit(void) {
+/** Publish the breath that ended immediately before a new inspiration. */
+static void monitorEngineBreathResultPublish(uint32_t nowMs)
+{
+    float lPeepPressure = controlDataGet(PAT_REAL_PRS);
+    stBreathResult lResult = {0};
+
+    lResult.sequence = gMonitorEngine.breathPlan.sequence;
+    lResult.mode = gMonitorEngine.breathPlan.mode;
+    lResult.breathType = gMonitorEngine.breathPlan.breathType;
+    lResult.triggerReason = gMonitorEngine.breathPlan.triggerReason;
+    lResult.vtiMl = gMonitorData[MONITOR_TIDA_VOL_INSP];
+    lResult.vteMl = gMonitorData[MONITOR_TIDA_VOL_EXP];
+    lResult.ppeakCmh2o = gMonitorEngine.peakPressureCmh2o;
+    lResult.peepCmh2o = lPeepPressure;
+    lResult.cycleTimeMs = nowMs - gMonitorEngine.breathStartedMs;
+    lResult.validMask = BREATH_RESULT_VALID_COMPLETE |
+                        BREATH_RESULT_VALID_CYCLE_TIME;
+    if (monitorEngineFinite(lResult.vtiMl) != 0U) {
+        lResult.validMask |= BREATH_RESULT_VALID_VTI;
+    }
+    if (monitorEngineFinite(lResult.vteMl) != 0U) {
+        lResult.validMask |= BREATH_RESULT_VALID_VTE;
+    }
+    if (monitorEngineFinite(lResult.ppeakCmh2o) != 0U) {
+        lResult.validMask |= BREATH_RESULT_VALID_PPEAK;
+    }
+    if (monitorEngineFinite(lResult.peepCmh2o) != 0U) {
+        lResult.validMask |= BREATH_RESULT_VALID_PEEP;
+    }
+    repRtosEnterCritical();
+    gMonitorLatestBreathResult = lResult;
+    gMonitorBreathResultAvailable = 1U;
+    repRtosExitCritical();
+}
+
+/** Start accumulation for the plan that just entered inspiration. */
+static int8_t monitorEngineBreathStart(uint32_t nowMs)
+{
+    stBreathPlan lPlan;
+    float lPressure;
+
+    if (phaseControllerActivePlanGet(&lPlan) != PHASE_CONTROL_SUCCESS) {
+        return MONITOR_ENGINE_ERROR_STATE;
+    }
+    lPressure = controlDataGet(PAT_REAL_PRS);
+    gMonitorEngine.breathPlan = lPlan;
+    gMonitorEngine.breathStartedMs = nowMs;
+    gMonitorEngine.peakPressureCmh2o = lPressure;
+    gMonitorEngine.breathActive = 1U;
+    (void)monitorEngineSet(MONITOR_TIDA_VOL, 0.0F);
+    (void)monitorEngineSet(MONITOR_TIDA_VOL_INSP, 0.0F);
+    (void)monitorEngineSet(MONITOR_TIDA_VOL_EXP, 0.0F);
+    return MONITOR_ENGINE_SUCCESS;
+}
+
+void monitorEngineInit(void)
+{
+    (void)memset(&gMonitorEngine, 0, sizeof(gMonitorEngine));
+    (void)memset(&gMonitorLatestBreathResult, 0,
+                 sizeof(gMonitorLatestBreathResult));
     gMonitorEngine.runState = MONITOR_STATE_IDLE;
+    gMonitorBreathResultAvailable = 0U;
     (void)monitorEngineSet(MONITOR_TIDA_VOL, 0.0F);
     (void)monitorEngineSet(MONITOR_TIDA_VOL_INSP, 0.0F);
     (void)monitorEngineSet(MONITOR_TIDA_VOL_EXP, 0.0F);
 }
 
-float monitorEngineGet(eMonitorDataType type) {
+float monitorEngineGet(eMonitorDataType type)
+{
     if ((type <= MONITOR_DATA_NONE) || (type >= MONITOR_DATA_COUNT)) {
         return 0.0F;
     }
-
     return gMonitorData[type];
 }
 
-void monitorEngineProcess(void) {
-    eMonitorEngineState lNextState = monitorEngineStateFromPhase(phaseControllerStateGet());
+int8_t monitorEngineBreathResultGet(stBreathResult *result)
+{
+    if (result == NULL) {
+        return MONITOR_ENGINE_ERROR_PARAM;
+    }
+    repRtosEnterCritical();
+    if (gMonitorBreathResultAvailable == 0U) {
+        repRtosExitCritical();
+        return MONITOR_ENGINE_ERROR_STATE;
+    }
+    *result = gMonitorLatestBreathResult;
+    repRtosExitCritical();
+    return MONITOR_ENGINE_SUCCESS;
+}
+
+void monitorEngineProcess(uint32_t nowMs)
+{
+    eMonitorEngineState lNextState =
+        monitorEngineStateFromPhase(phaseControllerStateGet());
     float lFlow;
+    float lPressure;
 
     if ((lNextState == MONITOR_STATE_INSP_RISE) &&
         (gMonitorEngine.runState != MONITOR_STATE_INSP_RISE)) {
-        (void)monitorEngineSet(MONITOR_TIDA_VOL_INSP, 0.0F);
-        (void)monitorEngineSet(MONITOR_TIDA_VOL, 0.0F);
+        if (gMonitorEngine.breathActive != 0U) {
+            monitorEngineBreathResultPublish(nowMs);
+        }
+        if (monitorEngineBreathStart(nowMs) != MONITOR_ENGINE_SUCCESS) {
+            gMonitorEngine.breathActive = 0U;
+        }
     } else if ((lNextState == MONITOR_STATE_EXP_RELEASE) &&
                (gMonitorEngine.runState != MONITOR_STATE_EXP_RELEASE)) {
         (void)monitorEngineSet(MONITOR_TIDA_VOL_EXP, 0.0F);
     }
     gMonitorEngine.runState = lNextState;
 
-    if (gMonitorEngine.runState == MONITOR_STATE_IDLE) {
+    if ((gMonitorEngine.runState == MONITOR_STATE_IDLE) ||
+        (gMonitorEngine.breathActive == 0U)) {
         return;
+    }
+
+    if ((gMonitorEngine.runState == MONITOR_STATE_INSP_RISE) ||
+        (gMonitorEngine.runState == MONITOR_STATE_INSP_HOLD)) {
+        lPressure = controlDataGet(PAT_REAL_PRS);
+        if ((monitorEngineFinite(lPressure) != 0U) &&
+            ((monitorEngineFinite(gMonitorEngine.peakPressureCmh2o) == 0U) ||
+             (lPressure > gMonitorEngine.peakPressureCmh2o))) {
+            gMonitorEngine.peakPressureCmh2o = lPressure;
+        }
     }
 
     lFlow = controlDataGet(MDIFF_REAL_FLOW);
-    if ((lFlow > -MONITOR_FLOW_DEADBAND_LPM) &&
-        (lFlow < MONITOR_FLOW_DEADBAND_LPM)) {
+    if ((monitorEngineFinite(lFlow) == 0U) ||
+        ((lFlow > -MONITOR_FLOW_DEADBAND_LPM) &&
+         (lFlow < MONITOR_FLOW_DEADBAND_LPM))) {
         return;
     }
 
-    monitorEngineTidaVolIntegrate(MONITOR_TIDA_VOL, lFlow);
-
-    switch (gMonitorEngine.runState) {
-        case MONITOR_STATE_INSP_RISE:
-        case MONITOR_STATE_INSP_HOLD:
-            monitorEngineTidaVolIntegrate(MONITOR_TIDA_VOL_INSP, lFlow);
-            break;
-
-        case MONITOR_STATE_EXP_RELEASE:
-        case MONITOR_STATE_EXP_PEEP:
-            monitorEngineTidaVolIntegrate(MONITOR_TIDA_VOL_EXP, -lFlow);
-            break;
-
-        case MONITOR_STATE_IDLE:
-            break;
-
-        default:
-            gMonitorEngine.runState = MONITOR_STATE_IDLE;
-            break;
+    monitorEngineTidalVolumeIntegrate(MONITOR_TIDA_VOL, lFlow);
+    if (((gMonitorEngine.runState == MONITOR_STATE_INSP_RISE) ||
+         (gMonitorEngine.runState == MONITOR_STATE_INSP_HOLD)) &&
+        (lFlow > 0.0F)) {
+        monitorEngineTidalVolumeIntegrate(MONITOR_TIDA_VOL_INSP, lFlow);
+    } else if (((gMonitorEngine.runState == MONITOR_STATE_EXP_RELEASE) ||
+                (gMonitorEngine.runState == MONITOR_STATE_EXP_PEEP)) &&
+               (lFlow < 0.0F)) {
+        monitorEngineTidalVolumeIntegrate(MONITOR_TIDA_VOL_EXP, -lFlow);
     }
-
 }
 
 /**************************End of file********************************/

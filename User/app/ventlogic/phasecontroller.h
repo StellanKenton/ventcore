@@ -1,7 +1,7 @@
 /************************************************************************************
 * @file     : phasecontroller.h
-* @brief    : Breath phase controller interface.
-* @details  : Declares phase controller initialization and periodic processing.
+* @brief    : Breath plan phase executor interface.
+* @details  : Executes one scheduler-selected plan without inspecting vent modes.
 * @author   :
 * @date     : 2026-08-20
 * @version  : V1.0.0
@@ -12,14 +12,17 @@
 
 #include <stdint.h>
 
+#include "breathscheduler.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-#define PHASE_CONTROL_SUCCESS       1
-#define PHASE_CONTROL_ERROR_PARAM  (-1)
+#define PHASE_CONTROL_SUCCESS              1
+#define PHASE_CONTROL_ERROR_PARAM         (-1)
+#define PHASE_CONTROL_ERROR_STATE         (-2)
 #define PHASE_EXP_PEEP_ENTRY_MARGIN        2.0F
-#define PHASE_EXP_RELEASE_MAX_TIME_MS 1200U
+#define PHASE_EXP_RELEASE_MAX_TIME_MS   1200U
 
 typedef enum {
     PHASE_NONE = 0,
@@ -39,26 +42,34 @@ typedef enum {
 
 typedef struct stPhaseController {
     ePhaseControllerState runState;
-    uint16_t inspRiseTimeTicks;
-    uint16_t inspHoldTimeTicks;
-    uint16_t expPeepTimeTicks;
+    uint32_t stateStartedMs;
+    uint32_t expirationStartedMs;
     float inspRiseStartPressure;
+    uint8_t planValid;
+    uint8_t breathStarted;
+    stBreathPlan activePlan;
 } stPhaseController;
 
-/** Initialize the phase controller. */
+/** Initialize the phase executor. */
 void phaseControllerInit(void);
 
-/** Set a phase control value selected by type. */
+/** Set a phase reference value selected by type. */
 int8_t phaseControlSet(ePhaseControlType type, float value);
 
-/** Get a phase control value selected by type. */
+/** Get a phase reference value selected by type. */
 float phaseControlGet(ePhaseControlType type);
 
 /** Get the current breath phase. */
 ePhaseControllerState phaseControllerStateGet(void);
 
-/** Run one phase controller processing cycle. */
-void phaseControllerProcess(uint8_t tickCount);
+/** Copy the immutable plan currently executed by the phase controller. */
+int8_t phaseControllerActivePlanGet(stBreathPlan *plan);
+
+/** Start a patient-triggered breath after the plan's expiratory lock time. */
+int8_t phaseControllerTrigger(eBreathTriggerReason triggerReason, uint32_t nowMs);
+
+/** Execute the active breath plan using a monotonic millisecond tick. */
+void phaseControllerProcess(uint32_t nowMs);
 
 #ifdef __cplusplus
 }

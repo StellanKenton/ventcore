@@ -11,13 +11,14 @@
 
 #include <stdint.h>
 
+#include "actuatorcontroller.h"
 #include "blower_vcm.h"
 #include "breathscheduler.h"
 #include "console.h"
 #include "controldata.h"
 #include "log.h"
+#include "monitorengine.h"
 #include "phasecontroller.h"
-#include "pressurecontroller.h"
 #include "rtos.h"
 
 static const char *const gVentTestTag = "venttest";
@@ -90,12 +91,13 @@ static bool ventTestUnsignedParse(const char **arguments, uint16_t *value)
 /** Show the supported ventilation test commands. */
 static void ventTestUsageShow(void)
 {
-    LOG_I(gVentTestTag, "usage: vt mode <x> | run <0|1> | pac | vac | stop | set <peep> <delta> | status");
+    LOG_I(gVentTestTag, "usage: vt mode <x> | run <0|1> | pac | vac | stop | set <peep> <delta> | trigger off | trigger pressure <cmh2o100> | trigger flow <lpm100> | status");
 }
 
 /** Upload only samples recorded since the previous status command. */
 static void ventTestStatusShow(void)
 {
+    stBreathResult lBreathResult;
     uint32_t lCurrentCount;
     uint32_t lDroppedCount = 0U;
     uint32_t lFirstSequence;
@@ -118,6 +120,19 @@ static void ventTestStatusShow(void)
     gVentTestTransientUploadedCount = lCurrentCount;
     repRtosExitCritical();
 
+    if (monitorEngineBreathResultGet(&lBreathResult) == MONITOR_ENGINE_SUCCESS) {
+        LOG_R("VT_BREATH_RESULT,sequence=%lu,mode=%u,type=%u,trigger=%u,vti100=%ld,vte100=%ld,ppeak100=%ld,peep100=%ld,cycle_ms=%lu,valid=0x%08lX",
+              (unsigned long)lBreathResult.sequence,
+              (unsigned int)lBreathResult.mode,
+              (unsigned int)lBreathResult.breathType,
+              (unsigned int)lBreathResult.triggerReason,
+              (long)ventTestCenti(lBreathResult.vtiMl),
+              (long)ventTestCenti(lBreathResult.vteMl),
+              (long)ventTestCenti(lBreathResult.ppeakCmh2o),
+              (long)ventTestCenti(lBreathResult.peepCmh2o),
+              (unsigned long)lBreathResult.cycleTimeMs,
+              (unsigned long)lBreathResult.validMask);
+    }
     LOG_R("VT_TRANSIENT_BEGIN,count=%u,interval_ms=%u,first_sequence=%lu,dropped=%lu",
           (unsigned int)lCount,
           (unsigned int)VENT_TEST_TRANSIENT_SAMPLE_INTERVAL_MS,
@@ -148,12 +163,18 @@ static void ventTestStatusShow(void)
 /** Record one control-cycle sample into the rolling two-second buffer. */
 void ventTestTransientRecord(void)
 {
+    stActuatorRequest lActuatorRequest;
     stBlowerVcmFeedback lBlowerFeedback;
     stVentTestTransientSample *lSample;
     uint32_t lSequence = gVentTestTransientTotalCount;
 
     if (blowerVcmGetFeedback(&lBlowerFeedback) != BLOWER_VCM_STATUS_OK) {
         lBlowerFeedback.speedScaled = 0U;
+    }
+    if (actuatorControllerLastRequestGet(&lActuatorRequest) !=
+        ACTUATOR_REQUEST_SUCCESS) {
+        lActuatorRequest.blowerTarget = 0U;
+        lActuatorRequest.expiratoryValveDuty = 0U;
     }
 
     lSample = &gVentTestTransientBuffer[lSequence % VENT_TEST_TRANSIENT_SAMPLE_COUNT];
@@ -163,10 +184,10 @@ void ventTestTransientRecord(void)
     lSample->airFlowCenti = ventTestCenti(controlDataGet(INSP_FLOW_FILTERED));
     lSample->o2FlowCenti = ventTestCenti(controlDataGet(O2_FLOW_FILTERED));
     lSample->expFlowCenti = ventTestCenti(controlDataGet(MDIFF_REAL_FLOW));
-    lSample->blowerTarget = pressureControllerBlowerTargetGet();
+    lSample->blowerTarget = lActuatorRequest.blowerTarget;
     lSample->blowerActual = lBlowerFeedback.speedScaled;
     lSample->phase = (uint8_t)phaseControllerStateGet();
-    lSample->valveDuty = pressureControllerExpValveDutyGet();
+    lSample->valveDuty = lActuatorRequest.expiratoryValveDuty;
 
     gVentTestTransientTotalCount = lSequence + 1U;
 }
@@ -180,7 +201,9 @@ static eConsoleCommandResult ventTestConsoleCommand(const char *arguments)
     uint16_t lDeltaPressure;
     uint16_t lMode;
     uint16_t lPeep;
+    uint16_t lTriggerThreshold;
     uint8_t lRun;
+    eVentTriggerType lTriggerType;
 
     if (ventTestTokenMatch(&arguments, "pac") &&
         (*ventTestSkipSpaces(arguments) == '\0')) {
@@ -217,6 +240,46 @@ static eConsoleCommandResult ventTestConsoleCommand(const char *arguments)
               (unsigned int)(lPeep * 100U),
               (unsigned int)(lDeltaPressure * 100U),
               (unsigned int)((lPeep + lDeltaPressure) * 100U),
+              (int)lStatus);
+    } else if (ventTestTokenMatch(&arguments, "trigger")) {
+        if (ventTestTokenMatch(&arguments, "off") &&
+            (*ventTestSkipSpaces(arguments) == '\0')) {
+            lTriggerType = VENT_TRIGGER_OFF;
+            lTriggerThreshold = 0U;
+        } else if (ventTestTokenMatch(&arguments, "pressure") &&
+                   ventTestUnsignedParse(&arguments, &lTriggerThreshold) &&
+                   (lTriggerThreshold > 0U) &&
+                   (*ventTestSkipSpaces(arguments) == '\0')) {
+            lTriggerType = VENT_TRIGGER_PRESSURE;
+        } else if (ventTestTokenMatch(&arguments, "flow") &&
+                   ventTestUnsignedParse(&arguments, &lTriggerThreshold) &&
+                   (lTriggerThreshold > 0U) &&
+                   (*ventTestSkipSpaces(arguments) == '\0')) {
+            lTriggerType = VENT_TRIGGER_FLOW;
+        } else {
+            ventTestUsageShow();
+            return CONSOLE_COMMAND_RESULT_INVALID_ARGUMENT;
+        }
+
+        (void)breathSchedulerStop();
+        lPacSettings = GetVentPacSettings();
+        lPreviousSettings = *lPacSettings;
+        lPacSettings->triggerType = lTriggerType;
+        if (lTriggerType == VENT_TRIGGER_PRESSURE) {
+            lPacSettings->pressureTriggerCmh2o =
+                -((float)lTriggerThreshold / 100.0F);
+        } else if (lTriggerType == VENT_TRIGGER_FLOW) {
+            lPacSettings->flowTriggerLpm = (float)lTriggerThreshold / 100.0F;
+        }
+        lStatus = breathSchedulerTestModeSet((uint8_t)VENT_MD_PAC);
+        if (lStatus != BREATH_CONTROL_SUCCESS) {
+            *lPacSettings = lPreviousSettings;
+            (void)breathSchedulerTestModeSet((uint8_t)VENT_MD_PAC);
+        }
+        LOG_I(gVentTestTag,
+              "PAC trigger type=%u threshold100=%u status=%d",
+              (unsigned int)lTriggerType,
+              (unsigned int)lTriggerThreshold,
               (int)lStatus);
     } else if (ventTestTokenMatch(&arguments, "mode") &&
                ventTestUnsignedParse(&arguments, &lMode) &&
