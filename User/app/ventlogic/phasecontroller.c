@@ -18,25 +18,19 @@ static float gPhaseData[PHASE_COUNT];
 static void phaseControllerStartInspRise(void)
 {
     float lPatientPressure = controlDataGet(PAT_REAL_PRS);
+    float lFlowReference = 0.0F;
+
+    if (breathControlGet(BREATH_CONTROL_TYPE) == (float)VOLUME_CONTROL) {
+        lFlowReference = breathControlGet(BREATH_FLOW);
+    }
 
     gPhaseController.inspRiseTimeTicks = 0U;
     gPhaseController.inspHoldTimeTicks = 0U;
     gPhaseController.inspRiseStartPressure = lPatientPressure;
     (void)phaseControlSet(PHASE_REF_PRESSURE, lPatientPressure);
     (void)phaseControlSet(PHASE_REF_FAST_PRESSURE, lPatientPressure);
-    (void)phaseControlSet(PHASE_REF_FLOW, 0.0F);
+    (void)phaseControlSet(PHASE_REF_FLOW, lFlowReference);
     gPhaseController.runState = PHASE_INSP_RISE;
-}
-
-/** Calculate the VAC inspiratory flow target in litres per minute. */
-static float phaseControllerVacFlowTargetGet(void)
-{
-    float lFlowTimeMs = breathControlGet(BREATH_INSP_RISE_TIME);
-
-    if (lFlowTimeMs <= 0.0F) {
-        return 0.0F;
-    }
-    return breathControlGet(BREATH_TIDAL_VOLUME) * 60.0F / lFlowTimeMs;
 }
 
 void phaseControllerInit(void)
@@ -140,12 +134,9 @@ void phaseControllerProcess(uint8_t tickCount)
                 (void)phaseControlSet(PHASE_REF_PRESSURE, lReferencePressure);
                 (void)phaseControlSet(PHASE_REF_FAST_PRESSURE, lFastReferencePressure);
             } else {
-                float lFlowReference = phaseControlGet(PHASE_REF_FLOW);
-                float lFlowTarget = phaseControllerVacFlowTargetGet();
-
-                lFlowReference += PHASE_FLOW_RISE_FILTER_GAIN *
-                                  (lFlowTarget - lFlowReference);
-                (void)phaseControlSet(PHASE_REF_FLOW, lFlowReference);
+                /* VAC uses a step reference so the flow reaches its plateau quickly. */
+                (void)phaseControlSet(PHASE_REF_FLOW,
+                                      breathControlGet(BREATH_FLOW));
                 if (((float)gPhaseController.inspRiseTimeTicks + (float)tickCount) >= lRiseTime) {
                     gPhaseController.runState = PHASE_INSP_HOLD;
                 } else {

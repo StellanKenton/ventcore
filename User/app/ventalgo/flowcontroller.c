@@ -12,18 +12,15 @@
 #include "breathscheduler.h"
 #include "calibtrans.h"
 #include "controldata.h"
-#include "monitorengine.h"
 #include "phasecontroller.h"
 #include "pid.h"
 #include "pressurecontroller.h"
 
-static stPid gFlowVolumePid;
-static stPid gFlowInnerPid;
+static stPid gFlowPid;
 static uint16_t gFlowBlowerTarget;
 static uint8_t gFlowExpValveDuty;
 static uint8_t gFlowControllerReady;
 static eFlowControllerState gFlowControllerState;
-static float gFlowTargetVti;
 
 /** Clamp a flow-controller value to a configured range. */
 static float flowControllerClamp(float value, float minimum, float maximum)
@@ -44,12 +41,10 @@ static void flowControllerOutputClear(void)
     gFlowExpValveDuty = 0U;
 }
 
-/** Reset the inspiratory cascade and its target-volume trajectory. */
+/** Reset the inspiratory flow loop. */
 static void flowControllerInspirationReset(void)
 {
-    (void)pidReset(&gFlowVolumePid);
-    (void)pidReset(&gFlowInnerPid);
-    gFlowTargetVti = 0.0F;
+    (void)pidReset(&gFlowPid);
 }
 
 /** Resolve the active controller state from the shared breath phase. */
@@ -90,44 +85,34 @@ static void flowControllerStateEnter(eFlowControllerState state)
     }
 }
 
-/** Run the VTi outer loop and flow inner loop for VAC inspiration. */
+/** Hold the VAC flow required to deliver the target volume within flow time. */
 static void flowControllerInspirationProcess(void)
 {
     float lBlowerFeedforward;
     float lEffort;
     float lFeedforwardPressure;
-    float lFlowCorrection;
     float lFlowReference;
-    float lFlowTarget;
     float lMeasuredFlow;
-    float lTidalVolumeTarget;
+
+    if (gFlowControllerState == FLOW_CONTROLLER_INSP_HOLD) {
+        /* Inspiratory pause is part of Ti but must not add delivered volume. */
+        gFlowBlowerTarget = 0U;
+        gFlowExpValveDuty = FLOW_CONTROLLER_EXP_VALVE_CLOSED_DUTY;
+        return;
+    }
 
     lFlowReference = flowControllerClamp(phaseControlGet(PHASE_REF_FLOW),
                                          FLOW_CONTROLLER_FLOW_TARGET_MIN,
                                          FLOW_CONTROLLER_FLOW_TARGET_MAX);
-    lTidalVolumeTarget = breathControlGet(BREATH_TIDAL_VOLUME);
-    gFlowTargetVti += breathControlGet(BREATH_FLOW) * FLOW_CONTROLLER_SAMPLE_VOLUME_ML;
-    gFlowTargetVti = flowControllerClamp(gFlowTargetVti, 0.0F, lTidalVolumeTarget);
-
-    if (pidUpdate(&gFlowVolumePid,
-                  gFlowTargetVti,
-                  monitorEngineGet(MONITOR_TIDA_VOL_INSP),
-                  &lFlowCorrection) != PID_STATUS_OK) {
-        flowControllerOutputClear();
-        return;
-    }
-    lFlowTarget = flowControllerClamp(lFlowReference + lFlowCorrection,
-                                      FLOW_CONTROLLER_FLOW_TARGET_MIN,
-                                      FLOW_CONTROLLER_FLOW_TARGET_MAX);
     lMeasuredFlow = controlDataGet(INSP_FLOW_FILTERED) * FLOW_CONTROLLER_FLOW_INPUT_SCALE;
-    if (pidUpdate(&gFlowInnerPid, lFlowTarget, lMeasuredFlow, &lEffort) != PID_STATUS_OK) {
+    if (pidUpdate(&gFlowPid, lFlowReference, lMeasuredFlow, &lEffort) != PID_STATUS_OK) {
         flowControllerOutputClear();
         return;
     }
 
     lFeedforwardPressure = breathControlGet(BREATH_PEEP_PRESSURE) +
-                           (FLOW_CONTROLLER_FLOW_FF_LINEAR * lFlowTarget) +
-                           (FLOW_CONTROLLER_FLOW_FF_QUADRATIC * lFlowTarget * lFlowTarget);
+                           (FLOW_CONTROLLER_FLOW_FF_LINEAR * lFlowReference) +
+                           (FLOW_CONTROLLER_FLOW_FF_QUADRATIC * lFlowReference * lFlowReference);
     if (calibtransPrsSpeed(lFeedforwardPressure, &lBlowerFeedforward) !=
         CALIBTRANS_STATUS_OK) {
         flowControllerOutputClear();
@@ -154,26 +139,16 @@ static void flowControllerExpirationProcess(void)
 void flowControllerInit(void)
 {
     int8_t lFlowStatus;
-    int8_t lVolumeStatus;
 
-    lVolumeStatus = pidInit(&gFlowVolumePid,
-                            FLOW_CONTROLLER_VOLUME_KP,
-                            FLOW_CONTROLLER_VOLUME_KI,
-                            FLOW_CONTROLLER_VOLUME_KD,
-                            FLOW_CONTROLLER_SAMPLE_PERIOD_S,
-                            FLOW_CONTROLLER_VOLUME_CORRECTION_MIN,
-                            FLOW_CONTROLLER_VOLUME_CORRECTION_MAX);
-    lFlowStatus = pidInit(&gFlowInnerPid,
+    lFlowStatus = pidInit(&gFlowPid,
                           FLOW_CONTROLLER_FLOW_KP,
                           FLOW_CONTROLLER_FLOW_KI,
                           FLOW_CONTROLLER_FLOW_KD,
                           FLOW_CONTROLLER_SAMPLE_PERIOD_S,
                           FLOW_CONTROLLER_EFFORT_MIN,
                           FLOW_CONTROLLER_EFFORT_MAX);
-    gFlowControllerReady = (uint8_t)((lVolumeStatus == PID_STATUS_OK) &&
-                                     (lFlowStatus == PID_STATUS_OK));
+    gFlowControllerReady = (uint8_t)(lFlowStatus == PID_STATUS_OK);
     gFlowControllerState = FLOW_CONTROLLER_IDLE;
-    gFlowTargetVti = 0.0F;
     flowControllerOutputClear();
 }
 

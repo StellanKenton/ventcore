@@ -17,13 +17,6 @@ extern "C" {
 #endif
 
 #define FLOW_CONTROLLER_SAMPLE_PERIOD_S          0.006F
-#define FLOW_CONTROLLER_SAMPLE_VOLUME_ML          0.1F
-
-#define FLOW_CONTROLLER_VOLUME_KP                 0.10F
-#define FLOW_CONTROLLER_VOLUME_KI                 0.02F
-#define FLOW_CONTROLLER_VOLUME_KD                 0.00F
-#define FLOW_CONTROLLER_VOLUME_CORRECTION_MIN   (-20.0F)
-#define FLOW_CONTROLLER_VOLUME_CORRECTION_MAX    20.0F
 
 #define FLOW_CONTROLLER_FLOW_KP                   0.02F
 #define FLOW_CONTROLLER_FLOW_KI                   0.005F
