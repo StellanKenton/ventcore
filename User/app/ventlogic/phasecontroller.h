@@ -43,8 +43,10 @@ typedef enum {
 typedef struct stPhaseController {
     ePhaseControllerState runState;
     uint32_t stateStartedMs;
+    uint32_t inspirationStartedMs;
     uint32_t expirationStartedMs;
     float inspRiseStartPressure;
+    eBreathCycleReason cycleReason;
     uint8_t planValid;
     uint8_t breathStarted;
     stBreathPlan activePlan;
@@ -67,6 +69,12 @@ int8_t phaseControllerActivePlanGet(stBreathPlan *plan);
 
 /** Start a patient-triggered breath after the plan's expiratory lock time. */
 int8_t phaseControllerTrigger(eBreathTriggerReason triggerReason, uint32_t nowMs);
+
+/** End a flow-cycled spontaneous inspiration and begin expiration. */
+int8_t phaseControllerCycle(eBreathCycleReason cycleReason, uint32_t nowMs);
+
+/** Return the reason recorded when the active inspiration ended. */
+eBreathCycleReason phaseControllerCycleReasonGet(void);
 
 /** Execute the active breath plan using a monotonic millisecond tick. */
 void phaseControllerProcess(uint32_t nowMs);

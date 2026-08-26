@@ -21,6 +21,8 @@
 #include "rtos.h"
 #include "sfm3119.h"
 #include "actuatorcontroller.h"
+#include "apneaengine.h"
+#include "cycleengine.h"
 #include "triggerengine.h"
 #include "venttest.h"
 
@@ -103,6 +105,8 @@ static void ventTask(void *argument)
     breathSchedulerInit();
     phaseControllerInit();
     triggerEngineInit();
+    cycleEngineInit();
+    apneaEngineInit();
     monitorEngineInit();
     actuatorControllerInit();
     
@@ -113,6 +117,8 @@ static void ventTask(void *argument)
         lNowMs = repRtosGetTickMs();
         phaseControllerProcess(lNowMs);
         triggerEngineProcess(lNowMs);
+        cycleEngineProcess(lNowMs);
+        apneaEngineProcess(lNowMs);
         monitorEngineProcess(lNowMs);
         actuatorControllerProcess();
         ventTestTransientRecord();

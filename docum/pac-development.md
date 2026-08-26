@@ -176,6 +176,26 @@ PAC 上台架前至少需要这些独立保护：
 
 高压保护不应只依赖 10 ms 的 AlarmTask；VentTask 内需要快速联锁，AlarmTask 负责独立复核、锁存和上报。
 
+### PSV/PSV-ST 第一版扩展
+
+当前 Scheduler 也支持 `VENT_MD_CPAP_PSV` 和 `VENT_MD_PSV_ST`。PSV 计划使用 `BREATH_TYPE_SPONTANEOUS_PRESSURE_SUPPORT`，患者触发后复用压力控制器；Cycle Engine 在吸气期记录近端峰值流量，经过最小吸气锁定后，在流量下降至 `cycleOffPercent` 且连续确认 3 个样本时进入呼气。没有达到流量切换条件时，由 `maximumInspiratoryTimeMs` 强制结束吸气。
+
+`stBreathPlan` 已增加 Cycle 类型、Cycle 百分比、最小/最大吸气时间、窒息时间、备份呼吸周期和时间触发开关。PAC/VAC 仍使用时间切换和时间触发；PSV 使用患者触发和流量切换。
+
+Apnea Engine 在 CPAP/PSV 中超时后进入 `APNEA_ENGINE_ALARM`，等待后续 Alarm Engine 消费；在 PSV-ST 中则请求 Scheduler 产生 `BREATH_TRIGGER_REASON_APNEA_BACKUP` 的强制压力呼吸，并按 backup rate 重复。任何新的压力或流量患者触发都会退出 backup，恢复 PSV。
+
+RTT 台架入口：
+
+```text
+vt psv                  # 启动 CPAP/PSV 默认设置
+vt psvst                # 启动 PSV-ST 默认设置
+vt trigger pressure 200 # 修改当前已选择模式为 2.00 cmH2O 压力触发；命令会停止通气
+vt trigger flow 300     # 修改当前已选择模式为 3.00 L/min 流量触发；命令会停止通气
+vt status               # 查看 trigger、cycle_reason、Ti、峰值吸气流量和 apnea state
+```
+
+第一版 Cycle 参数为最小吸气时间 200 ms、连续确认 3 个 VentTask 样本；这些仅是工程默认值。当前尚未实现漏气补偿、自动触发抑制、双触发统计和正式窒息报警锁存，因此仍需肺模型台架调参和安全监督后才能进入产品验证。
+
 ## 6. 建议的数据流和调用顺序
 
 VentTask 每 6 ms 的建议顺序如下：

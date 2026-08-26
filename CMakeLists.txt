@@ -38,6 +38,7 @@ add_executable(ventcore
     User/app/ventalgo/flowcontroller.c
     User/app/ventalgo/pressurecontroller.c
     User/app/ventlogic/actuatorcontroller.c
+    User/app/ventlogic/apneaengine.c
     User/app/ventlogic/breathscheduler.c
     User/app/ventlogic/cycleengine.c
     User/app/ventlogic/monitorengine.c

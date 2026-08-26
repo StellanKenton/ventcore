@@ -12,6 +12,7 @@
 #include <stdint.h>
 
 #include "actuatorcontroller.h"
+#include "apneaengine.h"
 #include "blower_vcm.h"
 #include "breathscheduler.h"
 #include "console.h"
@@ -91,7 +92,7 @@ static bool ventTestUnsignedParse(const char **arguments, uint16_t *value)
 /** Show the supported ventilation test commands. */
 static void ventTestUsageShow(void)
 {
-    LOG_I(gVentTestTag, "usage: vt mode <x> | run <0|1> | pac | vac | stop | set <peep> <delta> | trigger off | trigger pressure <cmh2o100> | trigger flow <lpm100> | status");
+    LOG_I(gVentTestTag, "usage: vt mode <x> | run <0|1> | pac | vac | psv | psvst | stop | set <peep> <delta> | trigger off | trigger pressure <cmh2o100> | trigger flow <lpm100> | status");
 }
 
 /** Upload only samples recorded since the previous status command. */
@@ -121,18 +122,22 @@ static void ventTestStatusShow(void)
     repRtosExitCritical();
 
     if (monitorEngineBreathResultGet(&lBreathResult) == MONITOR_ENGINE_SUCCESS) {
-        LOG_R("VT_BREATH_RESULT,sequence=%lu,mode=%u,type=%u,trigger=%u,vti100=%ld,vte100=%ld,ppeak100=%ld,peep100=%ld,cycle_ms=%lu,valid=0x%08lX",
+        LOG_R("VT_BREATH_RESULT,sequence=%lu,mode=%u,type=%u,trigger=%u,cycle_reason=%u,vti100=%ld,vte100=%ld,ppeak100=%ld,peep100=%ld,peak_insp_flow100=%ld,ti_ms=%lu,cycle_ms=%lu,valid=0x%08lX",
               (unsigned long)lBreathResult.sequence,
               (unsigned int)lBreathResult.mode,
               (unsigned int)lBreathResult.breathType,
               (unsigned int)lBreathResult.triggerReason,
+              (unsigned int)lBreathResult.cycleReason,
               (long)ventTestCenti(lBreathResult.vtiMl),
               (long)ventTestCenti(lBreathResult.vteMl),
               (long)ventTestCenti(lBreathResult.ppeakCmh2o),
               (long)ventTestCenti(lBreathResult.peepCmh2o),
+              (long)ventTestCenti(lBreathResult.peakInspiratoryFlowLpm),
+              (unsigned long)lBreathResult.inspiratoryTimeMs,
               (unsigned long)lBreathResult.cycleTimeMs,
               (unsigned long)lBreathResult.validMask);
     }
+    LOG_R("VT_APNEA_STATE,state=%u", (unsigned int)apneaEngineStateGet());
     LOG_R("VT_TRANSIENT_BEGIN,count=%u,interval_ms=%u,first_sequence=%lu,dropped=%lu",
           (unsigned int)lCount,
           (unsigned int)VENT_TEST_TRANSIENT_SAMPLE_INTERVAL_MS,
@@ -196,7 +201,11 @@ void ventTestTransientRecord(void)
 static eConsoleCommandResult ventTestConsoleCommand(const char *arguments)
 {
     stVentPacSettings lPreviousSettings;
+    stVentCpapPsvSettings lPreviousCpapPsvSettings;
+    stVentPsvStSettings lPreviousPsvStSettings;
     stVentPacSettings *lPacSettings;
+    stVentCpapPsvSettings *lCpapPsvSettings;
+    stVentPsvStSettings *lPsvStSettings;
     int8_t lStatus;
     uint16_t lDeltaPressure;
     uint16_t lMode;
@@ -204,6 +213,7 @@ static eConsoleCommandResult ventTestConsoleCommand(const char *arguments)
     uint16_t lTriggerThreshold;
     uint8_t lRun;
     eVentTriggerType lTriggerType;
+    eVentMode lConfiguredMode;
 
     if (ventTestTokenMatch(&arguments, "pac") &&
         (*ventTestSkipSpaces(arguments) == '\0')) {
@@ -213,6 +223,14 @@ static eConsoleCommandResult ventTestConsoleCommand(const char *arguments)
                (*ventTestSkipSpaces(arguments) == '\0')) {
         lStatus = breathSchedulerStart(VENT_MD_VAC);
         LOG_I(gVentTestTag, "VAC start status=%d", (int)lStatus);
+    } else if (ventTestTokenMatch(&arguments, "psv") &&
+               (*ventTestSkipSpaces(arguments) == '\0')) {
+        lStatus = breathSchedulerStart(VENT_MD_CPAP_PSV);
+        LOG_I(gVentTestTag, "PSV start status=%d", (int)lStatus);
+    } else if (ventTestTokenMatch(&arguments, "psvst") &&
+               (*ventTestSkipSpaces(arguments) == '\0')) {
+        lStatus = breathSchedulerStart(VENT_MD_PSV_ST);
+        LOG_I(gVentTestTag, "PSV-ST start status=%d", (int)lStatus);
     } else if (ventTestTokenMatch(&arguments, "stop") &&
                (*ventTestSkipSpaces(arguments) == '\0')) {
         lStatus = breathSchedulerTestRunSet(0U);
@@ -261,23 +279,61 @@ static eConsoleCommandResult ventTestConsoleCommand(const char *arguments)
             return CONSOLE_COMMAND_RESULT_INVALID_ARGUMENT;
         }
 
+        lConfiguredMode = breathSchedulerModeGet();
         (void)breathSchedulerStop();
-        lPacSettings = GetVentPacSettings();
-        lPreviousSettings = *lPacSettings;
-        lPacSettings->triggerType = lTriggerType;
-        if (lTriggerType == VENT_TRIGGER_PRESSURE) {
-            lPacSettings->pressureTriggerCmh2o =
-                -((float)lTriggerThreshold / 100.0F);
-        } else if (lTriggerType == VENT_TRIGGER_FLOW) {
-            lPacSettings->flowTriggerLpm = (float)lTriggerThreshold / 100.0F;
-        }
-        lStatus = breathSchedulerTestModeSet((uint8_t)VENT_MD_PAC);
-        if (lStatus != BREATH_CONTROL_SUCCESS) {
-            *lPacSettings = lPreviousSettings;
-            (void)breathSchedulerTestModeSet((uint8_t)VENT_MD_PAC);
+        if (lConfiguredMode == VENT_MD_CPAP_PSV) {
+            lCpapPsvSettings = GetVentCpapPsvSettings();
+            lPreviousCpapPsvSettings = *lCpapPsvSettings;
+            lCpapPsvSettings->triggerType = lTriggerType;
+            if (lTriggerType == VENT_TRIGGER_PRESSURE) {
+                lCpapPsvSettings->pressureTriggerCmh2o =
+                    -((float)lTriggerThreshold / 100.0F);
+            } else if (lTriggerType == VENT_TRIGGER_FLOW) {
+                lCpapPsvSettings->flowTriggerLpm =
+                    (float)lTriggerThreshold / 100.0F;
+            }
+            lStatus = breathSchedulerTestModeSet((uint8_t)lConfiguredMode);
+            if (lStatus != BREATH_CONTROL_SUCCESS) {
+                *lCpapPsvSettings = lPreviousCpapPsvSettings;
+                (void)breathSchedulerTestModeSet((uint8_t)lConfiguredMode);
+            }
+        } else if (lConfiguredMode == VENT_MD_PSV_ST) {
+            lPsvStSettings = GetVentPsvStSettings();
+            lPreviousPsvStSettings = *lPsvStSettings;
+            lPsvStSettings->triggerType = lTriggerType;
+            if (lTriggerType == VENT_TRIGGER_PRESSURE) {
+                lPsvStSettings->pressureTriggerCmh2o =
+                    -((float)lTriggerThreshold / 100.0F);
+            } else if (lTriggerType == VENT_TRIGGER_FLOW) {
+                lPsvStSettings->flowTriggerLpm =
+                    (float)lTriggerThreshold / 100.0F;
+            }
+            lStatus = breathSchedulerTestModeSet((uint8_t)lConfiguredMode);
+            if (lStatus != BREATH_CONTROL_SUCCESS) {
+                *lPsvStSettings = lPreviousPsvStSettings;
+                (void)breathSchedulerTestModeSet((uint8_t)lConfiguredMode);
+            }
+        } else {
+            lConfiguredMode = VENT_MD_PAC;
+            lPacSettings = GetVentPacSettings();
+            lPreviousSettings = *lPacSettings;
+            lPacSettings->triggerType = lTriggerType;
+            if (lTriggerType == VENT_TRIGGER_PRESSURE) {
+                lPacSettings->pressureTriggerCmh2o =
+                    -((float)lTriggerThreshold / 100.0F);
+            } else if (lTriggerType == VENT_TRIGGER_FLOW) {
+                lPacSettings->flowTriggerLpm =
+                    (float)lTriggerThreshold / 100.0F;
+            }
+            lStatus = breathSchedulerTestModeSet((uint8_t)lConfiguredMode);
+            if (lStatus != BREATH_CONTROL_SUCCESS) {
+                *lPacSettings = lPreviousSettings;
+                (void)breathSchedulerTestModeSet((uint8_t)lConfiguredMode);
+            }
         }
         LOG_I(gVentTestTag,
-              "PAC trigger type=%u threshold100=%u status=%d",
+              "trigger mode=%u type=%u threshold100=%u status=%d",
+              (unsigned int)lConfiguredMode,
               (unsigned int)lTriggerType,
               (unsigned int)lTriggerThreshold,
               (int)lStatus);

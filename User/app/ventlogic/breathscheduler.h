@@ -27,6 +27,7 @@ extern "C" {
 #define BREATH_RISE_DELTA_REFERENCE         15.0F
 #define BREATH_RISE_EXTRA_MS_PER_CMH2O      20.0F
 #define BREATH_PRESSURE_CONTROL_HEADROOM      9.0F
+#define BREATH_PSV_MIN_INSPIRATORY_TIME_MS    200U
 
 typedef enum {
     BREATH_TYPE_NONE = 0,
@@ -45,6 +46,23 @@ typedef enum {
     BREATH_TRIGGER_REASON_COUNT,
 } eBreathTriggerReason;
 
+typedef enum {
+    BREATH_CYCLE_TYPE_NONE = 0,
+    BREATH_CYCLE_TYPE_TIME,
+    BREATH_CYCLE_TYPE_FLOW,
+    BREATH_CYCLE_TYPE_COUNT,
+} eBreathCycleType;
+
+typedef enum {
+    BREATH_CYCLE_REASON_NONE = 0,
+    BREATH_CYCLE_REASON_TIME,
+    BREATH_CYCLE_REASON_FLOW,
+    BREATH_CYCLE_REASON_MAX_INSPIRATORY_TIME,
+    BREATH_CYCLE_REASON_PRESSURE_LIMIT,
+    BREATH_CYCLE_REASON_ABORT,
+    BREATH_CYCLE_REASON_COUNT,
+} eBreathCycleReason;
+
 typedef struct stBreathPlan {
     uint32_t sequence;
     eVentMode mode;
@@ -59,10 +77,17 @@ typedef struct stBreathPlan {
     float pressureLimitCmh2o;
     float pressureTriggerCmh2o;
     float flowTriggerLpm;
+    eBreathCycleType cycleType;
+    float cycleOffPercent;
     uint32_t riseTimeMs;
     uint32_t holdTimeMs;
+    uint32_t minimumInspiratoryTimeMs;
+    uint32_t maximumInspiratoryTimeMs;
     uint32_t expiratoryTimeMs;
     uint32_t minimumExpiratoryTimeMs;
+    uint32_t apneaTimeMs;
+    uint32_t backupBreathIntervalMs;
+    uint8_t timeTriggerEnabled;
 } stBreathPlan;
 
 /** Configure the scheduler and leave it idle. */

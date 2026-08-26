@@ -29,10 +29,12 @@ static void phaseControllerIdleEnter(void)
 {
     gPhaseController.runState = PHASE_IDLE;
     gPhaseController.stateStartedMs = 0U;
+    gPhaseController.inspirationStartedMs = 0U;
     gPhaseController.expirationStartedMs = 0U;
     gPhaseController.inspRiseStartPressure = 0.0F;
     gPhaseController.planValid = 0U;
     gPhaseController.breathStarted = 0U;
+    gPhaseController.cycleReason = BREATH_CYCLE_REASON_NONE;
     (void)memset(&gPhaseController.activePlan, 0, sizeof(gPhaseController.activePlan));
     phaseControllerReferencesClear();
 }
@@ -69,7 +71,8 @@ static int8_t phaseControllerInspirationStart(eBreathTriggerReason triggerReason
 {
     float lPatientPressure;
 
-    if (gPhaseController.breathStarted != 0U) {
+    if ((gPhaseController.breathStarted != 0U) ||
+        (triggerReason == BREATH_TRIGGER_REASON_APNEA_BACKUP)) {
         if (phaseControllerPlanLoad(triggerReason) != PHASE_CONTROL_SUCCESS) {
             return PHASE_CONTROL_ERROR_STATE;
         }
@@ -80,6 +83,8 @@ static int8_t phaseControllerInspirationStart(eBreathTriggerReason triggerReason
     lPatientPressure = controlDataGet(PAT_REAL_PRS);
     gPhaseController.inspRiseStartPressure = lPatientPressure;
     gPhaseController.stateStartedMs = nowMs;
+    gPhaseController.inspirationStartedMs = nowMs;
+    gPhaseController.cycleReason = BREATH_CYCLE_REASON_NONE;
     gPhaseController.breathStarted = 1U;
     (void)phaseControlSet(PHASE_REF_PRESSURE, lPatientPressure);
     (void)phaseControlSet(PHASE_REF_FAST_PRESSURE, lPatientPressure);
@@ -137,7 +142,8 @@ int8_t phaseControllerTrigger(eBreathTriggerReason triggerReason, uint32_t nowMs
     uint32_t lExpirationElapsedMs;
 
     if ((triggerReason != BREATH_TRIGGER_REASON_PRESSURE) &&
-        (triggerReason != BREATH_TRIGGER_REASON_FLOW)) {
+        (triggerReason != BREATH_TRIGGER_REASON_FLOW) &&
+        (triggerReason != BREATH_TRIGGER_REASON_APNEA_BACKUP)) {
         return PHASE_CONTROL_ERROR_PARAM;
     }
     if ((gPhaseController.planValid == 0U) ||
@@ -155,6 +161,47 @@ int8_t phaseControllerTrigger(eBreathTriggerReason triggerReason, uint32_t nowMs
         return PHASE_CONTROL_ERROR_STATE;
     }
     return phaseControllerInspirationStart(triggerReason, nowMs);
+}
+
+/** Begin expiration and preserve the reason that ended inspiration. */
+static void phaseControllerExpirationStart(eBreathCycleReason cycleReason,
+                                           uint32_t nowMs)
+{
+    gPhaseController.cycleReason = cycleReason;
+    gPhaseController.expirationStartedMs = nowMs;
+    gPhaseController.stateStartedMs = nowMs;
+    gPhaseController.runState = PHASE_EXP_RELEASE;
+}
+
+int8_t phaseControllerCycle(eBreathCycleReason cycleReason, uint32_t nowMs)
+{
+    uint32_t lInspiratoryElapsedMs;
+
+    if ((cycleReason != BREATH_CYCLE_REASON_FLOW) &&
+        (cycleReason != BREATH_CYCLE_REASON_MAX_INSPIRATORY_TIME)) {
+        return PHASE_CONTROL_ERROR_PARAM;
+    }
+    if ((gPhaseController.planValid == 0U) ||
+        (gPhaseController.activePlan.cycleType != BREATH_CYCLE_TYPE_FLOW) ||
+        (gPhaseController.activePlan.breathType !=
+         BREATH_TYPE_SPONTANEOUS_PRESSURE_SUPPORT) ||
+        ((gPhaseController.runState != PHASE_INSP_RISE) &&
+         (gPhaseController.runState != PHASE_INSP_HOLD))) {
+        return PHASE_CONTROL_ERROR_STATE;
+    }
+    lInspiratoryElapsedMs = nowMs - gPhaseController.inspirationStartedMs;
+    if ((cycleReason == BREATH_CYCLE_REASON_FLOW) &&
+        (lInspiratoryElapsedMs <
+         gPhaseController.activePlan.minimumInspiratoryTimeMs)) {
+        return PHASE_CONTROL_ERROR_STATE;
+    }
+    phaseControllerExpirationStart(cycleReason, nowMs);
+    return PHASE_CONTROL_SUCCESS;
+}
+
+eBreathCycleReason phaseControllerCycleReasonGet(void)
+{
+    return gPhaseController.cycleReason;
 }
 
 /** Process the pressure-controlled inspiratory rise reference. */
@@ -244,11 +291,10 @@ void phaseControllerProcess(uint32_t nowMs)
                 (void)phaseControlSet(PHASE_REF_FAST_PRESSURE,
                                       gPhaseController.activePlan.inspiratoryPressureCmh2o);
             }
-            if ((nowMs - gPhaseController.stateStartedMs) >=
-                gPhaseController.activePlan.holdTimeMs) {
-                gPhaseController.expirationStartedMs = nowMs;
-                gPhaseController.stateStartedMs = nowMs;
-                gPhaseController.runState = PHASE_EXP_RELEASE;
+            if ((gPhaseController.activePlan.cycleType == BREATH_CYCLE_TYPE_TIME) &&
+                ((nowMs - gPhaseController.inspirationStartedMs) >=
+                 gPhaseController.activePlan.maximumInspiratoryTimeMs)) {
+                phaseControllerExpirationStart(BREATH_CYCLE_REASON_TIME, nowMs);
             }
             break;
 
@@ -273,7 +319,8 @@ void phaseControllerProcess(uint32_t nowMs)
                                   gPhaseController.activePlan.peepCmh2o);
             (void)phaseControlSet(PHASE_REF_FLOW, 0.0F);
             lExpirationElapsedMs = nowMs - gPhaseController.expirationStartedMs;
-            if (lExpirationElapsedMs >= gPhaseController.activePlan.expiratoryTimeMs) {
+            if ((gPhaseController.activePlan.timeTriggerEnabled != 0U) &&
+                (lExpirationElapsedMs >= gPhaseController.activePlan.expiratoryTimeMs)) {
                 if (phaseControllerInspirationStart(BREATH_TRIGGER_REASON_TIME, nowMs) !=
                     PHASE_CONTROL_SUCCESS) {
                     phaseControllerIdleEnter();

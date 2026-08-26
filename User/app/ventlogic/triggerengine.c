@@ -84,7 +84,9 @@ void triggerEngineProcess(uint32_t nowMs)
 
     if ((lPhase != PHASE_EXP_PEEP) ||
         (phaseControllerActivePlanGet(&lPlan) != PHASE_CONTROL_SUCCESS) ||
-        (lPlan.mode != VENT_MD_PAC) ||
+        ((lPlan.mode != VENT_MD_PAC) &&
+         (lPlan.mode != VENT_MD_CPAP_PSV) &&
+         (lPlan.mode != VENT_MD_PSV_ST)) ||
         (lPlan.allowedTriggerType == VENT_TRIGGER_OFF)) {
         triggerEngineIdleEnter(lPhase);
         return;

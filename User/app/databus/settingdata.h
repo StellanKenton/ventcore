@@ -405,6 +405,8 @@ stVentLimitSettings *GetVentLimitSettings(void);
 stVentPatientSettings *GetVentPatientSettings(void);
 stVentPacSettings *GetVentPacSettings(void);
 stVentVacSettings *GetVentVacSettings(void);
+stVentCpapPsvSettings *GetVentCpapPsvSettings(void);
+stVentPsvStSettings *GetVentPsvStSettings(void);
 
 #ifdef __cplusplus
 }

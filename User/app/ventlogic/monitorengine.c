@@ -76,9 +76,13 @@ static void monitorEngineBreathResultPublish(uint32_t nowMs)
     lResult.vteMl = gMonitorData[MONITOR_TIDA_VOL_EXP];
     lResult.ppeakCmh2o = gMonitorEngine.peakPressureCmh2o;
     lResult.peepCmh2o = lPeepPressure;
+    lResult.peakInspiratoryFlowLpm = gMonitorEngine.peakInspiratoryFlowLpm;
+    lResult.cycleReason = gMonitorEngine.cycleReason;
+    lResult.inspiratoryTimeMs = gMonitorEngine.inspiratoryTimeMs;
     lResult.cycleTimeMs = nowMs - gMonitorEngine.breathStartedMs;
     lResult.validMask = BREATH_RESULT_VALID_COMPLETE |
-                        BREATH_RESULT_VALID_CYCLE_TIME;
+                        BREATH_RESULT_VALID_CYCLE_TIME |
+                        BREATH_RESULT_VALID_INSPIRATORY_TIME;
     if (monitorEngineFinite(lResult.vtiMl) != 0U) {
         lResult.validMask |= BREATH_RESULT_VALID_VTI;
     }
@@ -90,6 +94,9 @@ static void monitorEngineBreathResultPublish(uint32_t nowMs)
     }
     if (monitorEngineFinite(lResult.peepCmh2o) != 0U) {
         lResult.validMask |= BREATH_RESULT_VALID_PEEP;
+    }
+    if (monitorEngineFinite(lResult.peakInspiratoryFlowLpm) != 0U) {
+        lResult.validMask |= BREATH_RESULT_VALID_PEAK_INSP_FLOW;
     }
     repRtosEnterCritical();
     gMonitorLatestBreathResult = lResult;
@@ -110,6 +117,9 @@ static int8_t monitorEngineBreathStart(uint32_t nowMs)
     gMonitorEngine.breathPlan = lPlan;
     gMonitorEngine.breathStartedMs = nowMs;
     gMonitorEngine.peakPressureCmh2o = lPressure;
+    gMonitorEngine.peakInspiratoryFlowLpm = 0.0F;
+    gMonitorEngine.inspiratoryTimeMs = 0U;
+    gMonitorEngine.cycleReason = BREATH_CYCLE_REASON_NONE;
     gMonitorEngine.breathActive = 1U;
     (void)monitorEngineSet(MONITOR_TIDA_VOL, 0.0F);
     (void)monitorEngineSet(MONITOR_TIDA_VOL_INSP, 0.0F);
@@ -169,6 +179,10 @@ void monitorEngineProcess(uint32_t nowMs)
         }
     } else if ((lNextState == MONITOR_STATE_EXP_RELEASE) &&
                (gMonitorEngine.runState != MONITOR_STATE_EXP_RELEASE)) {
+        if (gMonitorEngine.breathActive != 0U) {
+            gMonitorEngine.inspiratoryTimeMs = nowMs - gMonitorEngine.breathStartedMs;
+            gMonitorEngine.cycleReason = phaseControllerCycleReasonGet();
+        }
         (void)monitorEngineSet(MONITOR_TIDA_VOL_EXP, 0.0F);
     }
     gMonitorEngine.runState = lNextState;
@@ -193,6 +207,12 @@ void monitorEngineProcess(uint32_t nowMs)
         ((lFlow > -MONITOR_FLOW_DEADBAND_LPM) &&
          (lFlow < MONITOR_FLOW_DEADBAND_LPM))) {
         return;
+    }
+
+    if (((gMonitorEngine.runState == MONITOR_STATE_INSP_RISE) ||
+         (gMonitorEngine.runState == MONITOR_STATE_INSP_HOLD)) &&
+        (lFlow > gMonitorEngine.peakInspiratoryFlowLpm)) {
+        gMonitorEngine.peakInspiratoryFlowLpm = lFlow;
     }
 
     monitorEngineTidalVolumeIntegrate(MONITOR_TIDA_VOL, lFlow);

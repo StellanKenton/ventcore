@@ -29,6 +29,8 @@ extern "C" {
 #define BREATH_RESULT_VALID_PPEAK                (1UL << 3)
 #define BREATH_RESULT_VALID_PEEP                 (1UL << 4)
 #define BREATH_RESULT_VALID_CYCLE_TIME           (1UL << 5)
+#define BREATH_RESULT_VALID_INSPIRATORY_TIME     (1UL << 6)
+#define BREATH_RESULT_VALID_PEAK_INSP_FLOW       (1UL << 7)
 
 typedef enum {
     MONITOR_DATA_NONE = 0,
@@ -55,6 +57,9 @@ typedef struct stBreathResult {
     float vteMl;
     float ppeakCmh2o;
     float peepCmh2o;
+    float peakInspiratoryFlowLpm;
+    eBreathCycleReason cycleReason;
+    uint32_t inspiratoryTimeMs;
     uint32_t cycleTimeMs;
     uint32_t validMask;
 } stBreathResult;
@@ -62,7 +67,10 @@ typedef struct stBreathResult {
 typedef struct stMonitorEngine {
     eMonitorEngineState runState;
     uint32_t breathStartedMs;
+    uint32_t inspiratoryTimeMs;
     float peakPressureCmh2o;
+    float peakInspiratoryFlowLpm;
+    eBreathCycleReason cycleReason;
     uint8_t breathActive;
     stBreathPlan breathPlan;
 } stMonitorEngine;
