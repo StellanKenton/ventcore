@@ -75,17 +75,20 @@ int8_t flowControllerProcess(const stBreathPlan *plan, stActuatorRequest *reques
     eFlowControllerState lState;
     ePhaseControllerState lPhase;
     float lBlowerFeedforward;
+    float lBlowerMaximum;
     float lEffort;
     float lFeedforwardPressure;
     float lFlowReference;
     float lMeasuredFlow;
+    float lPressureLimit;
 
     if ((plan == NULL) || (request == NULL)) {
         return ACTUATOR_REQUEST_ERROR_PARAM;
     }
     flowControllerRequestClear(request);
     if ((gFlowControllerReady == 0U) ||
-        (plan->breathType != BREATH_TYPE_MANDATORY_VOLUME)) {
+        (plan->breathType != BREATH_TYPE_MANDATORY_VOLUME) ||
+        (plan->limitSettings == NULL)) {
         return ACTUATOR_REQUEST_ERROR_STATE;
     }
 
@@ -120,11 +123,19 @@ int8_t flowControllerProcess(const stBreathPlan *plan, stActuatorRequest *reques
         return ACTUATOR_REQUEST_ERROR_STATE;
     }
 
+    lPressureLimit = plan->limitSettings->pressureHigh;
     lFeedforwardPressure = plan->peepCmh2o +
                            (FLOW_CONTROLLER_FLOW_FF_LINEAR * lFlowReference) +
                            (FLOW_CONTROLLER_FLOW_FF_QUADRATIC *
                             lFlowReference * lFlowReference);
+    lFeedforwardPressure = flowControllerClamp(lFeedforwardPressure,
+                                                plan->limitSettings->pressureLow,
+                                                lPressureLimit);
     if (calibtransPrsSpeed(lFeedforwardPressure, &lBlowerFeedforward) !=
+        CALIBTRANS_STATUS_OK) {
+        return ACTUATOR_REQUEST_ERROR_STATE;
+    }
+    if (calibtransPrsSpeed(lPressureLimit, &lBlowerMaximum) !=
         CALIBTRANS_STATUS_OK) {
         return ACTUATOR_REQUEST_ERROR_STATE;
     }
@@ -133,7 +144,9 @@ int8_t flowControllerProcess(const stBreathPlan *plan, stActuatorRequest *reques
               (lEffort * FLOW_CONTROLLER_BLOWER_SPEED_SCALE);
     lEffort = flowControllerClamp(lEffort,
                                   0.0F,
-                                  (float)FLOW_CONTROLLER_BLOWER_SPEED_SCALE);
+                                  flowControllerClamp(lBlowerMaximum * 10.0F,
+                                                      0.0F,
+                                                      (float)FLOW_CONTROLLER_BLOWER_SPEED_SCALE));
     request->blowerTarget = (uint16_t)lEffort;
     request->expiratoryValveDuty = FLOW_CONTROLLER_EXP_VALVE_CLOSED_DUTY;
     request->validMask = ACTUATOR_REQUEST_VALID_BREATH_OUTPUTS;

@@ -1,7 +1,7 @@
 /************************************************************************************
 * @file     : breathscheduler.h
 * @brief    : Breath scheduler interface.
-* @details  : Declares validated breath plans selected from ventilation modes.
+* @details  : Declares breath plans selected from ventilation modes.
 * @author   :
 * @date     :
 * @version  :
@@ -75,6 +75,8 @@ typedef struct stBreathPlan {
     float targetTidalVolumeMl;
     float fio2Percent;
     float pressureLimitCmh2o;
+    /** Shared live limits; changes take effect without replacing the active plan. */
+    const stVentLimitSettings *limitSettings;
     float pressureTriggerCmh2o;
     float flowTriggerLpm;
     eBreathCycleType cycleType;
@@ -93,7 +95,7 @@ typedef struct stBreathPlan {
 /** Configure the scheduler and leave it idle. */
 int8_t breathSchedulerInit(void);
 
-/** Start ventilation after validating the selected mode settings. */
+/** Start ventilation with the selected mode settings. */
 int8_t breathSchedulerStart(eVentMode mode);
 
 /** Stop ventilation immediately. */
@@ -111,7 +113,7 @@ eVentMode breathSchedulerModeGet(void);
 /** Return 1 while ventilation is running, otherwise 0. */
 uint8_t breathSchedulerRunningGet(void);
 
-/** Validate and apply the latest settings for the selected ventilation mode. */
+/** Apply the latest settings for the selected ventilation mode. */
 int8_t breathSchedulerSettingsUpdate(eVentMode mode);
 
 /** Select and copy the next breath plan for the supplied trigger reason. */

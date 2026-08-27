@@ -1,7 +1,7 @@
 /************************************************************************************
 * @file     : breathscheduler.c
 * @brief    : Breath scheduler.
-* @details  : Validates mode settings and selects one immutable plan per breath.
+* @details  : Builds mode settings into one immutable plan per breath.
 * @author   :
 * @date     :
 * @version  :
@@ -9,7 +9,6 @@
 ***********************************************************************************/
 #include "breathscheduler.h"
 
-#include <float.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <string.h>
@@ -26,73 +25,10 @@ static stBreathPlan gBreathPlanTemplate;
 static stBreathPlan gBreathBackupPlanTemplate;
 static bool gBreathBackupPlanValid = false;
 static stVentPatientSettings gBreathAppliedPatientSettings;
-static stVentLimitSettings gBreathAppliedLimitSettings;
 static stVentPacSettings gBreathAppliedPacSettings;
 static stVentVacSettings gBreathAppliedVacSettings;
 static stVentCpapPsvSettings gBreathAppliedCpapPsvSettings;
 static stVentPsvStSettings gBreathAppliedPsvStSettings;
-
-/** Return true for a finite single-precision value. */
-static bool breathSchedulerFinite(float value)
-{
-    return (value >= -FLT_MAX) && (value <= FLT_MAX);
-}
-
-/** Return true when patient and common limit settings are valid. */
-static bool breathSchedulerCommonSettingsValid(const stVentPatientSettings *patientSettings,
-                                               const stVentLimitSettings *limitSettings)
-{
-    if ((patientSettings == NULL) || (limitSettings == NULL)) {
-        return false;
-    }
-    return ((uint32_t)patientSettings->Type < (uint32_t)VENT_PATIENT_TYPE_COUNT) &&
-           ((uint32_t)patientSettings->Gas < (uint32_t)VENT_GAS_COUNT) &&
-           breathSchedulerFinite(limitSettings->pressureLow) &&
-           breathSchedulerFinite(limitSettings->pressureHigh) &&
-           breathSchedulerFinite(limitSettings->minuteVolumeLow) &&
-           breathSchedulerFinite(limitSettings->minuteVolumeHigh) &&
-           (limitSettings->pressureLow < limitSettings->pressureHigh) &&
-           (limitSettings->minuteVolumeLow < limitSettings->minuteVolumeHigh);
-}
-
-/** Return true when a configured patient-trigger selection is valid. */
-static bool breathSchedulerTriggerValid(eVentTriggerType triggerType,
-                                        float pressureTriggerCmh2o,
-                                        float flowTriggerLpm)
-{
-    if ((uint32_t)triggerType >= (uint32_t)VENT_TRIGGER_COUNT) {
-        return false;
-    }
-    if ((triggerType == VENT_TRIGGER_PRESSURE) &&
-        (!breathSchedulerFinite(pressureTriggerCmh2o) ||
-         (pressureTriggerCmh2o == 0.0F))) {
-        return false;
-    }
-    if ((triggerType == VENT_TRIGGER_FLOW) &&
-        (!breathSchedulerFinite(flowTriggerLpm) || (flowTriggerLpm <= 0.0F))) {
-        return false;
-    }
-    return true;
-}
-
-/** Return true when a pressure target stays inside calibrated control headroom. */
-static bool breathSchedulerPressureTargetValid(float targetCmh2o)
-{
-    const stCalibrationPressure *lPressureCalibration = calibrationGetPressure();
-    float lMaximum;
-    uint8_t lIndex;
-
-    if (lPressureCalibration == NULL) {
-        return false;
-    }
-    lMaximum = lPressureCalibration->pressureValues[0U];
-    for (lIndex = 1U; lIndex < CALIBRATION_PRESSURE_POINT_COUNT; lIndex++) {
-        if (lPressureCalibration->pressureValues[lIndex] > lMaximum) {
-            lMaximum = lPressureCalibration->pressureValues[lIndex];
-        }
-    }
-    return targetCmh2o <= (lMaximum - BREATH_PRESSURE_CONTROL_HEADROOM);
-}
 
 /** Return true when the PAC source settings differ from the applied snapshot. */
 static bool breathSchedulerPacSettingsChanged(void)
@@ -101,9 +37,6 @@ static bool breathSchedulerPacSettingsChanged(void)
            (memcmp(&gBreathAppliedPatientSettings,
                    GetVentPatientSettings(),
                    sizeof(gBreathAppliedPatientSettings)) != 0) ||
-           (memcmp(&gBreathAppliedLimitSettings,
-                   GetVentLimitSettings(),
-                   sizeof(gBreathAppliedLimitSettings)) != 0) ||
            (memcmp(&gBreathAppliedPacSettings,
                    GetVentPacSettings(),
                    sizeof(gBreathAppliedPacSettings)) != 0);
@@ -116,9 +49,6 @@ static bool breathSchedulerVacSettingsChanged(void)
            (memcmp(&gBreathAppliedPatientSettings,
                    GetVentPatientSettings(),
                    sizeof(gBreathAppliedPatientSettings)) != 0) ||
-           (memcmp(&gBreathAppliedLimitSettings,
-                   GetVentLimitSettings(),
-                   sizeof(gBreathAppliedLimitSettings)) != 0) ||
            (memcmp(&gBreathAppliedVacSettings,
                    GetVentVacSettings(),
                    sizeof(gBreathAppliedVacSettings)) != 0);
@@ -131,9 +61,6 @@ static bool breathSchedulerCpapPsvSettingsChanged(void)
            (memcmp(&gBreathAppliedPatientSettings,
                    GetVentPatientSettings(),
                    sizeof(gBreathAppliedPatientSettings)) != 0) ||
-           (memcmp(&gBreathAppliedLimitSettings,
-                   GetVentLimitSettings(),
-                   sizeof(gBreathAppliedLimitSettings)) != 0) ||
            (memcmp(&gBreathAppliedCpapPsvSettings,
                    GetVentCpapPsvSettings(),
                    sizeof(gBreathAppliedCpapPsvSettings)) != 0);
@@ -146,67 +73,13 @@ static bool breathSchedulerPsvStSettingsChanged(void)
            (memcmp(&gBreathAppliedPatientSettings,
                    GetVentPatientSettings(),
                    sizeof(gBreathAppliedPatientSettings)) != 0) ||
-           (memcmp(&gBreathAppliedLimitSettings,
-                   GetVentLimitSettings(),
-                   sizeof(gBreathAppliedLimitSettings)) != 0) ||
            (memcmp(&gBreathAppliedPsvStSettings,
                    GetVentPsvStSettings(),
                    sizeof(gBreathAppliedPsvStSettings)) != 0);
 }
 
-/** Validate the PAC settings used to build a pressure breath plan. */
-static bool breathSchedulerPacSettingsValid(const stVentPatientSettings *patientSettings,
-                                            const stVentLimitSettings *limitSettings,
-                                            const stVentPacSettings *pacSettings)
-{
-    const stCalibrationPressure *lPressureCalibration;
-    float lBreathPeriodMs;
-    float lCalibratedPressureMaximum;
-    float lInspPressure;
-    uint8_t lIndex;
-
-    if (!breathSchedulerCommonSettingsValid(patientSettings, limitSettings) ||
-        (pacSettings == NULL) ||
-        !breathSchedulerFinite(pacSettings->oxygen) ||
-        !breathSchedulerFinite(pacSettings->peep) ||
-        !breathSchedulerFinite(pacSettings->Rate) ||
-        !breathSchedulerFinite(pacSettings->DeltaPressure) ||
-        (pacSettings->Rate <= 0.0F) ||
-        (pacSettings->inspiratoryTimeMs == 0U) ||
-        (pacSettings->riseTimeMs > pacSettings->inspiratoryTimeMs) ||
-        (pacSettings->oxygen < (float)limitSettings->o2PercentLow) ||
-        (pacSettings->oxygen > (float)limitSettings->o2PercentHigh) ||
-        (pacSettings->Rate < (float)limitSettings->frequencyLow) ||
-        (pacSettings->Rate > (float)limitSettings->frequencyHigh) ||
-        (pacSettings->peep < limitSettings->pressureLow) ||
-        (pacSettings->DeltaPressure < 0.0F) ||
-        !breathSchedulerTriggerValid(pacSettings->triggerType,
-                                     pacSettings->pressureTriggerCmh2o,
-                                     pacSettings->flowTriggerLpm)) {
-        return false;
-    }
-
-    lInspPressure = pacSettings->peep + pacSettings->DeltaPressure;
-    lBreathPeriodMs = 60000.0F / pacSettings->Rate;
-    lPressureCalibration = calibrationGetPressure();
-    if (lPressureCalibration == NULL) {
-        return false;
-    }
-    lCalibratedPressureMaximum = lPressureCalibration->pressureValues[0U];
-    for (lIndex = 1U; lIndex < CALIBRATION_PRESSURE_POINT_COUNT; lIndex++) {
-        if (lPressureCalibration->pressureValues[lIndex] > lCalibratedPressureMaximum) {
-            lCalibratedPressureMaximum = lPressureCalibration->pressureValues[lIndex];
-        }
-    }
-    return (lInspPressure <= limitSettings->pressureHigh) &&
-           (lInspPressure <= (lCalibratedPressureMaximum - BREATH_PRESSURE_CONTROL_HEADROOM)) &&
-           (lBreathPeriodMs >= ((float)pacSettings->inspiratoryTimeMs +
-                                (float)BREATH_PEEP_LOCK_TIME_MS));
-}
-
-/** Build the next-breath template from validated PAC settings. */
-static void breathSchedulerPacPlanApply(const stVentLimitSettings *limitSettings,
-                                        const stVentPacSettings *pacSettings,
+/** Build the next-breath template from PAC settings. */
+static void breathSchedulerPacPlanApply(const stVentPacSettings *pacSettings,
                                         stBreathPlan *plan)
 {
     float lBreathPeriodMs = 60000.0F / pacSettings->Rate;
@@ -226,7 +99,6 @@ static void breathSchedulerPacPlanApply(const stVentLimitSettings *limitSettings
     lPlan.peepCmh2o = pacSettings->peep;
     lPlan.inspiratoryPressureCmh2o = pacSettings->peep + pacSettings->DeltaPressure;
     lPlan.fio2Percent = pacSettings->oxygen;
-    lPlan.pressureLimitCmh2o = limitSettings->pressureHigh;
     lPlan.pressureTriggerCmh2o = pacSettings->pressureTriggerCmh2o;
     lPlan.flowTriggerLpm = pacSettings->flowTriggerLpm;
     lPlan.cycleType = BREATH_CYCLE_TYPE_TIME;
@@ -242,50 +114,8 @@ static void breathSchedulerPacPlanApply(const stVentLimitSettings *limitSettings
     *plan = lPlan;
 }
 
-/** Validate the VAC settings used to build a volume breath plan. */
-static bool breathSchedulerVacSettingsValid(const stVentPatientSettings *patientSettings,
-                                            const stVentLimitSettings *limitSettings,
-                                            const stVentVacSettings *vacSettings)
-{
-    float lBreathPeriodMs;
-    float lMinuteVolumeLpm;
-
-    if (!breathSchedulerCommonSettingsValid(patientSettings, limitSettings) ||
-        (vacSettings == NULL) ||
-        !breathSchedulerFinite(vacSettings->oxygen) ||
-        !breathSchedulerFinite(vacSettings->peep) ||
-        !breathSchedulerFinite(vacSettings->freq) ||
-        !breathSchedulerFinite(vacSettings->tidalVolume) ||
-        !breathSchedulerFinite(vacSettings->inspPausePct) ||
-        (vacSettings->freq <= 0.0F) ||
-        (vacSettings->inspTimeMs == 0U) ||
-        (vacSettings->inspPausePct < 0.0F) ||
-        (vacSettings->inspPausePct >= 100.0F) ||
-        (vacSettings->oxygen < (float)limitSettings->o2PercentLow) ||
-        (vacSettings->oxygen > (float)limitSettings->o2PercentHigh) ||
-        (vacSettings->freq < (float)limitSettings->frequencyLow) ||
-        (vacSettings->freq > (float)limitSettings->frequencyHigh) ||
-        (vacSettings->peep < limitSettings->pressureLow) ||
-        (vacSettings->peep > limitSettings->pressureHigh) ||
-        (vacSettings->tidalVolume < (float)limitSettings->tidalVolumeLow) ||
-        (vacSettings->tidalVolume > (float)limitSettings->tidalVolumeHigh) ||
-        !breathSchedulerTriggerValid(vacSettings->triggerType,
-                                     vacSettings->pressureTriggerCmh2o,
-                                     vacSettings->flowTriggerLpm)) {
-        return false;
-    }
-
-    lMinuteVolumeLpm = vacSettings->tidalVolume * vacSettings->freq / 1000.0F;
-    lBreathPeriodMs = 60000.0F / vacSettings->freq;
-    return (lMinuteVolumeLpm >= limitSettings->minuteVolumeLow) &&
-           (lMinuteVolumeLpm <= limitSettings->minuteVolumeHigh) &&
-           (lBreathPeriodMs >= ((float)vacSettings->inspTimeMs +
-                                (float)BREATH_PEEP_LOCK_TIME_MS));
-}
-
-/** Build the next-breath template from validated VAC settings. */
-static void breathSchedulerVacPlanApply(const stVentLimitSettings *limitSettings,
-                                        const stVentVacSettings *vacSettings,
+/** Build the next-breath template from VAC settings. */
+static void breathSchedulerVacPlanApply(const stVentVacSettings *vacSettings,
                                         stBreathPlan *plan)
 {
     float lBreathPeriodMs = 60000.0F / vacSettings->freq;
@@ -300,7 +130,6 @@ static void breathSchedulerVacPlanApply(const stVentLimitSettings *limitSettings
     lPlan.inspiratoryFlowLpm = vacSettings->tidalVolume * 60.0F / lFlowTimeMs;
     lPlan.targetTidalVolumeMl = vacSettings->tidalVolume;
     lPlan.fio2Percent = vacSettings->oxygen;
-    lPlan.pressureLimitCmh2o = limitSettings->pressureHigh;
     lPlan.pressureTriggerCmh2o = vacSettings->pressureTriggerCmh2o;
     lPlan.flowTriggerLpm = vacSettings->flowTriggerLpm;
     lPlan.cycleType = BREATH_CYCLE_TYPE_TIME;
@@ -314,45 +143,6 @@ static void breathSchedulerVacPlanApply(const stVentLimitSettings *limitSettings
     lPlan.minimumExpiratoryTimeMs = BREATH_PEEP_LOCK_TIME_MS;
     lPlan.timeTriggerEnabled = 1U;
     *plan = lPlan;
-}
-
-/** Validate the common spontaneous pressure-support settings. */
-static bool breathSchedulerPsvCommonValid(const stVentLimitSettings *limitSettings,
-                                          float oxygenPercent,
-                                          float peepCmh2o,
-                                          float pressureLimitCmh2o,
-                                          eVentTriggerType triggerType,
-                                          float pressureTriggerCmh2o,
-                                          float flowTriggerLpm,
-                                          float pressureSupportCmh2o,
-                                          uint32_t riseTimeMs,
-                                          float cycleOffPercent,
-                                          uint32_t maxInspiratoryTimeMs,
-                                          uint32_t apneaTimeMs)
-{
-    return (limitSettings != NULL) &&
-           breathSchedulerFinite(oxygenPercent) &&
-           breathSchedulerFinite(peepCmh2o) &&
-           breathSchedulerFinite(pressureLimitCmh2o) &&
-           breathSchedulerFinite(pressureSupportCmh2o) &&
-           breathSchedulerFinite(cycleOffPercent) &&
-           (oxygenPercent >= (float)limitSettings->o2PercentLow) &&
-           (oxygenPercent <= (float)limitSettings->o2PercentHigh) &&
-           (peepCmh2o >= limitSettings->pressureLow) &&
-           (pressureLimitCmh2o <= limitSettings->pressureHigh) &&
-           (pressureLimitCmh2o > peepCmh2o) &&
-           (pressureSupportCmh2o > 0.0F) &&
-           ((peepCmh2o + pressureSupportCmh2o) <= pressureLimitCmh2o) &&
-           (triggerType != VENT_TRIGGER_OFF) &&
-           breathSchedulerTriggerValid(triggerType,
-                                       pressureTriggerCmh2o,
-                                       flowTriggerLpm) &&
-           (cycleOffPercent > 0.0F) &&
-           (cycleOffPercent < 100.0F) &&
-           (riseTimeMs <= maxInspiratoryTimeMs) &&
-           (maxInspiratoryTimeMs >= BREATH_PSV_MIN_INSPIRATORY_TIME_MS) &&
-           (apneaTimeMs > 0U) &&
-           (apneaTimeMs <= ((uint32_t)limitSettings->apneaTimeHigh * 1000U));
 }
 
 /** Build one patient-triggered pressure-support breath template. */
@@ -420,68 +210,6 @@ static void breathSchedulerPsvBackupPlanApply(const stVentPsvStSettings *setting
         (uint32_t)(60000.0F / settings->backupRespiratoryRateBpm);
     lPlan.timeTriggerEnabled = 0U;
     *plan = lPlan;
-}
-
-/** Validate CPAP/PSV settings before publishing a support template. */
-static bool breathSchedulerCpapPsvSettingsValid(const stVentPatientSettings *patientSettings,
-                                                const stVentLimitSettings *limitSettings,
-                                                const stVentCpapPsvSettings *settings)
-{
-    return breathSchedulerCommonSettingsValid(patientSettings, limitSettings) &&
-           (settings != NULL) &&
-           breathSchedulerPsvCommonValid(limitSettings,
-                                         settings->oxygenPercent,
-                                         settings->peepCmh2o,
-                                         settings->pressureLimitCmh2o,
-                                         settings->triggerType,
-                                         settings->pressureTriggerCmh2o,
-                                         settings->flowTriggerLpm,
-                                         settings->pressureSupportCmh2o,
-                                         settings->riseTimeMs,
-                                         settings->cycleOffPercent,
-                                         settings->maxInspiratoryTimeMs,
-                                         settings->apneaAlarmTimeMs) &&
-           breathSchedulerPressureTargetValid(settings->peepCmh2o +
-                                              settings->pressureSupportCmh2o);
-}
-
-/** Validate PSV-ST support and timed backup settings. */
-static bool breathSchedulerPsvStSettingsValid(const stVentPatientSettings *patientSettings,
-                                              const stVentLimitSettings *limitSettings,
-                                              const stVentPsvStSettings *settings)
-{
-    float lBackupPeriodMs;
-
-    if (!breathSchedulerCommonSettingsValid(patientSettings, limitSettings) ||
-        (settings == NULL) ||
-        !breathSchedulerPsvCommonValid(limitSettings,
-                                       settings->oxygenPercent,
-                                       settings->peepCmh2o,
-                                       settings->pressureLimitCmh2o,
-                                       settings->triggerType,
-                                       settings->pressureTriggerCmh2o,
-                                       settings->flowTriggerLpm,
-                                       settings->pressureSupportCmh2o,
-                                       settings->riseTimeMs,
-                                       settings->cycleOffPercent,
-                                       settings->maxInspiratoryTimeMs,
-                                       settings->apneaTimeMs) ||
-        !breathSchedulerFinite(settings->backupRespiratoryRateBpm) ||
-        !breathSchedulerFinite(settings->backupInspiratoryPressureCmh2o) ||
-        (settings->backupRespiratoryRateBpm < (float)limitSettings->frequencyLow) ||
-        (settings->backupRespiratoryRateBpm > (float)limitSettings->frequencyHigh) ||
-        (settings->backupInspiratoryTimeMs == 0U) ||
-        (settings->backupRiseTimeMs > settings->backupInspiratoryTimeMs) ||
-        (settings->backupInspiratoryPressureCmh2o <= settings->peepCmh2o) ||
-        (settings->backupInspiratoryPressureCmh2o > settings->pressureLimitCmh2o)) {
-        return false;
-    }
-    lBackupPeriodMs = 60000.0F / settings->backupRespiratoryRateBpm;
-    return breathSchedulerPressureTargetValid(settings->peepCmh2o +
-                                              settings->pressureSupportCmh2o) &&
-           breathSchedulerPressureTargetValid(settings->backupInspiratoryPressureCmh2o) &&
-           (lBackupPeriodMs >= ((float)settings->backupInspiratoryTimeMs +
-                                (float)BREATH_PEEP_LOCK_TIME_MS));
 }
 
 int8_t breathSchedulerInit(void)
@@ -560,7 +288,7 @@ uint8_t breathSchedulerRunningGet(void)
 int8_t breathSchedulerSettingsUpdate(eVentMode mode)
 {
     stVentPatientSettings lPatientSettings;
-    stVentLimitSettings lLimitSettings;
+    const stVentLimitSettings *lLimitSettings;
     stVentPacSettings lPacSettings;
     stVentVacSettings lVacSettings;
     stVentCpapPsvSettings lCpapPsvSettings;
@@ -588,26 +316,15 @@ int8_t breathSchedulerSettingsUpdate(eVentMode mode)
     }
 
     lPatientSettings = *GetVentPatientSettings();
-    lLimitSettings = *GetVentLimitSettings();
+    lLimitSettings = GetVentLimitSettings();
     if (mode == VENT_MD_PAC) {
         lPacSettings = *GetVentPacSettings();
-        if (!breathSchedulerPacSettingsValid(&lPatientSettings, &lLimitSettings, &lPacSettings)) {
-            return BREATH_CONTROL_ERROR_SETTINGS;
-        }
-        breathSchedulerPacPlanApply(&lLimitSettings, &lPacSettings, &lPlan);
+        breathSchedulerPacPlanApply(&lPacSettings, &lPlan);
     } else if (mode == VENT_MD_VAC) {
         lVacSettings = *GetVentVacSettings();
-        if (!breathSchedulerVacSettingsValid(&lPatientSettings, &lLimitSettings, &lVacSettings)) {
-            return BREATH_CONTROL_ERROR_SETTINGS;
-        }
-        breathSchedulerVacPlanApply(&lLimitSettings, &lVacSettings, &lPlan);
+        breathSchedulerVacPlanApply(&lVacSettings, &lPlan);
     } else if (mode == VENT_MD_CPAP_PSV) {
         lCpapPsvSettings = *GetVentCpapPsvSettings();
-        if (!breathSchedulerCpapPsvSettingsValid(&lPatientSettings,
-                                                 &lLimitSettings,
-                                                 &lCpapPsvSettings)) {
-            return BREATH_CONTROL_ERROR_SETTINGS;
-        }
         breathSchedulerPsvPlanApply(mode,
                                     lCpapPsvSettings.oxygenPercent,
                                     lCpapPsvSettings.peepCmh2o,
@@ -624,11 +341,6 @@ int8_t breathSchedulerSettingsUpdate(eVentMode mode)
                                     &lPlan);
     } else {
         lPsvStSettings = *GetVentPsvStSettings();
-        if (!breathSchedulerPsvStSettingsValid(&lPatientSettings,
-                                               &lLimitSettings,
-                                               &lPsvStSettings)) {
-            return BREATH_CONTROL_ERROR_SETTINGS;
-        }
         breathSchedulerPsvPlanApply(mode,
                                     lPsvStSettings.oxygenPercent,
                                     lPsvStSettings.peepCmh2o,
@@ -647,6 +359,10 @@ int8_t breathSchedulerSettingsUpdate(eVentMode mode)
         breathSchedulerPsvBackupPlanApply(&lPsvStSettings, &lBackupPlan);
         lBackupPlanValid = true;
     }
+    lPlan.limitSettings = lLimitSettings;
+    if (lBackupPlanValid) {
+        lBackupPlan.limitSettings = lLimitSettings;
+    }
     repRtosEnterCritical();
     gBreathPlanTemplate = lPlan;
     gBreathBackupPlanTemplate = lBackupPlan;
@@ -661,7 +377,6 @@ int8_t breathSchedulerSettingsUpdate(eVentMode mode)
         gBreathAppliedPsvStSettings = lPsvStSettings;
     }
     gBreathAppliedPatientSettings = lPatientSettings;
-    gBreathAppliedLimitSettings = lLimitSettings;
     gBreathSettingsApplied = true;
     gBreathMode = mode;
     repRtosExitCritical();
@@ -702,19 +417,32 @@ void breathSchedulerProcess(void)
 {
     eVentMode lMode = breathSchedulerModeGet();
     bool lModeRunning = (breathSchedulerRunningGet() != 0U) &&
-                        ((lMode == VENT_MD_PAC) ||
-                         (lMode == VENT_MD_VAC) ||
-                         (lMode == VENT_MD_CPAP_PSV) ||
-                         (lMode == VENT_MD_PSV_ST));
+                        (lMode > VENT_MD_IDLE) &&
+                        (lMode < VENT_MD_COUNT);
+    bool lSettingsChanged = false;
 
     if (!lModeRunning) {
         return;
     }
-    if (((lMode == VENT_MD_PAC) && breathSchedulerPacSettingsChanged()) ||
-        ((lMode == VENT_MD_VAC) && breathSchedulerVacSettingsChanged()) ||
-        ((lMode == VENT_MD_CPAP_PSV) && breathSchedulerCpapPsvSettingsChanged()) ||
-        ((lMode == VENT_MD_PSV_ST) && breathSchedulerPsvStSettingsChanged())) {
-        /* Invalid live edits leave the last validated next-breath template active. */
+    switch (lMode) {
+        case VENT_MD_PAC:
+            lSettingsChanged = breathSchedulerPacSettingsChanged();
+            break;
+        case VENT_MD_VAC:
+            lSettingsChanged = breathSchedulerVacSettingsChanged();
+            break;
+        case VENT_MD_CPAP_PSV:
+            lSettingsChanged = breathSchedulerCpapPsvSettingsChanged();
+            break;
+        case VENT_MD_PSV_ST:
+            lSettingsChanged = breathSchedulerPsvStSettingsChanged();
+            break;
+        default:
+            break;
+    }
+
+    if (lSettingsChanged) {
+        /* Live edits take effect in the next-breath template. */
         (void)breathSchedulerSettingsUpdate(lMode);
     }
 }

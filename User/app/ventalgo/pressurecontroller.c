@@ -112,13 +112,21 @@ static int8_t pressureControllerOuterLoopProcess(const stBreathPlan *plan,
     float lInspCorrection;
     float lPatientPressure;
     float lPatientReference;
+    float lPressureLimit;
     int8_t lStatus;
 
     if ((plan == NULL) || (inspTarget == NULL)) {
         return PID_ERROR_PARAM;
     }
 
-    lPatientReference = phaseControlGet(PHASE_REF_PRESSURE);
+    lPressureLimit = plan->limitSettings->pressureHigh;
+    if (((plan->mode == VENT_MD_CPAP_PSV) || (plan->mode == VENT_MD_PSV_ST)) &&
+        (plan->pressureLimitCmh2o < lPressureLimit)) {
+        lPressureLimit = plan->pressureLimitCmh2o;
+    }
+    lPatientReference = pressureControllerClamp(phaseControlGet(PHASE_REF_PRESSURE),
+                                                 plan->limitSettings->pressureLow,
+                                                 lPressureLimit);
     lPatientPressure = controlDataGet(PAT_REAL_PRS);
     lFlow = controlDataGet(INSP_FLOW_FILTERED) * PRESSURE_CONTROLLER_FLOW_INPUT_SCALE;
     lFlow = pressureControllerClamp(lFlow, 0.0F, PRESSURE_CONTROLLER_FLOW_INPUT_MAX);
@@ -156,7 +164,9 @@ static int8_t pressureControllerOuterLoopProcess(const stBreathPlan *plan,
                                           gPressureFlowCompensation +
                                           lInspCorrection,
                                           PRESSURE_CONTROLLER_INSP_TARGET_MIN,
-                                          PRESSURE_CONTROLLER_INSP_TARGET_MAX);
+                                          pressureControllerClamp(lPressureLimit,
+                                                                  PRESSURE_CONTROLLER_INSP_TARGET_MIN,
+                                                                  PRESSURE_CONTROLLER_INSP_TARGET_MAX));
     gPressureDiagnostic.inspTarget = *inspTarget;
     gPressureDiagnostic.flowCompensation = gPressureFlowCompensation;
     gPressureDiagnostic.patientCorrection = lInspCorrection;
@@ -205,6 +215,9 @@ int8_t pressureControllerProcess(const stBreathPlan *plan, stActuatorRequest *re
     }
     pressureControllerRequestClear(request);
     if (gPressureControllerReady == 0U) {
+        return ACTUATOR_REQUEST_ERROR_STATE;
+    }
+    if (plan->limitSettings == NULL) {
         return ACTUATOR_REQUEST_ERROR_STATE;
     }
     if ((plan->breathType != BREATH_TYPE_MANDATORY_PRESSURE) &&
