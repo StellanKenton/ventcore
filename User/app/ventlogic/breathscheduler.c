@@ -86,10 +86,6 @@ static void breathSchedulerPacPlanApply(const stVentPacSettings *pacSettings,
     float lEffectiveRiseTime = (float)pacSettings->riseTimeMs;
     stBreathPlan lPlan = {0};
 
-    if (pacSettings->DeltaPressure > BREATH_RISE_DELTA_REFERENCE) {
-        lEffectiveRiseTime += (pacSettings->DeltaPressure - BREATH_RISE_DELTA_REFERENCE) *
-                              BREATH_RISE_EXTRA_MS_PER_CMH2O;
-    }
     lEffectiveRiseTime = NUMFILTER_MIN((float)pacSettings->inspiratoryTimeMs,
                                        lEffectiveRiseTime);
 

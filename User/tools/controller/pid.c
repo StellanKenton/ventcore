@@ -131,6 +131,44 @@ int8_t pidSetOutputLimits(stPid *controller, float outputMin, float outputMax)
     return PID_STATUS_OK;
 }
 
+int8_t pidTrackOutput(stPid *controller, float setpoint, float measurement, float desiredOutput)
+{
+    float lError;
+    float lProportional;
+    float lIntegralStep;
+
+    if (controller == NULL) {
+        return PID_ERROR_PARAM;
+    }
+
+    if (controller->initialized == 0U) {
+        return PID_ERROR_STATE;
+    }
+
+    if ((pidIsFinite(setpoint) == 0U) ||
+        (pidIsFinite(measurement) == 0U) ||
+        (pidIsFinite(desiredOutput) == 0U)) {
+        return PID_ERROR_PARAM;
+    }
+
+    lError = setpoint - measurement;
+    lProportional = controller->kp * lError;
+    lIntegralStep = controller->ki * controller->samplePeriod * lError;
+    desiredOutput = pidClamp(desiredOutput,
+                             controller->outputMin,
+                             controller->outputMax);
+
+    /* Cancel the next integral step and suppress derivative kick on entry. */
+    controller->integral = pidClamp(desiredOutput - lProportional - lIntegralStep,
+                                    controller->outputMin,
+                                    controller->outputMax);
+    controller->previousMeasurement = measurement;
+    controller->hasPreviousMeasurement = 1U;
+    controller->output = desiredOutput;
+
+    return PID_STATUS_OK;
+}
+
 int8_t pidUpdate(stPid *controller, float setpoint, float measurement, float *output)
 {
     float lError;

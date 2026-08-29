@@ -48,6 +48,9 @@ int8_t pidSetTunings(stPid *controller, float kp, float ki, float kd);
 /** Update output limits and clamp the current integral and output. */
 int8_t pidSetOutputLimits(stPid *controller, float outputMin, float outputMax);
 
+/** Track a desired output so the next PID update starts without an output step. */
+int8_t pidTrackOutput(stPid *controller, float setpoint, float measurement, float desiredOutput);
+
 /** Execute one PID update using the configured fixed sample period. */
 int8_t pidUpdate(stPid *controller, float setpoint, float measurement, float *output);
 
