@@ -303,8 +303,7 @@ void phaseControllerProcess(uint32_t nowMs)
             (void)phaseControlSet(PHASE_REF_PRESSURE, lPeepPressure);
             (void)phaseControlSet(PHASE_REF_FAST_PRESSURE, lPeepPressure);
             (void)phaseControlSet(PHASE_REF_FLOW, 0.0F);
-            if ((controlDataGet(PAT_REAL_PRS) <=
-                 (lPeepPressure + PHASE_EXP_PEEP_ENTRY_MARGIN)) ||
+            if ((controlDataGet(PREDICT_PAT_PRS) <= lPeepPressure ) ||
                 ((nowMs - gPhaseController.stateStartedMs) >=
                  PHASE_EXP_RELEASE_MAX_TIME_MS)) {
                 gPhaseController.stateStartedMs = nowMs;

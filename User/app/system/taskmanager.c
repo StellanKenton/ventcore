@@ -121,8 +121,8 @@ static void ventTask(void *argument)
         apneaEngineProcess(lNowMs);
         monitorEngineProcess(lNowMs);
         actuatorControllerProcess();
-        ventTestTransientRecord();
         monitorDataUpdate();
+        ventTestTransientRecord();
         (void)repRtosTaskDelayUntilMs(&lPreviousWakeMs, VENT_TASK_INTERVAL_MS);
     }
 }

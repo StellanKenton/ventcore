@@ -22,7 +22,7 @@ extern "C" {
 #define PHASE_CONTROL_ERROR_PARAM         (-1)
 #define PHASE_CONTROL_ERROR_STATE         (-2)
 #define PHASE_EXP_PEEP_ENTRY_MARGIN       2.0F
-#define PHASE_EXP_RELEASE_MAX_TIME_MS     1200U
+#define PHASE_EXP_RELEASE_MAX_TIME_MS     400U
 
 typedef enum {
     PHASE_NONE = 0,

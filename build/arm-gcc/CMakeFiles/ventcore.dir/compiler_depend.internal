@@ -639,6 +639,7 @@ CMakeFiles/ventcore.dir/User/app/ventlogic/actuatorcontroller.c.obj
  D:/Space/Cosmos/ventcore/User/app/ventlogic/breathscheduler.h
  D:/Space/Cosmos/ventcore/User/bsp/blower_vcm/blower_vcm.h
  D:/Space/Cosmos/ventcore/User/bsp/dvalve/dvalve.h
+ D:/Space/Cosmos/ventcore/User/module/rtos/rtos.h
 
 CMakeFiles/ventcore.dir/User/app/ventlogic/breathscheduler.c.obj
  D:/Space/Cosmos/ventcore/User/app/ventlogic/breathscheduler.c
@@ -766,6 +767,7 @@ CMakeFiles/ventcore.dir/User/bsp/bspdebug.c.obj
  C:/Program Files (x86)/Arm/GNU Toolchain mingw-w64-i686-arm-none-eabi/lib/gcc/arm-none-eabi/15.2.1/include/stdbool.h
  C:/Program Files (x86)/Arm/GNU Toolchain mingw-w64-i686-arm-none-eabi/lib/gcc/arm-none-eabi/15.2.1/include/stddef.h
  C:/Program Files (x86)/Arm/GNU Toolchain mingw-w64-i686-arm-none-eabi/lib/gcc/arm-none-eabi/15.2.1/include/stdint.h
+ D:/Space/Cosmos/ventcore/User/app/ventlogic/actuatorcontroller.h
  D:/Space/Cosmos/ventcore/User/bsp/adc/adc.h
  D:/Space/Cosmos/ventcore/User/bsp/blower_vcm/blower_vcm.h
  D:/Space/Cosmos/ventcore/User/bsp/bspdebug.h

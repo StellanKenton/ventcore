@@ -11,20 +11,17 @@
 
 #include <stdint.h>
 
-#include "actuatorcontroller.h"
 #include "apneaengine.h"
-#include "blower_vcm.h"
 #include "breathscheduler.h"
 #include "console.h"
-#include "controldata.h"
 #include "log.h"
+#include "monitordata.h"
 #include "monitorengine.h"
-#include "phasecontroller.h"
 #include "rtos.h"
 
 static const char *const gVentTestTag = "venttest";
-static stVentTestTransientSample gVentTestTransientBuffer[VENT_TEST_TRANSIENT_SAMPLE_COUNT];
-static stVentTestTransientSample gVentTestTransientUpload[VENT_TEST_TRANSIENT_SAMPLE_COUNT];
+static stMonitorWaveformData gVentTestTransientBuffer[VENT_TEST_TRANSIENT_SAMPLE_COUNT];
+static stMonitorWaveformData gVentTestTransientUpload[VENT_TEST_TRANSIENT_SAMPLE_COUNT];
 static volatile uint32_t gVentTestTransientTotalCount = 0U;
 static uint32_t gVentTestTransientUploadedCount = 0U;
 
@@ -143,57 +140,46 @@ static void ventTestStatusShow(void)
           (unsigned int)VENT_TEST_TRANSIENT_SAMPLE_INTERVAL_MS,
           (unsigned long)lFirstSequence,
           (unsigned long)lDroppedCount);
-    LOG_R("sequence,time_ms,patient_pressure100,insp_pressure100,pressure_reference100,phase,blower_target,blower_actual,valve_duty,air_flow100,o2_flow100,exp_flow100");
+    LOG_R("VT_MONITOR_SCALE,float_fields=100");
+    LOG_R("sequence,time_ms,air_x2,o2_x2,prox_x2,pinsp_x1,ppeep_x1,pexp_x1,ppat_x1,blower_x10,pref_x1,fastref_x1,flowcomp_x1,pcorr_x1,effort_x1,ff_x1,vt_x10,vti_x10,vte_x10,target_x100,valve_x2,phase_x1");
     for (lIndex = 0U; lIndex < lCount; lIndex++) {
-        const stVentTestTransientSample *lSample = &gVentTestTransientUpload[lIndex];
+        const stMonitorWaveformData *lSample = &gVentTestTransientUpload[lIndex];
 
         lSequence = lFirstSequence + lIndex;
-        LOG_R("%lu,%lu,%ld,%ld,%ld,%u,%u,%u,%u,%ld,%ld,%ld",
+        LOG_R("%lu,%lu,%ld,%ld,%ld,%ld,%ld,%ld,%ld,%ld,%ld,%ld,%ld,%ld,%ld,%ld,%ld,%ld,%ld,%u,%u,%u",
               (unsigned long)lSequence,
               (unsigned long)(lSequence * VENT_TEST_TRANSIENT_SAMPLE_INTERVAL_MS),
-              (long)lSample->patientPressureCenti,
-              (long)lSample->inspPressureCenti,
-              (long)lSample->pressureReferenceCenti,
-              (unsigned int)lSample->phase,
-              (unsigned int)lSample->blowerTarget,
-              (unsigned int)lSample->blowerActual,
-              (unsigned int)lSample->valveDuty,
-              (long)lSample->airFlowCenti,
-              (long)lSample->o2FlowCenti,
-              (long)lSample->expFlowCenti);
+              (long)ventTestCenti(lSample->airFlowX2),
+              (long)ventTestCenti(lSample->oxygenFlowX2),
+              (long)ventTestCenti(lSample->proximalFlowX2),
+              (long)ventTestCenti(lSample->inspPressureX1),
+              (long)ventTestCenti(lSample->peepPressureX1),
+              (long)ventTestCenti(lSample->expPressureX1),
+              (long)ventTestCenti(lSample->patientPressureX1),
+              (long)ventTestCenti(lSample->blowerSpeedX10),
+              (long)ventTestCenti(lSample->patientRefPressureX1),
+              (long)ventTestCenti(lSample->fastRefX1),
+              (long)ventTestCenti(lSample->flowCompensationX1),
+              (long)ventTestCenti(lSample->patientCorrectionX1),
+              (long)ventTestCenti(lSample->innerEffortX1),
+              (long)ventTestCenti(lSample->blowerFeedforwardX1),
+              (long)ventTestCenti(lSample->tidalVolumeX10),
+              (long)ventTestCenti(lSample->tidalVolumeInspX10),
+              (long)ventTestCenti(lSample->tidalVolumeExpX10),
+              (unsigned int)lSample->blowerTargetX100,
+              (unsigned int)lSample->valveDutyX2,
+              (unsigned int)lSample->phaseStateX1);
     }
     LOG_R("VT_TRANSIENT_END,count=%u", (unsigned int)lCount);
 }
 
-/** Record one control-cycle sample into the rolling two-second buffer. */
+/** Record one control-cycle sample into the rolling one-second buffer. */
 void ventTestTransientRecord(void)
 {
-    stActuatorRequest lActuatorRequest;
-    stBlowerVcmFeedback lBlowerFeedback;
-    stVentTestTransientSample *lSample;
     uint32_t lSequence = gVentTestTransientTotalCount;
 
-    if (blowerVcmGetFeedback(&lBlowerFeedback) != BLOWER_VCM_STATUS_OK) {
-        lBlowerFeedback.speedScaled = 0U;
-    }
-    if (actuatorControllerLastRequestGet(&lActuatorRequest) !=
-        ACTUATOR_REQUEST_SUCCESS) {
-        lActuatorRequest.blowerTarget = 0U;
-        lActuatorRequest.expiratoryValveDuty = 0U;
-    }
-
-    lSample = &gVentTestTransientBuffer[lSequence % VENT_TEST_TRANSIENT_SAMPLE_COUNT];
-    lSample->patientPressureCenti = ventTestCenti(controlDataGet(PAT_REAL_PRS));
-    lSample->inspPressureCenti = ventTestCenti(controlDataGet(INSP_REAL_PRS));
-    lSample->pressureReferenceCenti = ventTestCenti(phaseControlGet(PHASE_REF_PRESSURE));
-    lSample->airFlowCenti = ventTestCenti(controlDataGet(INSP_FLOW_FILTERED));
-    lSample->o2FlowCenti = ventTestCenti(controlDataGet(O2_FLOW_FILTERED));
-    lSample->expFlowCenti = ventTestCenti(controlDataGet(MDIFF_REAL_FLOW));
-    lSample->blowerTarget = lActuatorRequest.blowerTarget;
-    lSample->blowerActual = lBlowerFeedback.speedScaled;
-    lSample->phase = (uint8_t)phaseControllerStateGet();
-    lSample->valveDuty = lActuatorRequest.expiratoryValveDuty;
-
+    gVentTestTransientBuffer[lSequence % VENT_TEST_TRANSIENT_SAMPLE_COUNT] =
+        gMonitorWaveformData;
     gVentTestTransientTotalCount = lSequence + 1U;
 }
 

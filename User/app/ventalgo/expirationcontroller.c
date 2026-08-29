@@ -9,7 +9,6 @@
 ***********************************************************************************/
 #include "expirationcontroller.h"
 
-#include <float.h>
 #include <stddef.h>
 
 #include "calibtrans.h"
@@ -105,7 +104,8 @@ static void expirationControllerStateEnter(eExpirationControllerState state,
         (void)pidReset(&gExpirationPeepPid);
         gExpirationPeepEntryElapsedMs = 0U;
         gExpirationPeepTrackPending =
-            (uint8_t)(lPreviousState == EXPIRATION_CONTROLLER_RELEASE);
+            (uint8_t)((lPreviousState == EXPIRATION_CONTROLLER_RELEASE) ||
+                      (lPreviousState == EXPIRATION_CONTROLLER_CAPTURE));
     } else {
         (void)pidReset(&gExpirationPeepPid);
         gExpirationBlowerTarget = 0U;
@@ -114,20 +114,29 @@ static void expirationControllerStateEnter(eExpirationControllerState state,
     }
 }
 
+/** Produce the capture request while approaching PEEP. */
+static int8_t expirationControllerCaptureProcess(const stBreathPlan *plan,
+                                                  stActuatorRequest *request)
+{
+    (void)plan;
+
+    gExpirationBlowerTarget = 0U;
+    gExpirationValveDuty = EXPIRATION_CONTROLLER_EXP_VALVE_OPEN_DUTY;
+    request->blowerTarget = gExpirationBlowerTarget;
+    request->expiratoryValveDuty = gExpirationValveDuty;
+    request->validMask = ACTUATOR_REQUEST_VALID_BREATH_OUTPUTS;
+    return ACTUATOR_REQUEST_SUCCESS;
+}
+
 /** Produce the fast-release request while approaching PEEP. */
 static int8_t expirationControllerReleaseProcess(const stBreathPlan *plan, stActuatorRequest *request)
 {
-    float lBlowerFeedforward;
-    float lBlowerProgress;
-    float lBlowerTarget;
     float lPatientPressure = controlDataGet(PAT_REAL_PRS);
     float lPressureError = lPatientPressure - plan->peepCmh2o;
-    float lProgress;
     float lPeepSoftMargin;
     float lSoftMarginMaximum;
     float lSoftMarginRatio;
     float lSoftMargin;
-    float lValveTarget;
     float lInspiratoryPressure = plan->inspiratoryPressureCmh2o;
 
     if (gExpirationReleaseStartPressure > lInspiratoryPressure) {
@@ -161,42 +170,9 @@ static int8_t expirationControllerReleaseProcess(const stBreathPlan *plan, stAct
         request->validMask = ACTUATOR_REQUEST_VALID_BREATH_OUTPUTS;
         return ACTUATOR_REQUEST_SUCCESS;
     }
-    if (calibtransPrsSpeed(plan->peepCmh2o, &lBlowerFeedforward) !=
-        CALIBTRANS_STATUS_OK) {
-        return ACTUATOR_REQUEST_ERROR_STATE;
-    }
 
-    if ((lSoftMargin - EXPIRATION_CONTROLLER_PEEP_ENTRY_MARGIN) > FLT_EPSILON) {
-        lProgress = (lSoftMargin - lPressureError) /
-                    (lSoftMargin - EXPIRATION_CONTROLLER_PEEP_ENTRY_MARGIN);
-    } else {
-        lProgress = (lPressureError <= EXPIRATION_CONTROLLER_PEEP_ENTRY_MARGIN) ?
-                    1.0F : 0.0F;
-    }
-    lProgress = expirationControllerClamp(lProgress, 0.0F, 1.0F);
-    lBlowerProgress = expirationControllerClamp(
-        lProgress * EXPIRATION_CONTROLLER_RELEASE_BLOWER_PROGRESS_GAIN,
-        0.0F,
-        1.0F);
-    lBlowerTarget = lBlowerFeedforward * 10.0F * lBlowerProgress;
-    lValveTarget = EXPIRATION_CONTROLLER_RELEASE_VALVE_DUTY_MAX * lProgress;
-
-    gExpirationBlowerTarget = (uint16_t)expirationControllerMoveTowards(
-        (float)gExpirationBlowerTarget,
-        lBlowerTarget,
-        EXPIRATION_CONTROLLER_RELEASE_BLOWER_MAX_STEP);
-    if (lValveTarget < (float)gExpirationValveDuty) {
-        gExpirationValveDuty = (uint8_t)lValveTarget;
-    } else {
-        gExpirationValveDuty = (uint8_t)expirationControllerMoveTowards(
-            (float)gExpirationValveDuty,
-            lValveTarget,
-            EXPIRATION_CONTROLLER_EXP_VALVE_CAPTURE_STEP);
-    }
-    request->blowerTarget = gExpirationBlowerTarget;
-    request->expiratoryValveDuty = gExpirationValveDuty;
-    request->validMask = ACTUATOR_REQUEST_VALID_BREATH_OUTPUTS;
-    return ACTUATOR_REQUEST_SUCCESS;
+    expirationControllerStateEnter(EXPIRATION_CONTROLLER_CAPTURE, NULL);
+    return expirationControllerCaptureProcess(plan, request);
 }
 
 /** Produce the closed-loop PEEP request. */
@@ -302,23 +278,29 @@ int8_t expirationControllerProcess(const stBreathPlan *plan,
         return ACTUATOR_REQUEST_ERROR_STATE;
     }
 
-    if (phase == PHASE_EXP_RELEASE) {
-        lState = EXPIRATION_CONTROLLER_RELEASE;
-    } else if (phase == PHASE_EXP_PEEP) {
-        lState = EXPIRATION_CONTROLLER_PEEP;
-    } else {
-        expirationControllerStateEnter(EXPIRATION_CONTROLLER_IDLE,previousRequest);
-        return ACTUATOR_REQUEST_ERROR_STATE;
-    }
     if (plan->sequence != gExpirationPlanSequence) {
         gExpirationPlanSequence = plan->sequence;
         gExpirationControllerState = EXPIRATION_CONTROLLER_IDLE;
     }
-    expirationControllerStateEnter(lState, previousRequest);
-    if (lState == EXPIRATION_CONTROLLER_RELEASE) {
-        return expirationControllerReleaseProcess(plan, request);
+    if (phase == PHASE_EXP_RELEASE) {
+        lState = (gExpirationControllerState == EXPIRATION_CONTROLLER_CAPTURE) ?
+                 EXPIRATION_CONTROLLER_CAPTURE : EXPIRATION_CONTROLLER_RELEASE;
+    } else if (phase == PHASE_EXP_PEEP) {
+        lState = EXPIRATION_CONTROLLER_PEEP;
     } else {
-        return expirationControllerPeepProcess(plan, request);
+        expirationControllerStateEnter(EXPIRATION_CONTROLLER_IDLE, previousRequest);
+        return ACTUATOR_REQUEST_ERROR_STATE;
+    }
+    expirationControllerStateEnter(lState, previousRequest);
+    switch (lState) {
+        case EXPIRATION_CONTROLLER_RELEASE:
+            return expirationControllerReleaseProcess(plan, request);
+        case EXPIRATION_CONTROLLER_CAPTURE:
+            return expirationControllerCaptureProcess(plan, request);
+        case EXPIRATION_CONTROLLER_PEEP:
+            return expirationControllerPeepProcess(plan, request);
+        default:
+            return ACTUATOR_REQUEST_ERROR_STATE;
     }
 }
 

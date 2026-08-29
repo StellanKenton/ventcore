@@ -712,6 +712,30 @@ User/app/system/taskmanager.c.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/User/app/system/taskmanager.c.s
 .PHONY : User/app/system/taskmanager.c.s
 
+User/app/ventalgo/expirationcontroller.obj: User/app/ventalgo/expirationcontroller.c.obj
+.PHONY : User/app/ventalgo/expirationcontroller.obj
+
+# target to build an object file
+User/app/ventalgo/expirationcontroller.c.obj:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/User/app/ventalgo/expirationcontroller.c.obj
+.PHONY : User/app/ventalgo/expirationcontroller.c.obj
+
+User/app/ventalgo/expirationcontroller.i: User/app/ventalgo/expirationcontroller.c.i
+.PHONY : User/app/ventalgo/expirationcontroller.i
+
+# target to preprocess a source file
+User/app/ventalgo/expirationcontroller.c.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/User/app/ventalgo/expirationcontroller.c.i
+.PHONY : User/app/ventalgo/expirationcontroller.c.i
+
+User/app/ventalgo/expirationcontroller.s: User/app/ventalgo/expirationcontroller.c.s
+.PHONY : User/app/ventalgo/expirationcontroller.s
+
+# target to generate assembly for a file
+User/app/ventalgo/expirationcontroller.c.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/User/app/ventalgo/expirationcontroller.c.s
+.PHONY : User/app/ventalgo/expirationcontroller.c.s
+
 User/app/ventalgo/fio2controller.obj: User/app/ventalgo/fio2controller.c.obj
 .PHONY : User/app/ventalgo/fio2controller.obj
 
@@ -807,6 +831,30 @@ User/app/ventlogic/actuatorcontroller.s: User/app/ventlogic/actuatorcontroller.c
 User/app/ventlogic/actuatorcontroller.c.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/User/app/ventlogic/actuatorcontroller.c.s
 .PHONY : User/app/ventlogic/actuatorcontroller.c.s
+
+User/app/ventlogic/apneaengine.obj: User/app/ventlogic/apneaengine.c.obj
+.PHONY : User/app/ventlogic/apneaengine.obj
+
+# target to build an object file
+User/app/ventlogic/apneaengine.c.obj:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/User/app/ventlogic/apneaengine.c.obj
+.PHONY : User/app/ventlogic/apneaengine.c.obj
+
+User/app/ventlogic/apneaengine.i: User/app/ventlogic/apneaengine.c.i
+.PHONY : User/app/ventlogic/apneaengine.i
+
+# target to preprocess a source file
+User/app/ventlogic/apneaengine.c.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/User/app/ventlogic/apneaengine.c.i
+.PHONY : User/app/ventlogic/apneaengine.c.i
+
+User/app/ventlogic/apneaengine.s: User/app/ventlogic/apneaengine.c.s
+.PHONY : User/app/ventlogic/apneaengine.s
+
+# target to generate assembly for a file
+User/app/ventlogic/apneaengine.c.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\ventcore.dir\build.make CMakeFiles/ventcore.dir/User/app/ventlogic/apneaengine.c.s
+.PHONY : User/app/ventlogic/apneaengine.c.s
 
 User/app/ventlogic/breathscheduler.obj: User/app/ventlogic/breathscheduler.c.obj
 .PHONY : User/app/ventlogic/breathscheduler.obj
@@ -1610,6 +1658,9 @@ help:
 	@echo ... User/app/system/taskmanager.obj
 	@echo ... User/app/system/taskmanager.i
 	@echo ... User/app/system/taskmanager.s
+	@echo ... User/app/ventalgo/expirationcontroller.obj
+	@echo ... User/app/ventalgo/expirationcontroller.i
+	@echo ... User/app/ventalgo/expirationcontroller.s
 	@echo ... User/app/ventalgo/fio2controller.obj
 	@echo ... User/app/ventalgo/fio2controller.i
 	@echo ... User/app/ventalgo/fio2controller.s
@@ -1622,6 +1673,9 @@ help:
 	@echo ... User/app/ventlogic/actuatorcontroller.obj
 	@echo ... User/app/ventlogic/actuatorcontroller.i
 	@echo ... User/app/ventlogic/actuatorcontroller.s
+	@echo ... User/app/ventlogic/apneaengine.obj
+	@echo ... User/app/ventlogic/apneaengine.i
+	@echo ... User/app/ventlogic/apneaengine.s
 	@echo ... User/app/ventlogic/breathscheduler.obj
 	@echo ... User/app/ventlogic/breathscheduler.i
 	@echo ... User/app/ventlogic/breathscheduler.s

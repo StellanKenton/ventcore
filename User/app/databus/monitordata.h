@@ -21,6 +21,7 @@ typedef struct stMonitorWaveformData {
     float peepPressureX1;
     float expPressureX1;
     float patientPressureX1;
+    float predictedPressureX1;
     float blowerSpeedX10;
     float patientRefPressureX1;
     float fastRefX1;

@@ -25,6 +25,7 @@ void monitorDataUpdate(void) {
     gMonitorWaveformData.peepPressureX1 = controlDataGet(PEEP_REAL_PRS);
     gMonitorWaveformData.expPressureX1 = controlDataGet(EXP_REAL_PRS);
     gMonitorWaveformData.patientPressureX1 = controlDataGet(PAT_REAL_PRS);
+    gMonitorWaveformData.predictedPressureX1 = controlDataGet(PREDICT_PAT_PRS);
     gMonitorWaveformData.blowerSpeedX10 = controlDataGet(RAW_BLOWER_SPEED) / 10.0F;
     gMonitorWaveformData.patientRefPressureX1 = phaseControlGet(PHASE_REF_PRESSURE);
     gMonitorWaveformData.fastRefX1 = phaseControlGet(PHASE_REF_FAST_PRESSURE);

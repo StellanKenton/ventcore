@@ -22,6 +22,7 @@ static stLpf1 gPressureFilters[4U][2U];
 static stLpf1 gFlowFilters[2U][2U];
 static stLpf1 gInspFlowTriggerFilter;
 static uint8_t gcontrolDataFiltersInitialized = 0U;
+static uint8_t gPatientPressurePredictionInitialized = 0U;
 
 /** Average two 3 ms samples and run two cascaded low-pass filters. */
 static float controlDataLpf2Run(stLpf1 filters[2U], float sample1, float sample2) {
@@ -133,8 +134,18 @@ void controlDataCalibrationProcess(void) {
         controlDataSet(MDIFF_REAL_FLOW, lConverted);
     }
     if (calibtransPeepPrs(controlDataGet(PEEP_PRS_BWF), &lConverted) == CALIBTRANS_STATUS_OK) {
+        float lPreviousPatientPressure = controlDataGet(PAT_REAL_PRS);
+
         controlDataSet(PEEP_REAL_PRS, lConverted);
         controlDataSet(PAT_REAL_PRS, lConverted);
+        if (gPatientPressurePredictionInitialized != 0U) {
+            float lPressureSlope = (lConverted - lPreviousPatientPressure) / 6.0F;
+
+            controlDataSet(PREDICT_PAT_PRS, lConverted + lPressureSlope * 60.0F);
+        } else {
+            controlDataSet(PREDICT_PAT_PRS, lConverted);
+            gPatientPressurePredictionInitialized = 1U;
+        }
     }
     if (calibtransExpPrs(controlDataGet(EXP_PRS_BWF), &lConverted) == CALIBTRANS_STATUS_OK) {
         controlDataSet(EXP_REAL_PRS, lConverted);
