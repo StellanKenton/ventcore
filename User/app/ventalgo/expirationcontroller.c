@@ -108,8 +108,7 @@ static void expirationControllerStateEnter(eExpirationControllerState state,
 }
 
 /** Produce the fast-release request while approaching PEEP. */
-static int8_t expirationControllerReleaseProcess(const stBreathPlan *plan,
-                                                 stActuatorRequest *request)
+static int8_t expirationControllerReleaseProcess(const stBreathPlan *plan, stActuatorRequest *request)
 {
     float lBlowerFeedforward;
     float lBlowerProgress;
@@ -137,10 +136,8 @@ static int8_t expirationControllerReleaseProcess(const stBreathPlan *plan,
         plan->peepCmh2o * EXPIRATION_CONTROLLER_RELEASE_SOFT_MARGIN_RATIO_PEEP_SCALE,
         EXPIRATION_CONTROLLER_RELEASE_SOFT_MARGIN_RATIO_MIN,
         1.0F);
-    lSoftMargin = (lInspiratoryPressure - plan->peepCmh2o) *
-                  lSoftMarginRatio;
-    lPeepSoftMargin = plan->peepCmh2o *
-                      EXPIRATION_CONTROLLER_RELEASE_PEEP_MARGIN_RATIO;
+    lSoftMargin = (lInspiratoryPressure - plan->peepCmh2o) *lSoftMarginRatio;
+    lPeepSoftMargin = plan->peepCmh2o * EXPIRATION_CONTROLLER_RELEASE_PEEP_MARGIN_RATIO;
     if (lSoftMargin < lPeepSoftMargin) {
         lSoftMargin = lPeepSoftMargin;
     }
@@ -224,6 +221,7 @@ static int8_t expirationControllerPeepProcess(const stBreathPlan *plan,
                                               stActuatorRequest *request)
 {
     float lBlowerFeedforward;
+    float lBlowerCurrentSpeed;
     float lBlowerTarget;
     float lEffort;
     float lEntryProgress;
@@ -245,7 +243,7 @@ static int8_t expirationControllerPeepProcess(const stBreathPlan *plan,
     }
 
     lBlowerTarget = (lBlowerFeedforward * 10.0F) +
-                    (lEffort * EXPIRATION_CONTROLLER_PEEP_BLOWER_CORRECTION);
+                    (lEffort * BLOWER_SPEED_MAX_CORRECTION);
     lBlowerTarget = expirationControllerClamp(
         lBlowerTarget,
         0.0F,
@@ -301,9 +299,6 @@ int8_t expirationControllerProcess(const stBreathPlan *plan,
 {
     eExpirationControllerState lState;
 
-    if ((plan == NULL) || (request == NULL)) {
-        return ACTUATOR_REQUEST_ERROR_PARAM;
-    }
     expirationControllerRequestClear(request);
     if (gExpirationControllerReady == 0U) {
         return ACTUATOR_REQUEST_ERROR_STATE;
@@ -314,8 +309,7 @@ int8_t expirationControllerProcess(const stBreathPlan *plan,
     } else if (phase == PHASE_EXP_PEEP) {
         lState = EXPIRATION_CONTROLLER_PEEP;
     } else {
-        expirationControllerStateEnter(EXPIRATION_CONTROLLER_IDLE,
-                                       previousRequest);
+        expirationControllerStateEnter(EXPIRATION_CONTROLLER_IDLE,previousRequest);
         return ACTUATOR_REQUEST_ERROR_STATE;
     }
     if (plan->sequence != gExpirationPlanSequence) {
@@ -325,8 +319,9 @@ int8_t expirationControllerProcess(const stBreathPlan *plan,
     expirationControllerStateEnter(lState, previousRequest);
     if (lState == EXPIRATION_CONTROLLER_RELEASE) {
         return expirationControllerReleaseProcess(plan, request);
+    } else {
+        return expirationControllerPeepProcess(plan, request);
     }
-    return expirationControllerPeepProcess(plan, request);
 }
 
 /**************************End of file********************************/
