@@ -167,7 +167,7 @@ static void expirationControllerStateEnter(eExpirationControllerState state,
     } else if (state == EXPIRATION_CONTROLLER_CAPTURE) {
         (void)pidReset(&gExpirationPeepPid);
         (void)pidReset(&gExpirationCapturePid);
-        gExpirationBlowerTarget = 0U;
+        /* Preserve the RELEASE blower target so CAPTURE does not command a speed dip. */
         gExpirationValveDuty = EXPIRATION_CONTROLLER_EXP_VALVE_OPEN_DUTY;
         gExpirationCaptureElapsedMs = 0U;
         gExpirationCaptureStableCount = 0U;
@@ -196,15 +196,14 @@ static void expirationControllerStateEnter(eExpirationControllerState state,
  *     desired dP/dt = -K * (Ppatient - PEEP)
  *
  * A dedicated P controller compares that desired slope with the measured slope
- * and corrects expiratory-valve duty. A pressure-position feedforward term
- * supplies the nominal valve-closing trajectory, while the blower is pre-spooled
- * toward the PEEP feedforward target.
+ * and corrects expiratory-valve duty. Pressure position provides nominal valve
+ * feedforward. The blower is held at PEEP feedforward during CAPTURE; it is a
+ * slow pressure-source actuator and is intentionally not used for fast braking.
  */
 static int8_t expirationControllerCaptureProcess(const stBreathPlan *plan,
                                                   stActuatorRequest *request)
 {
     float lBlowerFeedforward;
-    float lBlowerProgress;
     float lBlowerTarget;
     float lCaptureEffort;
     float lCaptureProgress;
@@ -213,7 +212,9 @@ static int8_t expirationControllerCaptureProcess(const stBreathPlan *plan,
     float lPositivePressureError;
     float lPressureError = lPatientPressure - plan->peepCmh2o;
     float lPressureSlope = expirationControllerPressureSlopeGet(lPatientPressure);
+    float lSlopeOverspeed;
     float lSmoothProgress;
+    float lValveCloseStep;
     float lValveDuty;
     float lValveFeedforward;
     float lValveTarget;
@@ -245,8 +246,8 @@ static int8_t expirationControllerCaptureProcess(const stBreathPlan *plan,
     }
 
     /*
-     * Convert distance-to-PEEP into a smooth 0..1 capture progress. This is
-     * feedforward only; the slope controller adds/subtracts braking as needed.
+     * Convert distance-to-PEEP into a smooth 0..1 valve feedforward trajectory.
+     * The slope controller then adds or removes braking around this trajectory.
      */
     lCaptureProgress = 1.0F -
                        (lPositivePressureError / gExpirationCaptureMargin);
@@ -265,23 +266,35 @@ static int8_t expirationControllerCaptureProcess(const stBreathPlan *plan,
         (float)EXPIRATION_CONTROLLER_EXP_VALVE_CLOSED_DUTY);
 
     /*
-     * The blower is intentionally pre-spooled as soon as CAPTURE starts. The
-     * expiratory valve remains the fast braking actuator; blower only prepares
-     * the pressure source required by the following PEEP controller.
+     * The blower already needs to be near the PEEP operating point before the
+     * patient pressure reaches PEEP. Keep its command at PEEP feedforward rather
+     * than ramping from a low fraction and creating an unnecessary speed valley.
      */
-    lBlowerProgress =
-        EXPIRATION_CONTROLLER_CAPTURE_BLOWER_MIN_PROGRESS +
-        ((1.0F - EXPIRATION_CONTROLLER_CAPTURE_BLOWER_MIN_PROGRESS) *
-         lSmoothProgress);
-    lBlowerTarget = lBlowerFeedforward * lBlowerProgress;
+    lBlowerTarget = lBlowerFeedforward;
 
     /*
-     * If pressure has already crossed PEEP, stop releasing immediately. This
-     * avoids staying in CAPTURE below target while waiting for a stable window.
+     * Positive overspeed means the measured pressure is falling faster (more
+     * negative) than requested. Give the expiratory valve more closing authority
+     * in that condition instead of always limiting it to a fixed 15 duty/6 ms.
      */
+    lSlopeOverspeed = lDesiredSlope - lPressureSlope;
+    lSlopeOverspeed = expirationControllerClamp(
+        lSlopeOverspeed,
+        0.0F,
+        EXPIRATION_CONTROLLER_CAPTURE_SLOPE_OVERSPEED_MAX);
+    lValveCloseStep =
+        EXPIRATION_CONTROLLER_CAPTURE_VALVE_CLOSE_STEP_BASE +
+        (lSlopeOverspeed * EXPIRATION_CONTROLLER_CAPTURE_VALVE_STEP_GAIN);
+    lValveCloseStep = expirationControllerClamp(
+        lValveCloseStep,
+        EXPIRATION_CONTROLLER_CAPTURE_VALVE_CLOSE_STEP_BASE,
+        EXPIRATION_CONTROLLER_CAPTURE_VALVE_CLOSE_STEP_MAX);
+
+    /* If pressure has crossed PEEP, immediately apply maximum braking. */
     if (lPressureError <= 0.0F) {
         lValveDuty = (float)EXPIRATION_CONTROLLER_EXP_VALVE_CLOSED_DUTY;
         lBlowerTarget = lBlowerFeedforward;
+        lValveCloseStep = EXPIRATION_CONTROLLER_CAPTURE_VALVE_CLOSE_STEP_MAX;
     }
 
     gExpirationBlowerTarget = (uint16_t)expirationControllerMoveTowards(
@@ -294,7 +307,7 @@ static int8_t expirationControllerCaptureProcess(const stBreathPlan *plan,
         gExpirationValveDuty = (uint8_t)expirationControllerMoveTowards(
             (float)gExpirationValveDuty,
             lValveDuty,
-            EXPIRATION_CONTROLLER_CAPTURE_VALVE_CLOSE_MAX_STEP);
+            lValveCloseStep);
     }
 
     if (gExpirationCaptureElapsedMs < EXPIRATION_CONTROLLER_CAPTURE_TIMEOUT_MS) {
@@ -342,10 +355,20 @@ static int8_t expirationControllerCaptureProcess(const stBreathPlan *plan,
 static int8_t expirationControllerReleaseProcess(const stBreathPlan *plan,
                                                   stActuatorRequest *request)
 {
+    float lBlowerFeedforward;
     float lCaptureMargin;
     float lPatientPressure = controlDataGet(PAT_REAL_PRS);
     float lPressureError = lPatientPressure - plan->peepCmh2o;
     float lPressureSlope = expirationControllerPressureSlopeGet(lPatientPressure);
+
+    if (calibtransPrsSpeed(plan->peepCmh2o, &lBlowerFeedforward) !=
+        CALIBTRANS_STATUS_OK) {
+        return ACTUATOR_REQUEST_ERROR_STATE;
+    }
+    lBlowerFeedforward = expirationControllerClamp(
+        lBlowerFeedforward * 10.0F,
+        0.0F,
+        (float)EXPIRATION_CONTROLLER_BLOWER_TARGET_MAX);
 
     lCaptureMargin = EXPIRATION_CONTROLLER_PEEP_BASE_MARGIN +
                      ((-lPressureSlope) * EXPIRATION_CONTROLLER_BRAKE_TIME_S);
@@ -354,7 +377,14 @@ static int8_t expirationControllerReleaseProcess(const stBreathPlan *plan,
         EXPIRATION_CONTROLLER_CAPTURE_MARGIN_MIN,
         EXPIRATION_CONTROLLER_CAPTURE_MARGIN_MAX);
     if (lPressureError > lCaptureMargin) {
-        gExpirationBlowerTarget = 0U;
+        /*
+         * Keep the valve fully open for the fastest pressure release, but drive
+         * the slow blower toward its future PEEP operating point instead of zero.
+         */
+        gExpirationBlowerTarget = (uint16_t)expirationControllerMoveTowards(
+            (float)gExpirationBlowerTarget,
+            lBlowerFeedforward,
+            EXPIRATION_CONTROLLER_BLOWER_MAX_STEP);
         gExpirationValveDuty = EXPIRATION_CONTROLLER_EXP_VALVE_OPEN_DUTY;
         request->blowerTarget = gExpirationBlowerTarget;
         request->expiratoryValveDuty = gExpirationValveDuty;
