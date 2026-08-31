@@ -40,12 +40,8 @@ void monitorDataUpdate(void) {
     gMonitorWaveformData.tidalVolumeInspX10 = monitorEngineGet(MONITOR_TIDA_VOL_INSP) / 10.0F;
     gMonitorWaveformData.tidalVolumeExpX10 = monitorEngineGet(MONITOR_TIDA_VOL_EXP) / 10.0F;
 
-    gMonitorWaveformData.peepBaseFeedforwardX100 =
-        lExpirationDiagnostic.peepBaseFeedforwardTarget / 100.0F;
-    gMonitorWaveformData.peepAdaptiveBiasX100 =
-        lExpirationDiagnostic.peepAdaptiveBiasTarget / 100.0F;
-    gMonitorWaveformData.peepAdaptiveFeedforwardX100 =
-        lExpirationDiagnostic.peepAdaptiveFeedforwardTarget / 100.0F;
+    gMonitorWaveformData.peepFeedforwardX100 =
+        lExpirationDiagnostic.peepFeedforwardTarget / 100.0F;
     gMonitorWaveformData.peepFeedbackEffortX1 =
         lExpirationDiagnostic.peepFeedbackEffort;
     gMonitorWaveformData.expirationPressureSlopeX1 =

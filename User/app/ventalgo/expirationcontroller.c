@@ -69,11 +69,13 @@ static float expirationControllerMoveTowards(float current, float target, float 
     return target;
 }
 
-/** Get the fixed calibrated blower feedforward for the requested PEEP. */
+/** Get the calibrated blower feedforward with a small bench bias. */
 static int8_t expirationControllerPeepFeedforwardGet(float peepCmh2o,
+                                                      float inspiratoryPressureCmh2o,
                                                       float *feedforward)
 {
     float lBaseSpeed;
+    float lBenchBias;
 
     if (feedforward == NULL) {
         return ACTUATOR_REQUEST_ERROR_STATE;
@@ -82,8 +84,23 @@ static int8_t expirationControllerPeepFeedforwardGet(float peepCmh2o,
         return ACTUATOR_REQUEST_ERROR_STATE;
     }
 
+    lBenchBias = (peepCmh2o -
+                  EXPIRATION_CONTROLLER_PEEP_FF_BIAS_CENTER_CMH2O) *
+                 EXPIRATION_CONTROLLER_PEEP_FF_BIAS_PER_CMH2O;
+    lBenchBias += expirationControllerClamp(
+        (EXPIRATION_CONTROLLER_PEEP_FF_LOW_END_CMH2O - peepCmh2o) *
+        EXPIRATION_CONTROLLER_PEEP_FF_LOW_END_GAIN,
+        0.0F,
+        EXPIRATION_CONTROLLER_PEEP_FF_LOW_END_MAX);
+    lBenchBias -= ((inspiratoryPressureCmh2o - peepCmh2o) -
+                   EXPIRATION_CONTROLLER_PEEP_FF_DELTA_CENTER_CMH2O) *
+                  EXPIRATION_CONTROLLER_PEEP_FF_DELTA_PER_CMH2O;
+    lBenchBias = expirationControllerClamp(
+        lBenchBias,
+        EXPIRATION_CONTROLLER_PEEP_FF_BIAS_MIN,
+        EXPIRATION_CONTROLLER_PEEP_FF_BIAS_MAX);
     *feedforward = expirationControllerClamp(
-        lBaseSpeed * 10.0F,
+        (lBaseSpeed * 10.0F) + lBenchBias,
         0.0F,
         (float)EXPIRATION_CONTROLLER_BLOWER_TARGET_MAX);
     gExpirationPeepFeedforwardTarget = *feedforward;
@@ -251,6 +268,7 @@ static int8_t expirationControllerCaptureProcess(const stBreathPlan *plan,
     float lValveTarget;
 
     if (expirationControllerPeepFeedforwardGet(plan->peepCmh2o,
+                                               plan->inspiratoryPressureCmh2o,
                                                &lBlowerFeedforward) !=
         ACTUATOR_REQUEST_SUCCESS) {
         return ACTUATOR_REQUEST_ERROR_STATE;
@@ -331,12 +349,6 @@ static int8_t expirationControllerCaptureProcess(const stBreathPlan *plan,
         EXPIRATION_CONTROLLER_CAPTURE_VALVE_OPEN_STEP_BASE,
         EXPIRATION_CONTROLLER_CAPTURE_VALVE_OPEN_STEP_MAX);
 
-    if (lPressureError <= 0.0F) {
-        lValveDuty = (float)EXPIRATION_CONTROLLER_EXP_VALVE_CLOSED_DUTY;
-        lBlowerTarget = lBlowerFeedforward;
-        lValveCloseStep = EXPIRATION_CONTROLLER_CAPTURE_VALVE_CLOSE_STEP_MAX;
-    }
-
     gExpirationBlowerTarget = (uint16_t)expirationControllerMoveTowards(
         (float)gExpirationBlowerTarget,
         lBlowerTarget,
@@ -358,12 +370,8 @@ static int8_t expirationControllerCaptureProcess(const stBreathPlan *plan,
             (uint16_t)(EXPIRATION_CONTROLLER_SAMPLE_PERIOD_S * 1000.0F);
     }
 
-    if (lPressureError <= 0.0F) {
-        if (phaseControllerExpirationCaptureNotify() != PHASE_CONTROL_SUCCESS) {
-            return ACTUATOR_REQUEST_ERROR_STATE;
-        }
-    } else if ((lPressureError <=
-                EXPIRATION_CONTROLLER_CAPTURE_PRESSURE_TOLERANCE) &&
+    if ((expirationControllerAbs(lPressureError) <=
+         EXPIRATION_CONTROLLER_CAPTURE_PRESSURE_TOLERANCE) &&
                (expirationControllerAbs(lPressureSlope) <=
                 EXPIRATION_CONTROLLER_CAPTURE_STABLE_SLOPE_MAX)) {
         if (gExpirationCaptureStableCount <
@@ -402,6 +410,7 @@ static int8_t expirationControllerReleaseProcess(const stBreathPlan *plan,
     float lPressureSlope = expirationControllerPressureSlopeGet(lPatientPressure);
 
     if (expirationControllerPeepFeedforwardGet(plan->peepCmh2o,
+                                               plan->inspiratoryPressureCmh2o,
                                                &lBlowerFeedforward) !=
         ACTUATOR_REQUEST_SUCCESS) {
         return ACTUATOR_REQUEST_ERROR_STATE;
@@ -441,8 +450,10 @@ static int8_t expirationControllerPeepProcess(const stBreathPlan *plan,
     float lEntryProgress;
     float lEntryValveDuty;
     float lExcessPressure;
+    float lFallReliefScale;
     float lPatientPressure;
     float lPressureSlope;
+    float lSlopeGain;
     float lSlopeOpening = 0.0F;
     float lValveDuty;
     float lValveDutyMaximum;
@@ -450,6 +461,7 @@ static int8_t expirationControllerPeepProcess(const stBreathPlan *plan,
     float lValveOpening;
 
     if (expirationControllerPeepFeedforwardGet(plan->peepCmh2o,
+                                               plan->inspiratoryPressureCmh2o,
                                                &lBlowerFeedforward) !=
         ACTUATOR_REQUEST_SUCCESS) {
         return ACTUATOR_REQUEST_ERROR_STATE;
@@ -497,15 +509,33 @@ static int8_t expirationControllerPeepProcess(const stBreathPlan *plan,
         lValveOpening,
         0.0F,
         EXPIRATION_CONTROLLER_PEEP_RELIEF_MAX_OPENING);
+    lFallReliefScale = EXPIRATION_CONTROLLER_PEEP_RELIEF_FALL_SCALE -
+        expirationControllerClamp(
+            (plan->peepCmh2o -
+             EXPIRATION_CONTROLLER_PEEP_RELIEF_HIGH_START_CMH2O) *
+            EXPIRATION_CONTROLLER_PEEP_RELIEF_HIGH_FALL_REDUCTION_GAIN,
+            0.0F,
+            EXPIRATION_CONTROLLER_PEEP_RELIEF_FALL_SCALE);
+    if (lPressureSlope <
+        EXPIRATION_CONTROLLER_PEEP_RELIEF_FALL_SLOPE_THRESHOLD) {
+        lValveOpening *= lFallReliefScale;
+    }
 
     if ((lPatientPressure >=
          (plan->peepCmh2o -
           EXPIRATION_CONTROLLER_PEEP_RELIEF_SLOPE_ENABLE_MARGIN)) &&
         (lPressureSlope > EXPIRATION_CONTROLLER_PEEP_RELIEF_SLOPE_DEADBAND)) {
+        lSlopeGain = EXPIRATION_CONTROLLER_PEEP_RELIEF_SLOPE_GAIN +
+            expirationControllerClamp(
+                (plan->peepCmh2o -
+                 EXPIRATION_CONTROLLER_PEEP_RELIEF_HIGH_START_CMH2O) *
+                EXPIRATION_CONTROLLER_PEEP_RELIEF_HIGH_SLOPE_GAIN,
+                0.0F,
+                EXPIRATION_CONTROLLER_PEEP_RELIEF_HIGH_SLOPE_GAIN_MAX);
         lSlopeOpening =
             (lPressureSlope -
              EXPIRATION_CONTROLLER_PEEP_RELIEF_SLOPE_DEADBAND) *
-            EXPIRATION_CONTROLLER_PEEP_RELIEF_SLOPE_GAIN;
+            lSlopeGain;
         lSlopeOpening = expirationControllerClamp(
             lSlopeOpening,
             0.0F,

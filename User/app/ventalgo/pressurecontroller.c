@@ -22,6 +22,8 @@ static uint8_t gPressureControllerReady;
 static ePressureControllerState gPressureControllerState;
 static stPressureControllerDiagnostic gPressureDiagnostic;
 static float gPressureFlowCompensation;
+static float gPressurePreviousPatientPressure;
+static float gPressurePatientSlope;
 static uint32_t gPressurePlanSequence;
 
 /** Clamp a pressure-controller value to a configured range. */
@@ -79,6 +81,8 @@ void pressureControllerInit(void)
                                          (lInnerStatus == PID_STATUS_OK));
     gPressureControllerState = PRESSURE_CONTROLLER_IDLE;
     gPressureFlowCompensation = 0.0F;
+    gPressurePreviousPatientPressure = 0.0F;
+    gPressurePatientSlope = 0.0F;
     gPressurePlanSequence = 0U;
     pressureControllerDiagnosticClear();
 }
@@ -94,6 +98,8 @@ static void pressureControllerStateEnter(ePressureControllerState state)
         (void)pidReset(&gPressureOuterPid);
         (void)pidReset(&gPressureInnerPid);
         gPressureFlowCompensation = 0.0F;
+        gPressurePreviousPatientPressure = controlDataGet(PAT_REAL_PRS);
+        gPressurePatientSlope = 0.0F;
     } else if (state == PRESSURE_CONTROLLER_IDLE) {
         (void)pidReset(&gPressureOuterPid);
         (void)pidReset(&gPressureInnerPid);
@@ -109,6 +115,7 @@ static int8_t pressureControllerOuterLoopProcess(const stBreathPlan *plan,
     float lFlow;
     float lFlowCompensation;
     float lFlowCompensationMaximum;
+    float lFastReference;
     float lInspCorrection;
     float lPatientPressure;
     float lPatientReference;
@@ -127,6 +134,14 @@ static int8_t pressureControllerOuterLoopProcess(const stBreathPlan *plan,
     lPatientReference = pressureControllerClamp(phaseControlGet(PHASE_REF_PRESSURE),
                                                  plan->limitSettings->pressureLow,
                                                  lPressureLimit);
+    if (state == PRESSURE_CONTROLLER_INSP_RISE) {
+        lFastReference = pressureControllerClamp(
+            phaseControlGet(PHASE_REF_FAST_PRESSURE),
+            lPatientReference,
+            lPressureLimit);
+        lPatientReference += PRESSURE_CONTROLLER_RISE_FAST_REF_BLEND *
+                             (lFastReference - lPatientReference);
+    }
     lPatientPressure = controlDataGet(PAT_REAL_PRS);
     lFlow = controlDataGet(INSP_FLOW_FILTERED) * PRESSURE_CONTROLLER_FLOW_INPUT_SCALE;
     lFlow = pressureControllerClamp(lFlow, 0.0F, PRESSURE_CONTROLLER_FLOW_INPUT_MAX);
@@ -198,6 +213,10 @@ static void pressureControllerHoldReliefProcess(stActuatorRequest *request)
     lValveOpening = pressureControllerClamp(lValveOpening,
                                              0.0F,
                                              PRESSURE_CONTROLLER_HOLD_RELIEF_MAX_OPENING);
+    if (gPressurePatientSlope <
+        PRESSURE_CONTROLLER_HOLD_FALL_SLOPE_THRESHOLD) {
+        lValveOpening = 0.0F;
+    }
     request->expiratoryValveDuty =
         (uint8_t)((float)PRESSURE_CONTROLLER_EXP_VALVE_CLOSED_DUTY - lValveOpening);
 }
@@ -240,6 +259,13 @@ int8_t pressureControllerProcess(const stBreathPlan *plan, stActuatorRequest *re
     }
     pressureControllerStateEnter(lState);
 
+    lEffort = (controlDataGet(PAT_REAL_PRS) -
+               gPressurePreviousPatientPressure) /
+              PRESSURE_CONTROLLER_SAMPLE_PERIOD_S;
+    gPressurePatientSlope += PRESSURE_CONTROLLER_HOLD_SLOPE_FILTER_GAIN *
+                             (lEffort - gPressurePatientSlope);
+    gPressurePreviousPatientPressure = controlDataGet(PAT_REAL_PRS);
+
     if (pressureControllerOuterLoopProcess(plan, lState, &lInspTarget) != PID_STATUS_OK) {
         return ACTUATOR_REQUEST_ERROR_STATE;
     }
@@ -257,6 +283,18 @@ int8_t pressureControllerProcess(const stBreathPlan *plan, stActuatorRequest *re
     lEffort = pressureControllerClamp(lEffort,
                                       0.0F,
                                       (float)PRESSURE_CONTROLLER_BLOWER_SPEED_SCALE);
+    if (lState == PRESSURE_CONTROLLER_INSP_HOLD) {
+        lEffort += pressureControllerClamp(
+            (plan->peepCmh2o -
+             PRESSURE_CONTROLLER_HOLD_FF_PEEP_START_CMH2O) *
+            PRESSURE_CONTROLLER_HOLD_FF_PEEP_GAIN,
+            0.0F,
+            PRESSURE_CONTROLLER_HOLD_FF_PEEP_MAX);
+        lEffort = pressureControllerClamp(
+            lEffort,
+            0.0F,
+            (float)PRESSURE_CONTROLLER_BLOWER_SPEED_SCALE);
+    }
     request->blowerTarget = (uint16_t)lEffort;
     request->expiratoryValveDuty = PRESSURE_CONTROLLER_EXP_VALVE_CLOSED_DUTY;
     request->validMask = ACTUATOR_REQUEST_VALID_BREATH_OUTPUTS;

@@ -1268,7 +1268,51 @@ def parse_args() -> argparse.Namespace:
         "--computer",
         help="Computer profile name from device_tool_config.json.",
     )
+    parser.add_argument(
+        "--headless",
+        action="store_true",
+        help="Run the complete RTT collection without opening the GUI.",
+    )
+    parser.add_argument(
+        "--output",
+        type=Path,
+        help="CSV output path used with --headless.",
+    )
     return parser.parse_args()
+
+
+def run_headless(profile: Dict[str, Any], output_path: Path) -> int:
+    events: "queue.Queue[tuple[str, Any]]" = queue.Queue()
+    stop = threading.Event()
+    collector = VentTestCollector(profile, events, stop)
+    worker = threading.Thread(target=collector.run)
+    worker.start()
+    failed = False
+    while worker.is_alive() or not events.empty():
+        try:
+            event, value = events.get(timeout=0.5)
+        except queue.Empty:
+            continue
+        if event == "log":
+            print(value, flush=True)
+        elif event == "error":
+            print("Error: " + value, flush=True)
+            failed = True
+    worker.join()
+    if failed or not collector.rows or not collector.waveform_fields:
+        return 1
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    fields = CSV_PREFIX_FIELDS + collector.waveform_fields
+    with output_path.open("w", encoding="utf-8-sig", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=fields)
+        writer.writeheader()
+        writer.writerows(collector.rows)
+    print(
+        f"CSV exported: {output_path} ({len(collector.rows)} rows, "
+        f"{len(collector.warnings)} warnings)",
+        flush=True,
+    )
+    return 0
 
 
 def main() -> int:
@@ -1282,6 +1326,12 @@ def main() -> int:
         messagebox.showerror("配置错误", str(exc))
         root.destroy()
         return 1
+
+    if args.headless:
+        if args.output is None:
+            print("Error: --output is required with --headless.")
+            return 2
+        return run_headless(profile, args.output)
 
     root = tk.Tk()
     VentTestApp(root, profile_name, profile)

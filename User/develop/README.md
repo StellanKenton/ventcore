@@ -39,6 +39,7 @@ py -3 user/develop/quick_deploy.py flash
 py -3 user/develop/quick_deploy.py reset
 py -3 user/develop/quick_deploy.py rtt
 py -3 user/develop/vent_test_gui.py
+py -3 user/develop/vent_test_gui.py --headless --output build/vent_test.csv
 ```
 
 Command behavior:
@@ -82,6 +83,11 @@ overlays all selected variables in one plot. Each variable independently scales
 its own Y range to the shared plot height, so signals with different units and
 magnitudes remain visible. Move the mouse across the plot to inspect the nearest
 curve's original sample time, value, and adaptive range.
+
+For automated bench runs, use `--headless --output <csv-path>`. This runs the
+same 25-group RTT sequence without opening Tk and exports the received waveform
+rows when collection completes. The command returns a nonzero status if RTT
+setup or collection fails.
 
 ## Config Notes
 

@@ -33,10 +33,8 @@ typedef struct stMonitorWaveformData {
     float tidalVolumeInspX10;
     float tidalVolumeExpX10;
 
-    /* Adaptive PEEP diagnostics. Feedforward values use the blower-target scale. */
-    float peepBaseFeedforwardX100;
-    float peepAdaptiveBiasX100;
-    float peepAdaptiveFeedforwardX100;
+    /* PEEP feedforward uses the blower-target scale. */
+    float peepFeedforwardX100;
     float peepFeedbackEffortX1;
     float expirationPressureSlopeX1;
 
