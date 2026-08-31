@@ -22,9 +22,12 @@ extern "C" {
 
 #define EXPIRATION_CONTROLLER_SAMPLE_PERIOD_S                         0.006F
 
-/* Fixed calibrated PEEP feedforward plus PI pressure feedback. */
+/*
+ * Fast PEEP feedback is P-only. The slow steady-state component is learned into
+ * adaptive feedforward, avoiding two competing integrators.
+ */
 #define EXPIRATION_CONTROLLER_PEEP_KP                                  0.20F
-#define EXPIRATION_CONTROLLER_PEEP_KI                                  0.03F
+#define EXPIRATION_CONTROLLER_PEEP_KI                                  0.0F
 #define EXPIRATION_CONTROLLER_PEEP_KD                                  0.0F
 #define EXPIRATION_CONTROLLER_PEEP_EFFORT_MIN                        (-1.0F)
 #define EXPIRATION_CONTROLLER_PEEP_EFFORT_MAX                          1.0F
@@ -42,6 +45,21 @@ extern "C" {
 #define EXPIRATION_CONTROLLER_PEEP_VALVE_OPEN_STEP_MAX                20.0F
 #define EXPIRATION_CONTROLLER_PEEP_VALVE_OPEN_SLOPE_GAIN               0.15F
 
+/*
+ * Online PEEP FF adaptation. calibtransPrsSpeed() remains the baseline; the
+ * learned FF is retained across breaths for the same PEEP and reset when the
+ * configured PEEP changes materially.
+ */
+#define EXPIRATION_CONTROLLER_PEEP_ADAPT_TARGET_CHANGE_RESET           0.5F
+#define EXPIRATION_CONTROLLER_PEEP_ADAPT_SETTLE_TIME_MS              400U
+#define EXPIRATION_CONTROLLER_PEEP_ADAPT_PRESSURE_WINDOW               5.0F
+#define EXPIRATION_CONTROLLER_PEEP_ADAPT_PRESSURE_DEADBAND             0.15F
+#define EXPIRATION_CONTROLLER_PEEP_ADAPT_SLOPE_MAX                     4.0F
+#define EXPIRATION_CONTROLLER_PEEP_ADAPT_GAIN_PER_CYCLE                0.60F
+#define EXPIRATION_CONTROLLER_PEEP_ADAPT_MAX_STEP_PER_CYCLE            2.0F
+#define EXPIRATION_CONTROLLER_PEEP_ADAPT_MIN_RATIO                     0.65F
+#define EXPIRATION_CONTROLLER_PEEP_ADAPT_MAX_RATIO                     1.35F
+
 #define EXPIRATION_CONTROLLER_EXP_VALVE_OPEN_DUTY                      0U
 #define EXPIRATION_CONTROLLER_EXP_VALVE_CLOSED_DUTY                  100U
 #define EXPIRATION_CONTROLLER_RELIEF_CLOSED_DUTY                      100U
@@ -55,10 +73,7 @@ extern "C" {
 #define EXPIRATION_CONTROLLER_PRESSURE_SLOPE_INTERVAL_S                 0.024F
 #define EXPIRATION_CONTROLLER_PRESSURE_HISTORY_COUNT                    5U
 
-/*
- * CAPTURE trajectory. Far from PEEP descent remains fast; near PEEP the allowed
- * slope is automatically reduced to damp the landing.
- */
+/* CAPTURE trajectory: fast far from PEEP, gentler in the last few cmH2O. */
 #define EXPIRATION_CONTROLLER_CAPTURE_SLOPE_K_FAR                       8.0F
 #define EXPIRATION_CONTROLLER_CAPTURE_SLOPE_K_NEAR                      4.0F
 #define EXPIRATION_CONTROLLER_CAPTURE_SLOPE_K_BLEND_ERROR               6.0F
@@ -85,7 +100,6 @@ extern "C" {
 #define EXPIRATION_CONTROLLER_CAPTURE_VALVE_OPEN_STEP_GAIN              0.08F
 #define EXPIRATION_CONTROLLER_CAPTURE_BLOWER_MAX_STEP                 800.0F
 
-/* CAPTURE -> PEEP handoff. Crossing PEEP is handled immediately in the source. */
 #define EXPIRATION_CONTROLLER_CAPTURE_PRESSURE_TOLERANCE                0.8F
 #define EXPIRATION_CONTROLLER_CAPTURE_STABLE_SLOPE_MAX                  8.0F
 #define EXPIRATION_CONTROLLER_CAPTURE_STABLE_SAMPLE_COUNT               3U
@@ -106,7 +120,9 @@ typedef enum {
 } eExpirationControllerState;
 
 typedef struct {
-    float peepFeedforwardTarget;
+    float peepBaseFeedforwardTarget;
+    float peepAdaptiveBiasTarget;
+    float peepAdaptiveFeedforwardTarget;
     float peepFeedbackEffort;
     float pressureSlopeCmh2oPerS;
 } stExpirationControllerDiagnostic;
