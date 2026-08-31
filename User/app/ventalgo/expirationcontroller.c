@@ -223,7 +223,7 @@ static int8_t expirationControllerCaptureProcess(const stBreathPlan *plan,
         return ACTUATOR_REQUEST_ERROR_STATE;
     }
     lBlowerFeedforward = expirationControllerClamp(
-        lBlowerFeedforward * 0.8F * 10.0F,
+        lBlowerFeedforward * 10.0F,
         0.0F,
         (float)EXPIRATION_CONTROLLER_BLOWER_TARGET_MAX);
 
@@ -387,7 +387,6 @@ static int8_t expirationControllerPeepProcess(const stBreathPlan *plan,
         CALIBTRANS_STATUS_OK) {
         return ACTUATOR_REQUEST_ERROR_STATE;
     }
-    lBlowerFeedforward = lBlowerFeedforward * 0.8F;
     lPatientPressure = controlDataGet(PAT_REAL_PRS);
     if (gExpirationPeepTrackPending != 0U) {
         lDesiredEffort = ((float)gExpirationBlowerTarget -
