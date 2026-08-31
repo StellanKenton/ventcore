@@ -32,15 +32,21 @@ typedef struct stMonitorWaveformData {
     float tidalVolumeX10;
     float tidalVolumeInspX10;
     float tidalVolumeExpX10;
+
+    /* Adaptive PEEP diagnostics. Feedforward values use the blower-target scale. */
+    float peepBaseFeedforwardX100;
+    float peepAdaptiveBiasX100;
+    float peepAdaptiveFeedforwardX100;
+    float peepFeedbackEffortX1;
+    float expirationPressureSlopeX1;
+
     uint16_t blowerTargetX100;
     uint8_t valveDutyX2;
     uint8_t phaseStateX1;
 } stMonitorWaveformData;
 
-/* Volatile storage allows debugger waveform tools to observe every update. */
 extern volatile stMonitorWaveformData gMonitorWaveformData;
 
-/* Refresh all waveform signals from the current data buses. */
 void monitorDataUpdate(void);
 
 #ifdef __cplusplus
