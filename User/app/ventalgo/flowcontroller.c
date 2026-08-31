@@ -97,14 +97,12 @@ int8_t flowControllerProcess(const stBreathPlan *plan, stActuatorRequest *reques
         gFlowPlanSequence = plan->sequence;
         gFlowControllerState = FLOW_CONTROLLER_IDLE;
     }
-    if (lPhase == PHASE_INSP_RISE) {
-        lState = FLOW_CONTROLLER_INSP_RISE;
-    } else if (lPhase == PHASE_INSP_HOLD) {
-        lState = FLOW_CONTROLLER_INSP_HOLD;
-    } else {
+    if (lPhase != PHASE_INSP) {
         flowControllerStateEnter(FLOW_CONTROLLER_IDLE);
         return ACTUATOR_REQUEST_ERROR_STATE;
     }
+    lState = (phaseControlGet(PHASE_REF_FLOW) > 0.0F) ?
+             FLOW_CONTROLLER_INSP_RISE : FLOW_CONTROLLER_INSP_HOLD;
     flowControllerStateEnter(lState);
 
     if (lState == FLOW_CONTROLLER_INSP_HOLD) {

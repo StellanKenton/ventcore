@@ -68,20 +68,32 @@ static int8_t actuatorControllerAutomaticRequestGet(stActuatorRequest *request)
     }
 
     lPhase = phaseControllerStateGet();
-    if ((lPhase == PHASE_EXP_RELEASE) || (lPhase == PHASE_EXP_PEEP)) {
-        lStatus = expirationControllerProcess(&lPlan,
-                                              lPhase,
-                                              &gActuatorControllerLastRequest,
-                                              request);
-    } else if ((lPhase == PHASE_INSP_RISE) || (lPhase == PHASE_INSP_HOLD)) {
-        if (lPlan.breathType == BREATH_TYPE_MANDATORY_VOLUME) {
-            lStatus = flowControllerProcess(&lPlan, request);
-        } else {
-            lStatus = pressureControllerProcess(&lPlan, request);
-        }
-    } else {
-        actuatorControllerSafeRequestSet(request);
-        return ACTUATOR_REQUEST_SUCCESS;
+    switch (lPhase) {
+        case PHASE_INSP:
+            switch (lPlan.breathType) {
+                case BREATH_TYPE_MANDATORY_VOLUME:
+                    lStatus = flowControllerProcess(&lPlan, request);
+                    break;
+                case BREATH_TYPE_MANDATORY_PRESSURE:
+                case BREATH_TYPE_SPONTANEOUS_PRESSURE_SUPPORT:
+                    lStatus = pressureControllerProcess(&lPlan, request);
+                    break;
+                default:
+                    actuatorControllerSafeRequestSet(request);
+                    return ACTUATOR_REQUEST_ERROR_STATE;
+            }
+            break;
+
+        case PHASE_EXP:
+            lStatus = expirationControllerProcess(&lPlan,
+                                                  &gActuatorControllerLastRequest,
+                                                  request);
+            break;
+
+        case PHASE_IDLE:
+        default:
+            actuatorControllerSafeRequestSet(request);
+            return ACTUATOR_REQUEST_SUCCESS;
     }
 
     if ((lStatus != ACTUATOR_REQUEST_SUCCESS) ||

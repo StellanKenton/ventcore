@@ -32,18 +32,14 @@ typedef enum {
 
 typedef enum {
     PHASE_IDLE = 0,
-    PHASE_INSP_RISE,
-    PHASE_INSP_HOLD,
-    PHASE_EXP_RELEASE,
-    PHASE_EXP_PEEP,
+    PHASE_INSP,
+    PHASE_EXP,
 } ePhaseControllerState;
 
 typedef struct stPhaseController {
     ePhaseControllerState runState;
-    uint32_t stateStartedMs;
     uint32_t inspirationStartedMs;
     uint32_t expirationStartedMs;
-    float inspRiseStartPressure;
     eBreathCycleReason cycleReason;
     uint8_t planValid;
     uint8_t breathStarted;
@@ -74,6 +70,9 @@ int8_t phaseControllerCycle(eBreathCycleReason cycleReason, uint32_t nowMs);
 
 /** Notify the phase executor that expiration capture is stable. */
 int8_t phaseControllerExpirationCaptureNotify(void);
+
+/** Return whether expiration has reached stable PEEP control. */
+uint8_t phaseControllerExpirationReadyGet(void);
 
 /** Return the reason recorded when the active inspiration ended. */
 eBreathCycleReason phaseControllerCycleReasonGet(void);

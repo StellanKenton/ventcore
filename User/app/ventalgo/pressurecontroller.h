@@ -20,6 +20,7 @@ extern "C" {
 #endif
 
 #define PRESSURE_CONTROLLER_SAMPLE_PERIOD_S          0.006F
+#define PRESSURE_CONTROLLER_SAMPLE_PERIOD_MS          6U
 #define PRESSURE_CONTROLLER_OUTER_KP                 0.2F
 #define PRESSURE_CONTROLLER_OUTER_KI                 0.0F
 #define PRESSURE_CONTROLLER_OUTER_KD                 0.0F

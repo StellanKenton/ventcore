@@ -53,8 +53,8 @@ void apneaEngineProcess(uint32_t nowMs)
         return;
     }
 
-    if ((lPhase == PHASE_INSP_RISE) &&
-        (gApneaEngine.previousPhase != PHASE_INSP_RISE)) {
+    if ((lPhase == PHASE_INSP) &&
+        (gApneaEngine.previousPhase != PHASE_INSP)) {
         if ((lPlan.triggerReason == BREATH_TRIGGER_REASON_PRESSURE) ||
             (lPlan.triggerReason == BREATH_TRIGGER_REASON_FLOW)) {
             gApneaEngine.state = APNEA_ENGINE_MONITORING;
@@ -81,7 +81,8 @@ void apneaEngineProcess(uint32_t nowMs)
         gApneaEngine.state = APNEA_ENGINE_ALARM;
         return;
     }
-    if ((lPhase == PHASE_EXP_PEEP) &&
+    if ((lPhase == PHASE_EXP) &&
+        (phaseControllerExpirationReadyGet() != 0U) &&
         (phaseControllerTrigger(BREATH_TRIGGER_REASON_APNEA_BACKUP, nowMs) ==
          PHASE_CONTROL_SUCCESS)) {
         gApneaEngine.state = APNEA_ENGINE_BACKUP;

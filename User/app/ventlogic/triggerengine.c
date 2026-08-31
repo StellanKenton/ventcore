@@ -82,7 +82,8 @@ void triggerEngineProcess(uint32_t nowMs)
     float lTriggerThreshold;
     bool lCandidate;
 
-    if ((lPhase != PHASE_EXP_PEEP) ||
+    if ((lPhase != PHASE_EXP) ||
+        (phaseControllerExpirationReadyGet() == 0U) ||
         (phaseControllerActivePlanGet(&lPlan) != PHASE_CONTROL_SUCCESS) ||
         ((lPlan.mode != VENT_MD_PAC) &&
          (lPlan.mode != VENT_MD_CPAP_PSV) &&
@@ -100,7 +101,7 @@ void triggerEngineProcess(uint32_t nowMs)
         return;
     }
 
-    if ((gTriggerEngine.previousPhase != PHASE_EXP_PEEP) ||
+    if ((gTriggerEngine.previousPhase != PHASE_EXP) ||
         (gTriggerEngine.planSequence != lPlan.sequence) ||
         (gTriggerEngine.state == TRIGGER_ENGINE_IDLE)) {
         triggerEngineSettlingEnter(&lPlan, lPatientPressure, lProximalFlow);

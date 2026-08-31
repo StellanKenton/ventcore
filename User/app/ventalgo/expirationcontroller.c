@@ -13,6 +13,7 @@
 
 #include "calibtrans.h"
 #include "controldata.h"
+#include "phasecontroller.h"
 #include "pid.h"
 
 static stPid gExpirationPeepPid;
@@ -218,6 +219,7 @@ static int8_t expirationControllerCaptureProcess(const stBreathPlan *plan,
             if (phaseControllerExpirationCaptureNotify() != PHASE_CONTROL_SUCCESS) {
                 return ACTUATOR_REQUEST_ERROR_STATE;
             }
+            expirationControllerStateEnter(EXPIRATION_CONTROLLER_PEEP, NULL);
         }
     } else {
         gExpirationCaptureStableCount = 0U;
@@ -347,12 +349,12 @@ static int8_t expirationControllerPeepProcess(const stBreathPlan *plan,
 }
 
 int8_t expirationControllerProcess(const stBreathPlan *plan,
-                                   ePhaseControllerState phase,
                                    const stActuatorRequest *previousRequest,
                                    stActuatorRequest *request)
 {
-    eExpirationControllerState lState;
-
+    if ((plan == NULL) || (request == NULL)) {
+        return ACTUATOR_REQUEST_ERROR_PARAM;
+    }
     expirationControllerRequestClear(request);
     if (gExpirationControllerReady == 0U) {
         return ACTUATOR_REQUEST_ERROR_STATE;
@@ -362,17 +364,11 @@ int8_t expirationControllerProcess(const stBreathPlan *plan,
         gExpirationPlanSequence = plan->sequence;
         gExpirationControllerState = EXPIRATION_CONTROLLER_IDLE;
     }
-    if (phase == PHASE_EXP_RELEASE) {
-        lState = (gExpirationControllerState == EXPIRATION_CONTROLLER_CAPTURE) ?
-                 EXPIRATION_CONTROLLER_CAPTURE : EXPIRATION_CONTROLLER_RELEASE;
-    } else if (phase == PHASE_EXP_PEEP) {
-        lState = EXPIRATION_CONTROLLER_PEEP;
-    } else {
-        expirationControllerStateEnter(EXPIRATION_CONTROLLER_IDLE, previousRequest);
-        return ACTUATOR_REQUEST_ERROR_STATE;
+    if (gExpirationControllerState == EXPIRATION_CONTROLLER_IDLE) {
+        expirationControllerStateEnter(EXPIRATION_CONTROLLER_RELEASE,
+                                       previousRequest);
     }
-    expirationControllerStateEnter(lState, previousRequest);
-    switch (lState) {
+    switch (gExpirationControllerState) {
         case EXPIRATION_CONTROLLER_RELEASE:
             return expirationControllerReleaseProcess(plan, request);
         case EXPIRATION_CONTROLLER_CAPTURE:

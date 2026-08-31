@@ -22,6 +22,8 @@ static uint8_t gPressureControllerReady;
 static ePressureControllerState gPressureControllerState;
 static stPressureControllerDiagnostic gPressureDiagnostic;
 static float gPressureFlowCompensation;
+static float gPressureRiseStartPressure;
+static uint32_t gPressureRiseElapsedMs;
 static uint32_t gPressurePlanSequence;
 
 /** Clamp a pressure-controller value to a configured range. */
@@ -79,6 +81,8 @@ void pressureControllerInit(void)
                                          (lInnerStatus == PID_STATUS_OK));
     gPressureControllerState = PRESSURE_CONTROLLER_IDLE;
     gPressureFlowCompensation = 0.0F;
+    gPressureRiseStartPressure = 0.0F;
+    gPressureRiseElapsedMs = 0U;
     gPressurePlanSequence = 0U;
     pressureControllerDiagnosticClear();
 }
@@ -94,6 +98,8 @@ static void pressureControllerStateEnter(ePressureControllerState state)
         (void)pidReset(&gPressureOuterPid);
         (void)pidReset(&gPressureInnerPid);
         gPressureFlowCompensation = 0.0F;
+        gPressureRiseStartPressure = controlDataGet(PAT_REAL_PRS);
+        gPressureRiseElapsedMs = 0U;
     } else if (state == PRESSURE_CONTROLLER_IDLE) {
         (void)pidReset(&gPressureOuterPid);
         (void)pidReset(&gPressureInnerPid);
@@ -202,13 +208,103 @@ static void pressureControllerHoldReliefProcess(stActuatorRequest *request)
         (uint8_t)((float)PRESSURE_CONTROLLER_EXP_VALVE_CLOSED_DUTY - lValveOpening);
 }
 
-int8_t pressureControllerProcess(const stBreathPlan *plan, stActuatorRequest *request)
+/** Run the shared pressure loops and produce the base inspiratory request. */
+static int8_t pressureControllerClosedLoopProcess(const stBreathPlan *plan,
+                                                  ePressureControllerState state,
+                                                  stActuatorRequest *request)
 {
-    ePhaseControllerState lPhase;
-    ePressureControllerState lState;
     float lBlowerFeedforward;
     float lEffort;
     float lInspTarget;
+
+    if (pressureControllerOuterLoopProcess(plan, state, &lInspTarget) !=
+        PID_STATUS_OK) {
+        return ACTUATOR_REQUEST_ERROR_STATE;
+    }
+    if (pressureControllerInnerLoopProcess(lInspTarget, &lEffort) != PID_STATUS_OK) {
+        return ACTUATOR_REQUEST_ERROR_STATE;
+    }
+    if (calibtransPrsSpeed(lInspTarget, &lBlowerFeedforward) !=
+        CALIBTRANS_STATUS_OK) {
+        return ACTUATOR_REQUEST_ERROR_STATE;
+    }
+
+    gPressureDiagnostic.innerEffort = lEffort;
+    gPressureDiagnostic.blowerFeedforward = lBlowerFeedforward;
+    lEffort = (lEffort * PRESSURE_CONTROLLER_BLOWER_SPEED_SCALE) +
+              (lBlowerFeedforward * 10.0F);
+    lEffort = pressureControllerClamp(lEffort,
+                                      0.0F,
+                                      (float)PRESSURE_CONTROLLER_BLOWER_SPEED_SCALE);
+    request->blowerTarget = (uint16_t)lEffort;
+    request->expiratoryValveDuty = PRESSURE_CONTROLLER_EXP_VALVE_CLOSED_DUTY;
+    request->validMask = ACTUATOR_REQUEST_VALID_BREATH_OUTPUTS;
+    return ACTUATOR_REQUEST_SUCCESS;
+}
+
+/** Produce the steady inspiratory-hold request. */
+static int8_t pressureControllerHoldProcess(const stBreathPlan *plan,
+                                            stActuatorRequest *request)
+{
+    int8_t lStatus;
+
+    (void)phaseControlSet(PHASE_REF_PRESSURE,
+                          plan->inspiratoryPressureCmh2o);
+    (void)phaseControlSet(PHASE_REF_FAST_PRESSURE,
+                          plan->inspiratoryPressureCmh2o);
+    lStatus = pressureControllerClosedLoopProcess(plan,
+                                                  PRESSURE_CONTROLLER_INSP_HOLD,
+                                                  request);
+    if (lStatus == ACTUATOR_REQUEST_SUCCESS) {
+        pressureControllerHoldReliefProcess(request);
+    }
+    return lStatus;
+}
+
+/** Produce the rising inspiratory-pressure request. */
+static int8_t pressureControllerRiseProcess(const stBreathPlan *plan,
+                                            stActuatorRequest *request)
+{
+    float lCurveProgress;
+    float lFastProgress;
+    float lPressureRange;
+    float lRemaining;
+    float lTimeProgress;
+
+    if ((plan->riseTimeMs == 0U) ||
+        (gPressureRiseElapsedMs >= plan->riseTimeMs)) {
+        pressureControllerStateEnter(PRESSURE_CONTROLLER_INSP_HOLD);
+        return pressureControllerHoldProcess(plan, request);
+    }
+
+    lTimeProgress = (float)gPressureRiseElapsedMs / (float)plan->riseTimeMs;
+    lRemaining = 1.0F - lTimeProgress;
+    /* Lightweight charging curve: about 61% at T/3 and 79% at T/2. */
+    lCurveProgress = 1.0F - ((lRemaining * lRemaining) *
+                            (0.65F + (0.35F * lRemaining)));
+    /* Reach 80% at T/3, then rise slowly to the target. */
+    if (lTimeProgress <= (1.0F / 3.0F)) {
+        lFastProgress = 2.4F * lTimeProgress;
+    } else {
+        lFastProgress = 0.7F + (0.3F * lTimeProgress);
+    }
+    lPressureRange = plan->inspiratoryPressureCmh2o -
+                     gPressureRiseStartPressure;
+    (void)phaseControlSet(PHASE_REF_PRESSURE,
+                          gPressureRiseStartPressure +
+                          (lPressureRange * lCurveProgress));
+    (void)phaseControlSet(PHASE_REF_FAST_PRESSURE,
+                          gPressureRiseStartPressure +
+                          (lPressureRange * lFastProgress));
+    gPressureRiseElapsedMs += PRESSURE_CONTROLLER_SAMPLE_PERIOD_MS;
+    return pressureControllerClosedLoopProcess(plan,
+                                               PRESSURE_CONTROLLER_INSP_RISE,
+                                               request);
+}
+
+int8_t pressureControllerProcess(const stBreathPlan *plan, stActuatorRequest *request)
+{
+    ePhaseControllerState lPhase;
 
     if ((plan == NULL) || (request == NULL)) {
         return ACTUATOR_REQUEST_ERROR_PARAM;
@@ -230,40 +326,27 @@ int8_t pressureControllerProcess(const stBreathPlan *plan, stActuatorRequest *re
         gPressurePlanSequence = plan->sequence;
         gPressureControllerState = PRESSURE_CONTROLLER_IDLE;
     }
-    if (lPhase == PHASE_INSP_RISE) {
-        lState = PRESSURE_CONTROLLER_INSP_RISE;
-    } else if (lPhase == PHASE_INSP_HOLD) {
-        lState = PRESSURE_CONTROLLER_INSP_HOLD;
-    } else {
-        pressureControllerStateEnter(PRESSURE_CONTROLLER_IDLE);
-        return ACTUATOR_REQUEST_ERROR_STATE;
+    switch (lPhase) {
+        case PHASE_INSP:
+            break;
+        case PHASE_IDLE:
+        case PHASE_EXP:
+        default:
+            pressureControllerStateEnter(PRESSURE_CONTROLLER_IDLE);
+            return ACTUATOR_REQUEST_ERROR_STATE;
     }
-    pressureControllerStateEnter(lState);
-
-    if (pressureControllerOuterLoopProcess(plan, lState, &lInspTarget) != PID_STATUS_OK) {
-        return ACTUATOR_REQUEST_ERROR_STATE;
+    switch (gPressureControllerState) {
+        case PRESSURE_CONTROLLER_IDLE:
+            pressureControllerStateEnter(PRESSURE_CONTROLLER_INSP_RISE);
+            return pressureControllerRiseProcess(plan, request);
+        case PRESSURE_CONTROLLER_INSP_RISE:
+            return pressureControllerRiseProcess(plan, request);
+        case PRESSURE_CONTROLLER_INSP_HOLD:
+            return pressureControllerHoldProcess(plan, request);
+        default:
+            pressureControllerStateEnter(PRESSURE_CONTROLLER_IDLE);
+            return ACTUATOR_REQUEST_ERROR_STATE;
     }
-    if (pressureControllerInnerLoopProcess(lInspTarget, &lEffort) != PID_STATUS_OK) {
-        return ACTUATOR_REQUEST_ERROR_STATE;
-    }
-    if (calibtransPrsSpeed(lInspTarget, &lBlowerFeedforward) != CALIBTRANS_STATUS_OK) {
-        return ACTUATOR_REQUEST_ERROR_STATE;
-    }
-
-    gPressureDiagnostic.innerEffort = lEffort;
-    gPressureDiagnostic.blowerFeedforward = lBlowerFeedforward;
-    lEffort = (lEffort * PRESSURE_CONTROLLER_BLOWER_SPEED_SCALE) +
-              (lBlowerFeedforward * 10.0F);
-    lEffort = pressureControllerClamp(lEffort,
-                                      0.0F,
-                                      (float)PRESSURE_CONTROLLER_BLOWER_SPEED_SCALE);
-    request->blowerTarget = (uint16_t)lEffort;
-    request->expiratoryValveDuty = PRESSURE_CONTROLLER_EXP_VALVE_CLOSED_DUTY;
-    request->validMask = ACTUATOR_REQUEST_VALID_BREATH_OUTPUTS;
-    if (lState == PRESSURE_CONTROLLER_INSP_HOLD) {
-        pressureControllerHoldReliefProcess(request);
-    }
-    return ACTUATOR_REQUEST_SUCCESS;
 }
 
 void pressureControllerDiagnosticGet(stPressureControllerDiagnostic *diagnostic)

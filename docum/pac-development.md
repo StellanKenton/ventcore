@@ -125,7 +125,7 @@ IDLE
 
 ### 阶段 3：实现呼气释放和 PEEP
 
-`PHASE_EXP_RELEASE` 与 `PHASE_EXP_PEEP` 应使用不同策略：前者快速卸压，后者维持 PEEP。`peepController` 可以输出呼气阀请求，但仍由 `actuatorController` 统一提交。
+全局相位在整个呼气期保持 `PHASE_EXP`。`expirationController` 在内部依次处理 `RELEASE`、`CAPTURE` 和 `PEEP`：快速卸压、捕获目标压力，再维持 PEEP；输出请求仍由 `actuatorController` 统一提交。
 
 需要明确以下行为：
 
@@ -138,7 +138,7 @@ IDLE
 
 ### 阶段 4：接入患者触发（第一版已完成）
 
-`triggerengine` 应在 `PHASE_EXP_PEEP` 中工作，输入优先使用已校准且专门滤波的数据：
+`triggerengine` 应在 `PHASE_EXP` 且 `expirationController` 已完成捕获后工作，输入优先使用已校准且专门滤波的数据：
 
 | 触发类型 | 建议输入 | 必需保护 |
 | --- | --- | --- |
@@ -147,7 +147,7 @@ IDLE
 
 当前 `INSP_FLOW_TRIGER_FILTERED` 仍是未校准的 SFM 吸气流量，不能在没有单位和方向验证的情况下直接当作患者触发量。触发成功后应向 `phaseController` 发送事件，不要由 `triggerengine` 自己修改全局相位对象。
 
-当前实现仅在 PAC 的 `PHASE_EXP_PEEP` 中建立基线和检测事件：进入 PEEP 后先用 8 个 VentTask 样本（约 48 ms）稳定基线，压力下降或近端吸气流量增量达到阈值并连续保持 3 个样本（约 18 ms）后，调用 `phaseControllerTrigger()`。候选成立期间冻结基线；相位控制器继续负责最小呼气锁定和触发类型校验。成功进入吸气后立即清除候选，因此一次努力只产生一次触发。
+当前实现仅在 PAC 的 `PHASE_EXP` 且呼气捕获完成后建立基线和检测事件：进入稳定 PEEP 后先用 8 个 VentTask 样本（约 48 ms）稳定基线，压力下降或近端吸气流量增量达到阈值并连续保持 3 个样本（约 18 ms）后，调用 `phaseControllerTrigger()`。候选成立期间冻结基线；相位控制器继续负责最小呼气锁定和触发类型校验。成功进入吸气后立即清除候选，因此一次努力只产生一次触发。
 
 RTT 台架命令如下，阈值参数使用百分之一单位，配置命令会先停止通气：
 

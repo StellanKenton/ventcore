@@ -42,10 +42,8 @@ typedef enum {
 
 typedef enum {
     MONITOR_STATE_IDLE = 0,
-    MONITOR_STATE_INSP_RISE,
-    MONITOR_STATE_INSP_HOLD,
-    MONITOR_STATE_EXP_RELEASE,
-    MONITOR_STATE_EXP_PEEP,
+    MONITOR_STATE_INSP,
+    MONITOR_STATE_EXP,
 } eMonitorEngineState;
 
 typedef struct stBreathResult {

@@ -47,7 +47,7 @@ void cycleEngineProcess(uint32_t nowMs)
     float lFlow;
     uint32_t lInspiratoryElapsedMs;
 
-    if (((lPhase != PHASE_INSP_RISE) && (lPhase != PHASE_INSP_HOLD)) ||
+    if ((lPhase != PHASE_INSP) ||
         (phaseControllerActivePlanGet(&lPlan) != PHASE_CONTROL_SUCCESS) ||
         (lPlan.breathType != BREATH_TYPE_SPONTANEOUS_PRESSURE_SUPPORT) ||
         (lPlan.cycleType != BREATH_CYCLE_TYPE_FLOW)) {
@@ -81,7 +81,7 @@ void cycleEngineProcess(uint32_t nowMs)
     if (lFlow > gCycleEngine.peakInspiratoryFlowLpm) {
         gCycleEngine.peakInspiratoryFlowLpm = lFlow;
     }
-    if ((lPhase != PHASE_INSP_HOLD) ||
+    if ((lInspiratoryElapsedMs < lPlan.riseTimeMs) ||
         (lInspiratoryElapsedMs < lPlan.minimumInspiratoryTimeMs) ||
         (gCycleEngine.peakInspiratoryFlowLpm <
          CYCLE_ENGINE_MINIMUM_PEAK_FLOW_LPM)) {

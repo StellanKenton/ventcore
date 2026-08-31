@@ -14,7 +14,6 @@
 
 #include "actuatorrequest.h"
 #include "breathscheduler.h"
-#include "phasecontroller.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -70,7 +69,6 @@ void expirationControllerInit(void);
 
 /** Produce one expiration actuator request for the active breath plan. */
 int8_t expirationControllerProcess(const stBreathPlan *plan,
-                                   ePhaseControllerState phase,
                                    const stActuatorRequest *previousRequest,
                                    stActuatorRequest *request);
 
