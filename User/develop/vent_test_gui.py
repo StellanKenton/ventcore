@@ -57,12 +57,14 @@ FIRMWARE_FIELD_NAMES = {
     "vte_x10": "tidalVolumeExpX10",
     "target_x100": "blowerTargetX100",
     "valve_x2": "valveDutyX2",
-    "phase_x1": "phaseStateX1",
+    "expiration_state": "expirationControllerState",
+    "pressure_state": "pressureControllerState",
 }
 FLOAT_FIRMWARE_FIELDS = set(FIRMWARE_FIELD_NAMES) - {
     "target_x100",
     "valve_x2",
-    "phase_x1",
+    "expiration_state",
+    "pressure_state",
 }
 EXPECTED_FIRMWARE_FIELDS = ["sequence", "time_ms", *FIRMWARE_FIELD_NAMES]
 CSV_NON_WAVEFORM_FIELDS = set(CSV_PREFIX_FIELDS) | {"sequence", "time_ms"}

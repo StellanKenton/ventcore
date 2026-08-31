@@ -72,6 +72,9 @@ int8_t expirationControllerProcess(const stBreathPlan *plan,
                                    const stActuatorRequest *previousRequest,
                                    stActuatorRequest *request);
 
+/** Return the current expiration-controller state. */
+eExpirationControllerState expirationControllerStateGet(void);
+
 #ifdef __cplusplus
 }
 #endif

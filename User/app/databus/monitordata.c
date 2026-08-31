@@ -6,6 +6,7 @@
 
 #include "actuatorcontroller.h"
 #include "controldata.h"
+#include "expirationcontroller.h"
 #include "phasecontroller.h"
 #include "monitorengine.h"
 #include "pressurecontroller.h"
@@ -36,7 +37,8 @@ void monitorDataUpdate(void) {
     gMonitorWaveformData.tidalVolumeX10 = monitorEngineGet(MONITOR_TIDA_VOL) / 10.0F;
     gMonitorWaveformData.tidalVolumeInspX10 = monitorEngineGet(MONITOR_TIDA_VOL_INSP) / 10.0F;
     gMonitorWaveformData.tidalVolumeExpX10 = monitorEngineGet(MONITOR_TIDA_VOL_EXP) / 10.0F;
-    gMonitorWaveformData.phaseStateX1 = (uint8_t)phaseControllerStateGet();
+    gMonitorWaveformData.expirationControllerState = expirationControllerStateGet();
+    gMonitorWaveformData.pressureControllerState = pressureControllerStateGet();
     if (actuatorControllerLastRequestGet(&lActuatorRequest) == ACTUATOR_REQUEST_SUCCESS) {
         gMonitorWaveformData.blowerTargetX100 = lActuatorRequest.blowerTarget / 100.0f;
         gMonitorWaveformData.valveDutyX2 = lActuatorRequest.expiratoryValveDuty /2.0f;

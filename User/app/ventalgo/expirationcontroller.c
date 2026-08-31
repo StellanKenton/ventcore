@@ -84,6 +84,11 @@ void expirationControllerInit(void)
     gExpirationCaptureStableCount = 0U;
 }
 
+eExpirationControllerState expirationControllerStateGet(void)
+{
+    return gExpirationControllerState;
+}
+
 /** Initialize the filtered patient-pressure history for release slope calculation. */
 static void expirationControllerPressureHistoryInit(float pressure) {
     uint8_t lIndex;
@@ -176,7 +181,7 @@ static int8_t expirationControllerCaptureProcess(const stBreathPlan *plan,
         return ACTUATOR_REQUEST_ERROR_STATE;
     }
     lBlowerFeedforward = expirationControllerClamp(
-        lBlowerFeedforward * 0.8F * 10.0F,
+        lBlowerFeedforward * 10.0F,
         0.0F,
         (float)EXPIRATION_CONTROLLER_BLOWER_TARGET_MAX);
     lValveTarget = expirationControllerClamp(
@@ -233,11 +238,13 @@ static int8_t expirationControllerCaptureProcess(const stBreathPlan *plan,
 /** Produce the fast-release request while approaching PEEP. */
 static int8_t expirationControllerReleaseProcess(const stBreathPlan *plan, stActuatorRequest *request)
 {
+    float lBlowerFeedforward;
     float lCaptureMargin;
     float lPatientPressure = controlDataGet(PAT_REAL_PRS);
     float lPressureError = lPatientPressure - plan->peepCmh2o;
     float lPressureSlope = expirationControllerPressureSlopeGet(lPatientPressure);
 
+    calibtransPrsSpeed(plan->peepCmh2o, &lBlowerFeedforward);
     lCaptureMargin = EXPIRATION_CONTROLLER_PEEP_BASE_MARGIN +
                      ((-lPressureSlope) * EXPIRATION_CONTROLLER_BRAKE_TIME_S);
     lCaptureMargin = expirationControllerClamp(
@@ -245,7 +252,7 @@ static int8_t expirationControllerReleaseProcess(const stBreathPlan *plan, stAct
         EXPIRATION_CONTROLLER_CAPTURE_MARGIN_MIN,
         EXPIRATION_CONTROLLER_CAPTURE_MARGIN_MAX);
     if (lPressureError > lCaptureMargin) {
-        gExpirationBlowerTarget = 0U;
+        gExpirationBlowerTarget = lBlowerFeedforward;
         gExpirationValveDuty = EXPIRATION_CONTROLLER_EXP_VALVE_OPEN_DUTY;
         request->blowerTarget = gExpirationBlowerTarget;
         request->expiratoryValveDuty = gExpirationValveDuty;
@@ -277,7 +284,6 @@ static int8_t expirationControllerPeepProcess(const stBreathPlan *plan,
         CALIBTRANS_STATUS_OK) {
         return ACTUATOR_REQUEST_ERROR_STATE;
     }
-    lBlowerFeedforward = lBlowerFeedforward*0.8;
     lPatientPressure = controlDataGet(PAT_REAL_PRS);
     if (gExpirationPeepTrackPending != 0U) {
         lDesiredEffort = ((float)gExpirationBlowerTarget -

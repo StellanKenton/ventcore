@@ -87,6 +87,11 @@ void pressureControllerInit(void)
     pressureControllerDiagnosticClear();
 }
 
+ePressureControllerState pressureControllerStateGet(void)
+{
+    return gPressureControllerState;
+}
+
 /** Reset inspiration state when a new rise begins. */
 static void pressureControllerStateEnter(ePressureControllerState state)
 {

@@ -141,12 +141,12 @@ static void ventTestStatusShow(void)
           (unsigned long)lFirstSequence,
           (unsigned long)lDroppedCount);
     LOG_R("VT_MONITOR_SCALE,float_fields=100");
-    LOG_R("sequence,time_ms,air_x2,o2_x2,prox_x2,pinsp_x1,ppeep_x1,pexp_x1,ppat_x1,blower_x10,pref_x1,fastref_x1,flowcomp_x1,pcorr_x1,effort_x1,ff_x1,vt_x10,vti_x10,vte_x10,target_x100,valve_x2,phase_x1");
+    LOG_R("sequence,time_ms,air_x2,o2_x2,prox_x2,pinsp_x1,ppeep_x1,pexp_x1,ppat_x1,blower_x10,pref_x1,fastref_x1,flowcomp_x1,pcorr_x1,effort_x1,ff_x1,vt_x10,vti_x10,vte_x10,target_x100,valve_x2,expiration_state,pressure_state");
     for (lIndex = 0U; lIndex < lCount; lIndex++) {
         const stMonitorWaveformData *lSample = &gVentTestTransientUpload[lIndex];
 
         lSequence = lFirstSequence + lIndex;
-        LOG_R("%lu,%lu,%ld,%ld,%ld,%ld,%ld,%ld,%ld,%ld,%ld,%ld,%ld,%ld,%ld,%ld,%ld,%ld,%ld,%u,%u,%u",
+        LOG_R("%lu,%lu,%ld,%ld,%ld,%ld,%ld,%ld,%ld,%ld,%ld,%ld,%ld,%ld,%ld,%ld,%ld,%ld,%ld,%u,%u,%u,%u",
               (unsigned long)lSequence,
               (unsigned long)(lSequence * VENT_TEST_TRANSIENT_SAMPLE_INTERVAL_MS),
               (long)ventTestCenti(lSample->airFlowX2),
@@ -168,7 +168,8 @@ static void ventTestStatusShow(void)
               (long)ventTestCenti(lSample->tidalVolumeExpX10),
               (unsigned int)lSample->blowerTargetX100,
               (unsigned int)lSample->valveDutyX2,
-              (unsigned int)lSample->phaseStateX1);
+              (unsigned int)lSample->expirationControllerState,
+              (unsigned int)lSample->pressureControllerState);
     }
     LOG_R("VT_TRANSIENT_END,count=%u", (unsigned int)lCount);
 }

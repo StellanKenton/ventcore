@@ -71,6 +71,9 @@ int8_t pressureControllerProcess(const stBreathPlan *plan, stActuatorRequest *re
 /** Copy the latest inspiratory-control diagnostic values. */
 void pressureControllerDiagnosticGet(stPressureControllerDiagnostic *diagnostic);
 
+/** Return the current pressure-controller state. */
+ePressureControllerState pressureControllerStateGet(void);
+
 #ifdef __cplusplus
 }
 #endif

@@ -8,6 +8,9 @@
 
 #include <stdint.h>
 
+#include "expirationcontroller.h"
+#include "pressurecontroller.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -34,7 +37,8 @@ typedef struct stMonitorWaveformData {
     float tidalVolumeExpX10;
     uint16_t blowerTargetX100;
     uint8_t valveDutyX2;
-    uint8_t phaseStateX1;
+    eExpirationControllerState expirationControllerState;
+    ePressureControllerState pressureControllerState;
 } stMonitorWaveformData;
 
 /* Volatile storage allows debugger waveform tools to observe every update. */
