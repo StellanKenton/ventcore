@@ -21,8 +21,6 @@ extern "C" {
 #define PHASE_CONTROL_SUCCESS             1
 #define PHASE_CONTROL_ERROR_PARAM         (-1)
 #define PHASE_CONTROL_ERROR_STATE         (-2)
-#define PHASE_EXP_PEEP_ENTRY_MARGIN       2.0F
-#define PHASE_EXP_RELEASE_MAX_TIME_MS     400U
 
 typedef enum {
     PHASE_NONE = 0,
@@ -49,6 +47,7 @@ typedef struct stPhaseController {
     eBreathCycleReason cycleReason;
     uint8_t planValid;
     uint8_t breathStarted;
+    uint8_t expirationCaptureComplete;
     stBreathPlan activePlan;
 } stPhaseController;
 
@@ -72,6 +71,9 @@ int8_t phaseControllerTrigger(eBreathTriggerReason triggerReason, uint32_t nowMs
 
 /** End a flow-cycled spontaneous inspiration and begin expiration. */
 int8_t phaseControllerCycle(eBreathCycleReason cycleReason, uint32_t nowMs);
+
+/** Notify the phase executor that expiration capture is stable. */
+int8_t phaseControllerExpirationCaptureNotify(void);
 
 /** Return the reason recorded when the active inspiration ended. */
 eBreathCycleReason phaseControllerCycleReasonGet(void);
