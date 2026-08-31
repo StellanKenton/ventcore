@@ -6,6 +6,7 @@
 
 #include "actuatorcontroller.h"
 #include "controldata.h"
+#include "expirationcontroller.h"
 #include "phasecontroller.h"
 #include "monitorengine.h"
 #include "pressurecontroller.h"
@@ -14,9 +15,11 @@ volatile stMonitorWaveformData gMonitorWaveformData;
 
 void monitorDataUpdate(void) {
     stActuatorRequest lActuatorRequest;
+    stExpirationControllerDiagnostic lExpirationDiagnostic;
     stPressureControllerDiagnostic lPressureDiagnostic;
 
     pressureControllerDiagnosticGet(&lPressureDiagnostic);
+    expirationControllerDiagnosticGet(&lExpirationDiagnostic);
 
     gMonitorWaveformData.airFlowX2 = controlDataGet(INSP_FLOW_FILTERED) / 2.0F;
     gMonitorWaveformData.oxygenFlowX2 = controlDataGet(O2_FLOW_FILTERED) / 2.0F;
@@ -36,10 +39,22 @@ void monitorDataUpdate(void) {
     gMonitorWaveformData.tidalVolumeX10 = monitorEngineGet(MONITOR_TIDA_VOL) / 10.0F;
     gMonitorWaveformData.tidalVolumeInspX10 = monitorEngineGet(MONITOR_TIDA_VOL_INSP) / 10.0F;
     gMonitorWaveformData.tidalVolumeExpX10 = monitorEngineGet(MONITOR_TIDA_VOL_EXP) / 10.0F;
+
+    gMonitorWaveformData.peepBaseFeedforwardX100 =
+        lExpirationDiagnostic.peepBaseFeedforwardTarget / 100.0F;
+    gMonitorWaveformData.peepAdaptiveBiasX100 =
+        lExpirationDiagnostic.peepAdaptiveBiasTarget / 100.0F;
+    gMonitorWaveformData.peepAdaptiveFeedforwardX100 =
+        lExpirationDiagnostic.peepAdaptiveFeedforwardTarget / 100.0F;
+    gMonitorWaveformData.peepFeedbackEffortX1 =
+        lExpirationDiagnostic.peepFeedbackEffort;
+    gMonitorWaveformData.expirationPressureSlopeX1 =
+        lExpirationDiagnostic.pressureSlopeCmh2oPerS;
+
     gMonitorWaveformData.phaseStateX1 = (uint8_t)phaseControllerStateGet();
     if (actuatorControllerLastRequestGet(&lActuatorRequest) == ACTUATOR_REQUEST_SUCCESS) {
-        gMonitorWaveformData.blowerTargetX100 = lActuatorRequest.blowerTarget / 100.0f;
-        gMonitorWaveformData.valveDutyX2 = lActuatorRequest.expiratoryValveDuty /2.0f;
+        gMonitorWaveformData.blowerTargetX100 = lActuatorRequest.blowerTarget / 100.0F;
+        gMonitorWaveformData.valveDutyX2 = lActuatorRequest.expiratoryValveDuty / 2.0F;
     }
 }
 
