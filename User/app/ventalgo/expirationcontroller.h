@@ -22,12 +22,9 @@ extern "C" {
 
 #define EXPIRATION_CONTROLLER_SAMPLE_PERIOD_S                         0.006F
 
-/*
- * Fast PEEP feedback is P-only. The slow steady-state component is learned into
- * adaptive feedforward, avoiding two competing integrators.
- */
+/* Fixed calibrated PEEP feedforward plus PI pressure feedback. */
 #define EXPIRATION_CONTROLLER_PEEP_KP                                  0.20F
-#define EXPIRATION_CONTROLLER_PEEP_KI                                  0.0F
+#define EXPIRATION_CONTROLLER_PEEP_KI                                  0.03F
 #define EXPIRATION_CONTROLLER_PEEP_KD                                  0.0F
 #define EXPIRATION_CONTROLLER_PEEP_EFFORT_MIN                        (-1.0F)
 #define EXPIRATION_CONTROLLER_PEEP_EFFORT_MAX                          1.0F
@@ -44,21 +41,6 @@ extern "C" {
 #define EXPIRATION_CONTROLLER_PEEP_VALVE_OPEN_STEP_BASE                8.0F
 #define EXPIRATION_CONTROLLER_PEEP_VALVE_OPEN_STEP_MAX                20.0F
 #define EXPIRATION_CONTROLLER_PEEP_VALVE_OPEN_SLOPE_GAIN               0.15F
-
-/*
- * Online PEEP FF adaptation. calibtransPrsSpeed() remains the baseline; the
- * learned FF is retained across breaths for the same PEEP and reset when the
- * configured PEEP changes materially.
- */
-#define EXPIRATION_CONTROLLER_PEEP_ADAPT_TARGET_CHANGE_RESET           0.5F
-#define EXPIRATION_CONTROLLER_PEEP_ADAPT_SETTLE_TIME_MS              400U
-#define EXPIRATION_CONTROLLER_PEEP_ADAPT_PRESSURE_WINDOW               5.0F
-#define EXPIRATION_CONTROLLER_PEEP_ADAPT_PRESSURE_DEADBAND             0.15F
-#define EXPIRATION_CONTROLLER_PEEP_ADAPT_SLOPE_MAX                     4.0F
-#define EXPIRATION_CONTROLLER_PEEP_ADAPT_GAIN_PER_CYCLE                0.60F
-#define EXPIRATION_CONTROLLER_PEEP_ADAPT_MAX_STEP_PER_CYCLE            2.0F
-#define EXPIRATION_CONTROLLER_PEEP_ADAPT_MIN_RATIO                     0.65F
-#define EXPIRATION_CONTROLLER_PEEP_ADAPT_MAX_RATIO                     1.35F
 
 #define EXPIRATION_CONTROLLER_EXP_VALVE_OPEN_DUTY                      0U
 #define EXPIRATION_CONTROLLER_EXP_VALVE_CLOSED_DUTY                  100U
@@ -120,9 +102,7 @@ typedef enum {
 } eExpirationControllerState;
 
 typedef struct {
-    float peepBaseFeedforwardTarget;
-    float peepAdaptiveBiasTarget;
-    float peepAdaptiveFeedforwardTarget;
+    float peepFeedforwardTarget;
     float peepFeedbackEffort;
     float pressureSlopeCmh2oPerS;
 } stExpirationControllerDiagnostic;
