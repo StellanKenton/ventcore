@@ -123,12 +123,22 @@ typedef enum {
     EXPIRATION_CONTROLLER_PEEP,
 } eExpirationControllerState;
 
+typedef struct {
+    float peepBaseFeedforwardTarget;
+    float peepAdaptiveBiasTarget;
+    float peepAdaptiveFeedforwardTarget;
+    float peepFeedbackEffort;
+    float pressureSlopeCmh2oPerS;
+} stExpirationControllerDiagnostic;
+
 void expirationControllerInit(void);
 
 int8_t expirationControllerProcess(const stBreathPlan *plan,
                                    ePhaseControllerState phase,
                                    const stActuatorRequest *previousRequest,
                                    stActuatorRequest *request);
+
+void expirationControllerDiagnosticGet(stExpirationControllerDiagnostic *diagnostic);
 
 #ifdef __cplusplus
 }
