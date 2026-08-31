@@ -22,15 +22,18 @@ extern "C" {
 
 #define EXPIRATION_CONTROLLER_SAMPLE_PERIOD_S                         0.006F
 
-/* PEEP pressure PI. Slow feedforward adaptation below removes steady PI bias. */
-#define EXPIRATION_CONTROLLER_PEEP_KP                                  0.25F
-#define EXPIRATION_CONTROLLER_PEEP_KI                                  0.05F
+/*
+ * PEEP feedback is intentionally P-only. Steady-state pressure bias is learned
+ * directly into the adaptive feedforward below, avoiding two competing integrators.
+ */
+#define EXPIRATION_CONTROLLER_PEEP_KP                                  0.20F
+#define EXPIRATION_CONTROLLER_PEEP_KI                                  0.0F
 #define EXPIRATION_CONTROLLER_PEEP_KD                                  0.0F
 #define EXPIRATION_CONTROLLER_PEEP_EFFORT_MIN                        (-1.0F)
 #define EXPIRATION_CONTROLLER_PEEP_EFFORT_MAX                          1.0F
 #define EXPIRATION_CONTROLLER_BLOWER_CORRECTION_SCALE                800.0F
 
-/* Pressure and positive-slope relief provide damping during PEEP recovery. */
+/* Static pressure relief plus positive dP/dt damping during PEEP recovery. */
 #define EXPIRATION_CONTROLLER_PEEP_RELIEF_DEADBAND                     0.5F
 #define EXPIRATION_CONTROLLER_PEEP_RELIEF_GAIN                        10.0F
 #define EXPIRATION_CONTROLLER_PEEP_RELIEF_MAX_OPENING                 40.0F
@@ -43,18 +46,19 @@ extern "C" {
 #define EXPIRATION_CONTROLLER_PEEP_VALVE_OPEN_SLOPE_GAIN               0.15F
 
 /*
- * Online feedforward trim. The calibration table remains the base feedforward;
- * a slow learned trim absorbs the sustained PI correction at one PEEP setting.
- * The trim is reset when the configured PEEP changes materially.
+ * Direct online FF learning.
+ * adaptiveFF starts from calibtransPrsSpeed() and is then changed directly by
+ * steady PEEP pressure error. Learning freezes during transient motion.
  */
 #define EXPIRATION_CONTROLLER_PEEP_ADAPT_TARGET_CHANGE_RESET           0.5F
-#define EXPIRATION_CONTROLLER_PEEP_ADAPT_SETTLE_TIME_MS              500U
-#define EXPIRATION_CONTROLLER_PEEP_ADAPT_PRESSURE_WINDOW               3.0F
+#define EXPIRATION_CONTROLLER_PEEP_ADAPT_SETTLE_TIME_MS              400U
+#define EXPIRATION_CONTROLLER_PEEP_ADAPT_PRESSURE_WINDOW               5.0F
+#define EXPIRATION_CONTROLLER_PEEP_ADAPT_PRESSURE_DEADBAND             0.15F
 #define EXPIRATION_CONTROLLER_PEEP_ADAPT_SLOPE_MAX                     4.0F
-#define EXPIRATION_CONTROLLER_PEEP_ADAPT_EFFORT_DEADBAND               0.05F
-#define EXPIRATION_CONTROLLER_PEEP_ADAPT_TRANSFER_PER_CYCLE            1.5F
-#define EXPIRATION_CONTROLLER_PEEP_ADAPT_TRIM_MIN                   (-1500.0F)
-#define EXPIRATION_CONTROLLER_PEEP_ADAPT_TRIM_MAX                    1500.0F
+#define EXPIRATION_CONTROLLER_PEEP_ADAPT_GAIN_PER_CYCLE                0.60F
+#define EXPIRATION_CONTROLLER_PEEP_ADAPT_MAX_STEP_PER_CYCLE            2.0F
+#define EXPIRATION_CONTROLLER_PEEP_ADAPT_MIN_RATIO                     0.65F
+#define EXPIRATION_CONTROLLER_PEEP_ADAPT_MAX_RATIO                     1.35F
 
 #define EXPIRATION_CONTROLLER_EXP_VALVE_OPEN_DUTY                      0U
 #define EXPIRATION_CONTROLLER_EXP_VALVE_CLOSED_DUTY                  100U
@@ -70,8 +74,8 @@ extern "C" {
 #define EXPIRATION_CONTROLLER_PRESSURE_HISTORY_COUNT                    5U
 
 /*
- * CAPTURE trajectory. Far from PEEP a steeper slope is allowed; near PEEP the
- * desired slope is reduced automatically to improve damping before handoff.
+ * CAPTURE trajectory. Far from PEEP descent remains fast; near PEEP the allowed
+ * slope is automatically reduced to damp the landing.
  */
 #define EXPIRATION_CONTROLLER_CAPTURE_SLOPE_K_FAR                       8.0F
 #define EXPIRATION_CONTROLLER_CAPTURE_SLOPE_K_NEAR                      4.0F
@@ -83,7 +87,7 @@ extern "C" {
 #define EXPIRATION_CONTROLLER_CAPTURE_PID_EFFORT_MIN                  (-1.0F)
 #define EXPIRATION_CONTROLLER_CAPTURE_PID_EFFORT_MAX                    1.0F
 
-/* Strong braking, gentler release: actuator asymmetry adds damping. */
+/* Strong braking, gentle reopening to suppress CAPTURE ringing. */
 #define EXPIRATION_CONTROLLER_CAPTURE_VALVE_CORRECTION_CLOSE_SCALE     60.0F
 #define EXPIRATION_CONTROLLER_CAPTURE_VALVE_CORRECTION_OPEN_SCALE      25.0F
 #define EXPIRATION_CONTROLLER_CAPTURE_VALVE_BASE_DUTY                  75.0F
@@ -119,10 +123,8 @@ typedef enum {
     EXPIRATION_CONTROLLER_PEEP,
 } eExpirationControllerState;
 
-/** Initialize the shared release and PEEP controller. */
 void expirationControllerInit(void);
 
-/** Produce one expiration actuator request for the active breath plan. */
 int8_t expirationControllerProcess(const stBreathPlan *plan,
                                    ePhaseControllerState phase,
                                    const stActuatorRequest *previousRequest,
