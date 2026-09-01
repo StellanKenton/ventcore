@@ -18,8 +18,6 @@
 
 static stPid gExpirationPeepPid;
 static stPid gExpirationReleaseBlowerPid;
-static stPid gExpirationReleaseValveOuterPid;
-static stPid gExpirationReleaseValveInnerPid;
 static uint8_t gExpirationControllerReady;
 static eExpirationControllerState gExpirationControllerState;
 static uint16_t gExpirationBlowerTarget;
@@ -31,7 +29,6 @@ static float gExpirationPressureHistory[EXPIRATION_CONTROLLER_PRESSURE_HISTORY_C
 static uint8_t gExpirationPressureHistoryIndex;
 static uint16_t gExpirationCaptureElapsedMs;
 static uint8_t gExpirationCaptureStableCount;
-static uint8_t gExpirationCaptureValveStartDuty;
 static uint8_t gExpirationPeepEntryValveStartDuty;
 static uint16_t gExpirationReleaseStableElapsedMs;
 
@@ -73,8 +70,6 @@ void expirationControllerInit(void)
 {
     int8_t lPeepStatus;
     int8_t lReleaseBlowerStatus;
-    int8_t lReleaseValveInnerStatus;
-    int8_t lReleaseValveOuterStatus;
 
     lPeepStatus = pidInit(&gExpirationPeepPid,
                           EXPIRATION_CONTROLLER_PEEP_KP,
@@ -91,27 +86,9 @@ void expirationControllerInit(void)
         EXPIRATION_CONTROLLER_SAMPLE_PERIOD_S,
         EXPIRATION_CONTROLLER_RELEASE_BLOWER_EFFORT_MIN,
         EXPIRATION_CONTROLLER_RELEASE_BLOWER_EFFORT_MAX);
-    lReleaseValveOuterStatus = pidInit(
-        &gExpirationReleaseValveOuterPid,
-        EXPIRATION_CONTROLLER_RELEASE_VALVE_OUTER_KP,
-        EXPIRATION_CONTROLLER_RELEASE_VALVE_OUTER_KI,
-        EXPIRATION_CONTROLLER_RELEASE_VALVE_OUTER_KD,
-        EXPIRATION_CONTROLLER_SAMPLE_PERIOD_S,
-        EXPIRATION_CONTROLLER_RELEASE_VALVE_TARGET_MIN,
-        EXPIRATION_CONTROLLER_RELEASE_VALVE_TARGET_MAX);
-    lReleaseValveInnerStatus = pidInit(
-        &gExpirationReleaseValveInnerPid,
-        EXPIRATION_CONTROLLER_RELEASE_VALVE_INNER_KP,
-        EXPIRATION_CONTROLLER_RELEASE_VALVE_INNER_KI,
-        EXPIRATION_CONTROLLER_RELEASE_VALVE_INNER_KD,
-        EXPIRATION_CONTROLLER_SAMPLE_PERIOD_S,
-        EXPIRATION_CONTROLLER_RELEASE_VALVE_EFFORT_MIN,
-        EXPIRATION_CONTROLLER_RELEASE_VALVE_EFFORT_MAX);
     gExpirationControllerReady = (uint8_t)(
         (lPeepStatus == PID_STATUS_OK) &&
-        (lReleaseBlowerStatus == PID_STATUS_OK) &&
-        (lReleaseValveOuterStatus == PID_STATUS_OK) &&
-        (lReleaseValveInnerStatus == PID_STATUS_OK));
+        (lReleaseBlowerStatus == PID_STATUS_OK));
     gExpirationControllerState = EXPIRATION_CONTROLLER_IDLE;
     gExpirationBlowerTarget = 0U;
     gExpirationValveDuty = EXPIRATION_CONTROLLER_EXP_VALVE_OPEN_DUTY;
@@ -121,7 +98,6 @@ void expirationControllerInit(void)
     gExpirationPressureHistoryIndex = 0U;
     gExpirationCaptureElapsedMs = 0U;
     gExpirationCaptureStableCount = 0U;
-    gExpirationCaptureValveStartDuty = EXPIRATION_CONTROLLER_EXP_VALVE_OPEN_DUTY;
     gExpirationPeepEntryValveStartDuty = EXPIRATION_CONTROLLER_EXP_VALVE_OPEN_DUTY;
     gExpirationReleaseStableElapsedMs = 0U;
 }
@@ -173,8 +149,6 @@ static void expirationControllerStateEnter(eExpirationControllerState state,
 
         (void)pidReset(&gExpirationPeepPid);
         (void)pidReset(&gExpirationReleaseBlowerPid);
-        (void)pidReset(&gExpirationReleaseValveOuterPid);
-        (void)pidReset(&gExpirationReleaseValveInnerPid);
         expirationControllerPressureHistoryInit(lPatientPressure);
         gExpirationCaptureElapsedMs = 0U;
         gExpirationCaptureStableCount = 0U;
@@ -191,7 +165,6 @@ static void expirationControllerStateEnter(eExpirationControllerState state,
     } else if (state == EXPIRATION_CONTROLLER_CAPTURE) {
         (void)pidReset(&gExpirationPeepPid);
         expirationControllerPressureHistoryInit(controlDataGet(PAT_REAL_PRS));
-        gExpirationCaptureValveStartDuty = gExpirationValveDuty;
         gExpirationCaptureElapsedMs = 0U;
         gExpirationCaptureStableCount = 0U;
         gExpirationPeepTrackPending = 0U;
@@ -216,8 +189,12 @@ static int8_t expirationControllerCaptureProcess(const stBreathPlan *plan,
 {
     float lBlowerFeedforward;
     float lPatientPressure = controlDataGet(PAT_REAL_PRS);
-    float lPressureError = lPatientPressure - plan->peepCmh2o;
     float lPressureSlope = expirationControllerPressureSlopeGet(lPatientPressure);
+    float lPressureError = lPatientPressure +
+                           (lPressureSlope *
+                            EXPIRATION_CONTROLLER_RELEASE_PREDICTION_TIME_S) -
+                           plan->peepCmh2o;
+    float lValveDuty;
 
     if (calibtransPrsSpeed(plan->peepCmh2o, &lBlowerFeedforward) !=
         CALIBTRANS_STATUS_OK) {
@@ -228,8 +205,25 @@ static int8_t expirationControllerCaptureProcess(const stBreathPlan *plan,
         0.0F,
         (float)EXPIRATION_CONTROLLER_BLOWER_TARGET_MAX);
     gExpirationBlowerTarget = lBlowerFeedforward;
-    /* Preserve the valve position that already held Ppat near PEEP in release. */
-    gExpirationValveDuty = gExpirationCaptureValveStartDuty;
+    /* Keep regulating during capture so a low entry duty cannot drain PEEP. */
+    lValveDuty = EXPIRATION_CONTROLLER_RELEASE_VALVE_BASE_OFFSET +
+                 plan->peepCmh2o +
+                 (-lPressureError * EXPIRATION_CONTROLLER_RELEASE_VALVE_KP);
+    lValveDuty = expirationControllerClamp(
+        lValveDuty,
+        EXPIRATION_CONTROLLER_RELEASE_VALVE_DUTY_MIN,
+        (float)EXPIRATION_CONTROLLER_EXP_VALVE_CLOSED_DUTY);
+    if (lValveDuty > (float)gExpirationValveDuty) {
+        gExpirationValveDuty = (uint8_t)expirationControllerMoveTowards(
+            (float)gExpirationValveDuty,
+            lValveDuty,
+            EXPIRATION_CONTROLLER_EXP_VALVE_CLOSE_MAX_STEP);
+    } else {
+        gExpirationValveDuty = (uint8_t)expirationControllerMoveTowards(
+            (float)gExpirationValveDuty,
+            lValveDuty,
+            EXPIRATION_CONTROLLER_RELEASE_VALVE_MAX_STEP);
+    }
     /* Confirm both pressure proximity and low motion before handing off to PEEP. */
     if (gExpirationCaptureElapsedMs < EXPIRATION_CONTROLLER_CAPTURE_RAMP_TIME_MS) {
         gExpirationCaptureElapsedMs +=
@@ -268,15 +262,17 @@ static int8_t expirationControllerReleaseProcess(const stBreathPlan *plan, stAct
     float lBlowerEffort;
     float lBlowerFeedforward;
     float lBlowerTarget;
-    float lExpPressure = controlDataGet(EXP_REAL_PRS);
-    float lExpTarget;
     float lInspPressure = controlDataGet(INSP_REAL_PRS);
     float lPatientPressure = controlDataGet(PAT_REAL_PRS);
     float lPatientReference = phaseControlGet(PHASE_REF_PRESSURE);
+    float lPressureSlope = expirationControllerPressureSlopeGet(lPatientPressure);
+    float lPressureError = lPatientPressure +
+                           (lPressureSlope *
+                            EXPIRATION_CONTROLLER_RELEASE_PREDICTION_TIME_S) -
+                           lPatientReference;
     float lPeepTolerance = plan->peepCmh2o *
                            EXPIRATION_CONTROLLER_RELEASE_CAPTURE_TOLERANCE_RATIO;
     float lValveDuty;
-    float lValveEffort;
 
     if (lPeepTolerance < 0.0F) {
         lPeepTolerance = -lPeepTolerance;
@@ -286,39 +282,29 @@ static int8_t expirationControllerReleaseProcess(const stBreathPlan *plan, stAct
         (pidUpdate(&gExpirationReleaseBlowerPid,
                    lPatientReference,
                    lInspPressure,
-                   &lBlowerEffort) != PID_STATUS_OK) ||
-        (pidUpdate(&gExpirationReleaseValveOuterPid,
-                   lPatientReference,
-                   lPatientPressure,
-                   &lExpTarget) != PID_STATUS_OK)) {
-        return ACTUATOR_REQUEST_ERROR_STATE;
-    }
-    lExpTarget = expirationControllerClamp(
-        lPatientReference + lExpTarget,
-        0.0F,
-        EXPIRATION_CONTROLLER_RELEASE_VALVE_TARGET_MAX);
-    if (pidUpdate(&gExpirationReleaseValveInnerPid,
-                  lExpTarget,
-                  lExpPressure,
-                  &lValveEffort) != PID_STATUS_OK) {
+                   &lBlowerEffort) != PID_STATUS_OK)) {
         return ACTUATOR_REQUEST_ERROR_STATE;
     }
 
     lBlowerTarget = lBlowerFeedforward +
                     (lBlowerEffort *
                      EXPIRATION_CONTROLLER_RELEASE_BLOWER_EFFORT_SCALE);
-    /* Negative effort must open the expiratory valve as Ppat rises above Pref. */
-    lValveDuty = (float)EXPIRATION_CONTROLLER_RELEASE_VALVE_DUTY +
-                 (lValveEffort *
-                  EXPIRATION_CONTROLLER_RELEASE_VALVE_EFFORT_SCALE);
+    /* Predicted patient pressure brakes the release before pneumatic lag overshoots. */
+    lValveDuty = EXPIRATION_CONTROLLER_RELEASE_VALVE_BASE_OFFSET +
+                 plan->peepCmh2o +
+                 (-lPressureError * EXPIRATION_CONTROLLER_RELEASE_VALVE_KP);
     gExpirationBlowerTarget = (uint16_t)expirationControllerClamp(
         lBlowerTarget,
         0.0F,
         (float)EXPIRATION_CONTROLLER_BLOWER_TARGET_MAX);
-    gExpirationValveDuty = (uint8_t)expirationControllerClamp(
+    lValveDuty = expirationControllerClamp(
         lValveDuty,
-        (float)EXPIRATION_CONTROLLER_EXP_VALVE_OPEN_DUTY,
+        EXPIRATION_CONTROLLER_RELEASE_VALVE_DUTY_MIN,
         (float)EXPIRATION_CONTROLLER_EXP_VALVE_CLOSED_DUTY);
+    gExpirationValveDuty = (uint8_t)expirationControllerMoveTowards(
+        (float)gExpirationValveDuty,
+        lValveDuty,
+        EXPIRATION_CONTROLLER_RELEASE_VALVE_MAX_STEP);
 
     if ((lPatientPressure >= (plan->peepCmh2o - lPeepTolerance)) &&
         (lPatientPressure <= (plan->peepCmh2o + lPeepTolerance))) {
