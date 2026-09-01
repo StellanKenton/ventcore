@@ -25,7 +25,6 @@ extern "C" {
 typedef enum {
     PHASE_NONE = 0,
     PHASE_REF_PRESSURE,
-    PHASE_REF_FAST_PRESSURE,
     PHASE_REF_FLOW,
     PHASE_COUNT,
 } ePhaseControlType;

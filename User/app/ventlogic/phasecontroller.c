@@ -20,7 +20,6 @@ static float gPhaseData[PHASE_COUNT];
 static void phaseControllerReferencesClear(void)
 {
     (void)phaseControlSet(PHASE_REF_PRESSURE, 0.0F);
-    (void)phaseControlSet(PHASE_REF_FAST_PRESSURE, 0.0F);
     (void)phaseControlSet(PHASE_REF_FLOW, 0.0F);
 }
 
@@ -85,7 +84,6 @@ static int8_t phaseControllerInspirationStart(eBreathTriggerReason triggerReason
     gPhaseController.breathStarted = 1U;
     gPhaseController.expirationCaptureComplete = 0U;
     (void)phaseControlSet(PHASE_REF_PRESSURE, lPatientPressure);
-    (void)phaseControlSet(PHASE_REF_FAST_PRESSURE, lPatientPressure);
     if (gPhaseController.activePlan.breathType == BREATH_TYPE_MANDATORY_VOLUME) {
         (void)phaseControlSet(PHASE_REF_FLOW,
                               gPhaseController.activePlan.inspiratoryFlowLpm);
@@ -259,7 +257,6 @@ void phaseControllerProcess(uint32_t nowMs)
         case PHASE_EXP:
             lPeepPressure = gPhaseController.activePlan.peepCmh2o;
             (void)phaseControlSet(PHASE_REF_PRESSURE, lPeepPressure);
-            (void)phaseControlSet(PHASE_REF_FAST_PRESSURE, lPeepPressure);
             (void)phaseControlSet(PHASE_REF_FLOW, 0.0F);
             lExpirationElapsedMs = nowMs - gPhaseController.expirationStartedMs;
             if ((gPhaseController.activePlan.timeTriggerEnabled != 0U) &&

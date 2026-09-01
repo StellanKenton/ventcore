@@ -259,10 +259,10 @@ static int8_t expirationControllerReleaseProcess(const stBreathPlan *plan, stAct
         request->expiratoryValveDuty = gExpirationValveDuty;
         request->validMask = ACTUATOR_REQUEST_VALID_BREATH_OUTPUTS;
         return ACTUATOR_REQUEST_SUCCESS;
-    }
-
-    expirationControllerStateEnter(EXPIRATION_CONTROLLER_CAPTURE, NULL);
-    return expirationControllerCaptureProcess(plan, request);
+    } else {
+        expirationControllerStateEnter(EXPIRATION_CONTROLLER_CAPTURE, NULL);
+        return expirationControllerCaptureProcess(plan, request);
+    }  
 }
 
 /** Produce the closed-loop PEEP request. */

@@ -47,7 +47,6 @@ FIRMWARE_FIELD_NAMES = {
     "ppat_x1": "patientPressureX1",
     "blower_x10": "blowerSpeedX10",
     "pref_x1": "patientRefPressureX1",
-    "fastref_x1": "fastRefX1",
     "flowcomp_x1": "flowCompensationX1",
     "pcorr_x1": "patientCorrectionX1",
     "effort_x1": "innerEffortX1",

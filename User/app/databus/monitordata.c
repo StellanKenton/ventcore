@@ -29,7 +29,6 @@ void monitorDataUpdate(void) {
     gMonitorWaveformData.predictedPressureX1 = controlDataGet(PREDICT_PAT_PRS);
     gMonitorWaveformData.blowerSpeedX10 = controlDataGet(RAW_BLOWER_SPEED) / 10.0F;
     gMonitorWaveformData.patientRefPressureX1 = phaseControlGet(PHASE_REF_PRESSURE);
-    gMonitorWaveformData.fastRefX1 = phaseControlGet(PHASE_REF_FAST_PRESSURE);
     gMonitorWaveformData.flowCompensationX1 = lPressureDiagnostic.flowCompensation;
     gMonitorWaveformData.patientCorrectionX1 = lPressureDiagnostic.patientCorrection;
     gMonitorWaveformData.innerEffortX1 = lPressureDiagnostic.innerEffort;

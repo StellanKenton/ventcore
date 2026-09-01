@@ -255,8 +255,6 @@ static int8_t pressureControllerHoldProcess(const stBreathPlan *plan,
 
     (void)phaseControlSet(PHASE_REF_PRESSURE,
                           plan->inspiratoryPressureCmh2o);
-    (void)phaseControlSet(PHASE_REF_FAST_PRESSURE,
-                          plan->inspiratoryPressureCmh2o);
     lStatus = pressureControllerClosedLoopProcess(plan,
                                                   PRESSURE_CONTROLLER_INSP_HOLD,
                                                   request);
@@ -271,7 +269,6 @@ static int8_t pressureControllerRiseProcess(const stBreathPlan *plan,
                                             stActuatorRequest *request)
 {
     float lCurveProgress;
-    float lFastProgress;
     float lPressureRange;
     float lRemaining;
     float lTimeProgress;
@@ -287,20 +284,11 @@ static int8_t pressureControllerRiseProcess(const stBreathPlan *plan,
     /* Lightweight charging curve: about 61% at T/3 and 79% at T/2. */
     lCurveProgress = 1.0F - ((lRemaining * lRemaining) *
                             (0.65F + (0.35F * lRemaining)));
-    /* Reach 80% at T/3, then rise slowly to the target. */
-    if (lTimeProgress <= (1.0F / 3.0F)) {
-        lFastProgress = 2.4F * lTimeProgress;
-    } else {
-        lFastProgress = 0.7F + (0.3F * lTimeProgress);
-    }
     lPressureRange = plan->inspiratoryPressureCmh2o -
                      gPressureRiseStartPressure;
     (void)phaseControlSet(PHASE_REF_PRESSURE,
                           gPressureRiseStartPressure +
                           (lPressureRange * lCurveProgress));
-    (void)phaseControlSet(PHASE_REF_FAST_PRESSURE,
-                          gPressureRiseStartPressure +
-                          (lPressureRange * lFastProgress));
     gPressureRiseElapsedMs += PRESSURE_CONTROLLER_SAMPLE_PERIOD_MS;
     return pressureControllerClosedLoopProcess(plan,
                                                PRESSURE_CONTROLLER_INSP_RISE,
