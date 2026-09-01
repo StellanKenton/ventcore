@@ -50,6 +50,11 @@ static uint32_t pressureControllerEffectiveRiseTimeGet(const stBreathPlan *plan)
         PRESSURE_CONTROLLER_INSP_TARGET_MAX);
     lRiseTimeMs = (lPressureRange * 1000.0F) /
                   PRESSURE_CONTROLLER_REFERENCE_SLEW_MAX;
+    if ((lPressureRange >= PRESSURE_CONTROLLER_RISE_MIN_DELTA) &&
+        (lPressureRange <= PRESSURE_CONTROLLER_RISE_MIN_DELTA_MAX) &&
+        (lRiseTimeMs < PRESSURE_CONTROLLER_RISE_MIN_TIME_MS)) {
+        lRiseTimeMs = PRESSURE_CONTROLLER_RISE_MIN_TIME_MS;
+    }
     lRiseTimeMs = pressureControllerClamp(
         lRiseTimeMs,
         (float)plan->riseTimeMs,
@@ -131,7 +136,7 @@ static void pressureControllerStateEnter(ePressureControllerState state)
     } else if (state == PRESSURE_CONTROLLER_INSP_HOLD) {
         (void)pidSetTunings(&gPressureOuterPid,
                             PRESSURE_CONTROLLER_OUTER_HOLD_KP,
-                            PRESSURE_CONTROLLER_OUTER_HOLD_KI,
+                            PRESSURE_CONTROLLER_OUTER_KI,
                             PRESSURE_CONTROLLER_OUTER_KD);
     } else if (state == PRESSURE_CONTROLLER_IDLE) {
         (void)pidReset(&gPressureOuterPid);

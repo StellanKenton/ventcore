@@ -192,7 +192,7 @@ static int8_t expirationControllerCaptureProcess(const stBreathPlan *plan,
     float lPressureSlope = expirationControllerPressureSlopeGet(lPatientPressure);
     float lPressureError = lPatientPressure +
                            (lPressureSlope *
-                            EXPIRATION_CONTROLLER_RELEASE_PREDICTION_TIME_S) -
+                            EXPIRATION_CONTROLLER_CAPTURE_PREDICTION_TIME_S) -
                            plan->peepCmh2o;
     float lValveDuty;
 
@@ -206,9 +206,9 @@ static int8_t expirationControllerCaptureProcess(const stBreathPlan *plan,
         (float)EXPIRATION_CONTROLLER_BLOWER_TARGET_MAX);
     gExpirationBlowerTarget = lBlowerFeedforward;
     /* Keep regulating during capture so a low entry duty cannot drain PEEP. */
-    lValveDuty = EXPIRATION_CONTROLLER_RELEASE_VALVE_BASE_OFFSET +
+    lValveDuty = EXPIRATION_CONTROLLER_CAPTURE_VALVE_BASE_OFFSET +
                  plan->peepCmh2o +
-                 (-lPressureError * EXPIRATION_CONTROLLER_RELEASE_VALVE_KP);
+                 (-lPressureError * EXPIRATION_CONTROLLER_CAPTURE_VALVE_KP);
     lValveDuty = expirationControllerClamp(
         lValveDuty,
         EXPIRATION_CONTROLLER_RELEASE_VALVE_DUTY_MIN,
@@ -217,12 +217,12 @@ static int8_t expirationControllerCaptureProcess(const stBreathPlan *plan,
         gExpirationValveDuty = (uint8_t)expirationControllerMoveTowards(
             (float)gExpirationValveDuty,
             lValveDuty,
-            EXPIRATION_CONTROLLER_EXP_VALVE_CLOSE_MAX_STEP);
+            EXPIRATION_CONTROLLER_CAPTURE_VALVE_MAX_STEP);
     } else {
         gExpirationValveDuty = (uint8_t)expirationControllerMoveTowards(
             (float)gExpirationValveDuty,
             lValveDuty,
-            EXPIRATION_CONTROLLER_RELEASE_VALVE_MAX_STEP);
+            EXPIRATION_CONTROLLER_CAPTURE_VALVE_MAX_STEP);
     }
     /* Confirm both pressure proximity and low motion before handing off to PEEP. */
     if (gExpirationCaptureElapsedMs < EXPIRATION_CONTROLLER_CAPTURE_RAMP_TIME_MS) {
