@@ -38,6 +38,25 @@ static float pressureControllerClamp(float value, float minimum, float maximum)
     return value;
 }
 
+/** Return a rise duration that keeps the pressure reference achievable. */
+static uint32_t pressureControllerEffectiveRiseTimeGet(const stBreathPlan *plan)
+{
+    float lPressureRange;
+    float lRiseTimeMs;
+
+    lPressureRange = pressureControllerClamp(
+        plan->inspiratoryPressureCmh2o - plan->peepCmh2o,
+        0.0F,
+        PRESSURE_CONTROLLER_INSP_TARGET_MAX);
+    lRiseTimeMs = (lPressureRange * 1000.0F) /
+                  PRESSURE_CONTROLLER_REFERENCE_SLEW_MAX;
+    lRiseTimeMs = pressureControllerClamp(
+        lRiseTimeMs,
+        (float)plan->riseTimeMs,
+        (float)plan->maximumInspiratoryTimeMs);
+    return (uint32_t)lRiseTimeMs;
+}
+
 /** Clear the latest inspiratory diagnostic values. */
 static void pressureControllerDiagnosticClear(void)
 {
@@ -100,11 +119,20 @@ static void pressureControllerStateEnter(ePressureControllerState state)
     }
     gPressureControllerState = state;
     if (state == PRESSURE_CONTROLLER_INSP_RISE) {
+        (void)pidSetTunings(&gPressureOuterPid,
+                            PRESSURE_CONTROLLER_OUTER_KP,
+                            PRESSURE_CONTROLLER_OUTER_KI,
+                            PRESSURE_CONTROLLER_OUTER_KD);
         (void)pidReset(&gPressureOuterPid);
         (void)pidReset(&gPressureInnerPid);
         gPressureFlowCompensation = 0.0F;
         gPressureRiseStartPressure = controlDataGet(PAT_REAL_PRS);
         gPressureRiseElapsedMs = 0U;
+    } else if (state == PRESSURE_CONTROLLER_INSP_HOLD) {
+        (void)pidSetTunings(&gPressureOuterPid,
+                            PRESSURE_CONTROLLER_OUTER_HOLD_KP,
+                            PRESSURE_CONTROLLER_OUTER_HOLD_KI,
+                            PRESSURE_CONTROLLER_OUTER_KD);
     } else if (state == PRESSURE_CONTROLLER_IDLE) {
         (void)pidReset(&gPressureOuterPid);
         (void)pidReset(&gPressureInnerPid);
@@ -124,6 +152,10 @@ static int8_t pressureControllerOuterLoopProcess(const stBreathPlan *plan,
     float lPatientPressure;
     float lPatientReference;
     float lPressureLimit;
+    float lRiseDelta;
+    float lRiseLead;
+    float lRiseProgress;
+    uint32_t lRiseTimeMs;
     int8_t lStatus;
 
     if ((plan == NULL) || (inspTarget == NULL)) {
@@ -171,9 +203,28 @@ static int8_t pressureControllerOuterLoopProcess(const stBreathPlan *plan,
         return lStatus;
     }
 
+    lRiseLead = 0.0F;
+    if ((state == PRESSURE_CONTROLLER_INSP_RISE) &&
+        (plan->riseTimeMs > 0U)) {
+        lRiseTimeMs = pressureControllerEffectiveRiseTimeGet(plan);
+        lRiseProgress = pressureControllerClamp(
+            (float)gPressureRiseElapsedMs / (float)lRiseTimeMs,
+            0.0F,
+            1.0F);
+        lRiseDelta = pressureControllerClamp(
+            (plan->inspiratoryPressureCmh2o - plan->peepCmh2o) -
+            PRESSURE_CONTROLLER_RISE_LEAD_DELTA_DEADBAND,
+            0.0F,
+            PRESSURE_CONTROLLER_INSP_TARGET_MAX);
+        lRiseLead = lRiseDelta *
+                    PRESSURE_CONTROLLER_RISE_LEAD_RATIO *
+                    (4.0F * lRiseProgress * (1.0F - lRiseProgress));
+    }
+
     *inspTarget = pressureControllerClamp(lPatientReference +
                                           gPressureFlowCompensation +
-                                          lInspCorrection,
+                                          lInspCorrection +
+                                          lRiseLead,
                                           PRESSURE_CONTROLLER_INSP_TARGET_MIN,
                                           pressureControllerClamp(lPressureLimit,
                                                                   PRESSURE_CONTROLLER_INSP_TARGET_MIN,
@@ -270,20 +321,19 @@ static int8_t pressureControllerRiseProcess(const stBreathPlan *plan,
 {
     float lCurveProgress;
     float lPressureRange;
-    float lRemaining;
     float lTimeProgress;
+    uint32_t lRiseTimeMs;
 
-    if ((plan->riseTimeMs == 0U) ||
-        (gPressureRiseElapsedMs >= plan->riseTimeMs)) {
+    lRiseTimeMs = pressureControllerEffectiveRiseTimeGet(plan);
+    if ((lRiseTimeMs == 0U) ||
+        (gPressureRiseElapsedMs >= lRiseTimeMs)) {
         pressureControllerStateEnter(PRESSURE_CONTROLLER_INSP_HOLD);
         return pressureControllerHoldProcess(plan, request);
     }
 
-    lTimeProgress = (float)gPressureRiseElapsedMs / (float)plan->riseTimeMs;
-    lRemaining = 1.0F - lTimeProgress;
-    /* Lightweight charging curve: about 61% at T/3 and 79% at T/2. */
-    lCurveProgress = 1.0F - ((lRemaining * lRemaining) *
-                            (0.65F + (0.35F * lRemaining)));
+    lTimeProgress = (float)gPressureRiseElapsedMs / (float)lRiseTimeMs;
+    lCurveProgress = (lTimeProgress * lTimeProgress) *
+                     (3.0F - (2.0F * lTimeProgress));
     lPressureRange = plan->inspiratoryPressureCmh2o -
                      gPressureRiseStartPressure;
     (void)phaseControlSet(PHASE_REF_PRESSURE,
