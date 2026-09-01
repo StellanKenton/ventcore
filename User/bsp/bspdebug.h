@@ -12,10 +12,9 @@
 
 #include <stdbool.h>
 
-#define BSP_DEBUG_BLOWER_SPEED_MAX_RPS       1000U
-#define BSP_DEBUG_BLOWER_SPEED_SCALE         10U
+#define BSP_DEBUG_BLOWER_SPEED_MAX_RPS        800U
 #define BSP_DEBUG_BLOWER_PWM_MAX_PERCENT     100U
-#define BSP_DEBUG_BLOWER_PWM_SCALE           100U
+#define BSP_DEBUG_BLOWER_PWM_SCALE            10U
 
 #ifdef __cplusplus
 extern "C" {

@@ -168,7 +168,6 @@ static int8_t expirationControllerCaptureProcess(const stBreathPlan *plan,
                                                   stActuatorRequest *request)
 {
     float lBlowerFeedforward;
-    float lBlowerProgress = 0.0F;
     float lCaptureProgress;
     float lCaptureValveDuty;
     float lPatientPressure = controlDataGet(PAT_REAL_PRS);
@@ -181,7 +180,7 @@ static int8_t expirationControllerCaptureProcess(const stBreathPlan *plan,
         return ACTUATOR_REQUEST_ERROR_STATE;
     }
     lBlowerFeedforward = expirationControllerClamp(
-        lBlowerFeedforward * 10.0F,
+        lBlowerFeedforward,
         0.0F,
         (float)EXPIRATION_CONTROLLER_BLOWER_TARGET_MAX);
     lValveTarget = expirationControllerClamp(
@@ -195,13 +194,8 @@ static int8_t expirationControllerCaptureProcess(const stBreathPlan *plan,
         1.0F);
     lCaptureValveDuty = lValveTarget * lCaptureProgress;
     /* Close the expiratory valve first, then ramp the blower to feedforward. */
-    if (lCaptureValveDuty >= EXPIRATION_CONTROLLER_CAPTURE_BLOWER_START_DUTY) {
-        lBlowerProgress =
-            (lCaptureValveDuty - EXPIRATION_CONTROLLER_CAPTURE_BLOWER_START_DUTY) /
-            (lValveTarget - EXPIRATION_CONTROLLER_CAPTURE_BLOWER_START_DUTY);
-    }
 
-    gExpirationBlowerTarget = (uint16_t)(lBlowerFeedforward * lBlowerProgress);
+    gExpirationBlowerTarget = lBlowerFeedforward;
     gExpirationValveDuty = (uint8_t)lCaptureValveDuty;
     /* Confirm both pressure proximity and low motion before handing off to PEEP. */
     if (gExpirationCaptureElapsedMs < EXPIRATION_CONTROLLER_CAPTURE_RAMP_TIME_MS) {
@@ -287,7 +281,7 @@ static int8_t expirationControllerPeepProcess(const stBreathPlan *plan,
     lPatientPressure = controlDataGet(PAT_REAL_PRS);
     if (gExpirationPeepTrackPending != 0U) {
         lDesiredEffort = ((float)gExpirationBlowerTarget -
-                          (lBlowerFeedforward * 10.0F)) /
+                          lBlowerFeedforward) /
                          EXPIRATION_CONTROLLER_BLOWER_CORRECTION_SCALE;
         if (pidTrackOutput(&gExpirationPeepPid,
                            plan->peepCmh2o,
@@ -304,7 +298,7 @@ static int8_t expirationControllerPeepProcess(const stBreathPlan *plan,
         return ACTUATOR_REQUEST_ERROR_STATE;
     }
 
-    lBlowerTarget = (lBlowerFeedforward * 10.0F) +
+    lBlowerTarget = lBlowerFeedforward +
                     (lEffort * EXPIRATION_CONTROLLER_BLOWER_CORRECTION_SCALE);
     lBlowerTarget = expirationControllerClamp(
         lBlowerTarget,

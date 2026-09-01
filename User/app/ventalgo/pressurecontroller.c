@@ -237,7 +237,7 @@ static int8_t pressureControllerClosedLoopProcess(const stBreathPlan *plan,
     gPressureDiagnostic.innerEffort = lEffort;
     gPressureDiagnostic.blowerFeedforward = lBlowerFeedforward;
     lEffort = (lEffort * PRESSURE_CONTROLLER_BLOWER_SPEED_SCALE) +
-              (lBlowerFeedforward * 10.0F);
+              lBlowerFeedforward;
     lEffort = pressureControllerClamp(lEffort,
                                       0.0F,
                                       (float)PRESSURE_CONTROLLER_BLOWER_SPEED_SCALE);

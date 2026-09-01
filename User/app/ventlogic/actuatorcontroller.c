@@ -140,7 +140,7 @@ void actuatorControllerProcess(void)
     gActuatorControllerLastRequest = lRequest;
     repRtosExitCritical();
 
-    (void)blowerVcmSendControl(lBlowerMode, lBlowerTarget, lBlowerSaturation);
+    (void)blowerVcmSendControl(lBlowerMode, lBlowerTarget * 10U, lBlowerSaturation);
     (void)dvalveDutySet(DVALVE_IDX_EXP, lRequest.expiratoryValveDuty);
     if ((lRequest.validMask & ACTUATOR_REQUEST_VALID_OXYGEN_VALVE) != 0U) {
         (void)dvalveDutySet(DVALVE_IDX_O2, lRequest.oxygenValveDuty);

@@ -138,11 +138,11 @@ int8_t flowControllerProcess(const stBreathPlan *plan, stActuatorRequest *reques
         return ACTUATOR_REQUEST_ERROR_STATE;
     }
 
-    lEffort = (lBlowerFeedforward * 10.0F) +
+    lEffort = lBlowerFeedforward +
               (lEffort * FLOW_CONTROLLER_BLOWER_SPEED_SCALE);
     lEffort = flowControllerClamp(lEffort,
                                   0.0F,
-                                  flowControllerClamp(lBlowerMaximum * 10.0F,
+                                  flowControllerClamp(lBlowerMaximum,
                                                       0.0F,
                                                       (float)FLOW_CONTROLLER_BLOWER_SPEED_SCALE));
     request->blowerTarget = (uint16_t)lEffort;

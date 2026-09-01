@@ -171,7 +171,7 @@ static void bspDebugUsageShow(void)
     LOG_I(gBspDebugTag, "adc: bsp a|adc <sfcur|flow|hw|3v3|temp|24v|peepcur|insp|5v|peep|exp|mdiff|o2cur|26v>");
     LOG_I(gBspDebugTag, "valve: bsp v|valve <insp|exp|diff|flush> [0|1]");
     LOG_I(gBspDebugTag, "dvalve: bsp d|dv|dvalve <o2|relief> <0-100> | exp <0-100|auto>");
-    LOG_I(gBspDebugTag, "blower: bsp blower <speed 0-1000|pwm 0-100|auto|stats>");
+    LOG_I(gBspDebugTag, "blower: bsp blower <speed 0-800|pwm 0-100|auto|stats>");
 }
 
 /**
@@ -360,7 +360,7 @@ static eConsoleCommandResult bspDebugBlowerCommand(const char *arguments)
     if (bspDebugTokenEqual(lModeToken, lModeLength, "speed") &&
         bspDebugUint16Parse(lValueToken, lValueLength, BSP_DEBUG_BLOWER_SPEED_MAX_RPS, &lValue)) {
         lMode = BLOWER_CTRL_SPEED;
-        lTarget = (uint16_t)(lValue * BSP_DEBUG_BLOWER_SPEED_SCALE);
+        lTarget = lValue;
     } else if (bspDebugTokenEqual(lModeToken, lModeLength, "pwm") &&
                bspDebugUint16Parse(lValueToken, lValueLength, BSP_DEBUG_BLOWER_PWM_MAX_PERCENT, &lValue)) {
         lMode = BLOWER_CTRL_PWM;
