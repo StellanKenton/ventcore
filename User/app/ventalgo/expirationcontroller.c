@@ -187,7 +187,11 @@ static void expirationControllerStateEnter(eExpirationControllerState state,
 static int8_t expirationControllerCaptureProcess(const stBreathPlan *plan,
                                                   stActuatorRequest *request)
 {
+    float lBlowerEffort;
     float lBlowerFeedforward;
+    float lBlowerCorrectionScale;
+    float lBlowerTarget;
+    float lCaptureTolerance;
     float lPatientPressure = controlDataGet(PAT_REAL_PRS);
     float lPressureSlope = expirationControllerPressureSlopeGet(lPatientPressure);
     float lPressureError = lPatientPressure +
@@ -196,23 +200,51 @@ static int8_t expirationControllerCaptureProcess(const stBreathPlan *plan,
                            plan->peepCmh2o;
     float lValveDuty;
 
-    if (calibtransPrsSpeed(plan->peepCmh2o, &lBlowerFeedforward) !=
-        CALIBTRANS_STATUS_OK) {
+    if ((calibtransPrsSpeed(plan->peepCmh2o, &lBlowerFeedforward) !=
+         CALIBTRANS_STATUS_OK) ||
+        (pidUpdate(&gExpirationPeepPid,
+                   plan->peepCmh2o,
+                   lPatientPressure,
+                   &lBlowerEffort) != PID_STATUS_OK)) {
         return ACTUATOR_REQUEST_ERROR_STATE;
     }
-    lBlowerFeedforward = expirationControllerClamp(
-        lBlowerFeedforward,
+    lBlowerCorrectionScale =
+        EXPIRATION_CONTROLLER_CAPTURE_BLOWER_SCALE_MAX -
+        ((plan->peepCmh2o -
+          EXPIRATION_CONTROLLER_CAPTURE_BLOWER_SCALE_PEEP_BASE) *
+         EXPIRATION_CONTROLLER_CAPTURE_BLOWER_SCALE_PEEP_GAIN);
+    lBlowerCorrectionScale = expirationControllerClamp(
+        lBlowerCorrectionScale,
+        EXPIRATION_CONTROLLER_CAPTURE_BLOWER_SCALE_MIN,
+        EXPIRATION_CONTROLLER_CAPTURE_BLOWER_SCALE_MAX);
+    lBlowerTarget = lBlowerFeedforward +
+                    (lBlowerEffort *
+                     lBlowerCorrectionScale);
+    lBlowerTarget = expirationControllerClamp(
+        lBlowerTarget,
         0.0F,
         (float)EXPIRATION_CONTROLLER_BLOWER_TARGET_MAX);
-    gExpirationBlowerTarget = lBlowerFeedforward;
+    gExpirationBlowerTarget = (uint16_t)expirationControllerMoveTowards(
+        (float)gExpirationBlowerTarget,
+        lBlowerTarget,
+        EXPIRATION_CONTROLLER_BLOWER_MAX_STEP);
     /* Keep regulating during capture so a low entry duty cannot drain PEEP. */
     lValveDuty = EXPIRATION_CONTROLLER_CAPTURE_VALVE_BASE_OFFSET +
-                 plan->peepCmh2o +
+                 (plan->peepCmh2o *
+                  EXPIRATION_CONTROLLER_CAPTURE_VALVE_PRESSURE_GAIN) +
                  (-lPressureError * EXPIRATION_CONTROLLER_CAPTURE_VALVE_KP);
     lValveDuty = expirationControllerClamp(
         lValveDuty,
         EXPIRATION_CONTROLLER_RELEASE_VALVE_DUTY_MIN,
         (float)EXPIRATION_CONTROLLER_EXP_VALVE_CLOSED_DUTY);
+    lCaptureTolerance = EXPIRATION_CONTROLLER_CAPTURE_TOLERANCE_MAX -
+        ((plan->peepCmh2o -
+          EXPIRATION_CONTROLLER_CAPTURE_TOLERANCE_PEEP_BASE) *
+         EXPIRATION_CONTROLLER_CAPTURE_TOLERANCE_PEEP_GAIN);
+    lCaptureTolerance = expirationControllerClamp(
+        lCaptureTolerance,
+        EXPIRATION_CONTROLLER_CAPTURE_TOLERANCE_MIN,
+        EXPIRATION_CONTROLLER_CAPTURE_TOLERANCE_MAX);
     if (lValveDuty > (float)gExpirationValveDuty) {
         gExpirationValveDuty = (uint8_t)expirationControllerMoveTowards(
             (float)gExpirationValveDuty,
@@ -228,10 +260,8 @@ static int8_t expirationControllerCaptureProcess(const stBreathPlan *plan,
     if (gExpirationCaptureElapsedMs < EXPIRATION_CONTROLLER_CAPTURE_RAMP_TIME_MS) {
         gExpirationCaptureElapsedMs +=
             (uint16_t)(EXPIRATION_CONTROLLER_SAMPLE_PERIOD_S * 1000.0F);
-    } else if ((lPressureError >=
-                (-EXPIRATION_CONTROLLER_CAPTURE_PRESSURE_TOLERANCE)) &&
-               (lPressureError <=
-                EXPIRATION_CONTROLLER_CAPTURE_PRESSURE_TOLERANCE) &&
+    } else if ((lPressureError >= (-lCaptureTolerance)) &&
+               (lPressureError <= lCaptureTolerance) &&
                (lPressureSlope >=
                 (-EXPIRATION_CONTROLLER_CAPTURE_STABLE_SLOPE_MAX)) &&
                (lPressureSlope <=
