@@ -164,9 +164,15 @@ int8_t phaseControllerTrigger(eBreathTriggerReason triggerReason, uint32_t nowMs
 static void phaseControllerExpirationStart(eBreathCycleReason cycleReason,
                                            uint32_t nowMs)
 {
+    float lPeakPressure = gPhaseController.activePlan.inspiratoryPressureCmh2o;
+
+    if (lPeakPressure < gPhaseController.activePlan.peepCmh2o) {
+        lPeakPressure = gPhaseController.activePlan.peepCmh2o;
+    }
     gPhaseController.cycleReason = cycleReason;
     gPhaseController.expirationStartedMs = nowMs;
     gPhaseController.expirationCaptureComplete = 0U;
+    (void)phaseControlSet(PHASE_REF_PRESSURE, lPeakPressure);
     gPhaseController.runState = PHASE_EXP;
 }
 
@@ -226,10 +232,37 @@ static void phaseControllerVolumeInspirationProcess(uint32_t nowMs)
     }
 }
 
+/** Process the pressure reference fall from peak pressure to PEEP. */
+static void phaseControllerPressureFallProcess(uint32_t expirationElapsedMs)
+{
+    float lCurveRemaining;
+    float lDeltaPressure = gPhaseController.activePlan.inspiratoryPressureCmh2o -
+                           gPhaseController.activePlan.peepCmh2o;
+    float lRemaining;
+    float lTimeProgress;
+
+    if ((gPhaseController.breathStarted == 0U) ||
+        (lDeltaPressure <= 0.0F) ||
+        (expirationElapsedMs >= PHASE_PRESSURE_FALL_TIME_MS)) {
+        (void)phaseControlSet(PHASE_REF_PRESSURE,
+                              gPhaseController.activePlan.peepCmh2o);
+        return;
+    }
+
+    lTimeProgress = (float)expirationElapsedMs /
+                    (float)PHASE_PRESSURE_FALL_TIME_MS;
+    lRemaining = 1.0F - lTimeProgress;
+    /* Lightweight discharge curve: about 39% at T/3 and 21% at T/2. */
+    lCurveRemaining = (lRemaining * lRemaining) *
+                      (0.65F + (0.35F * lRemaining));
+    (void)phaseControlSet(PHASE_REF_PRESSURE,
+                          gPhaseController.activePlan.peepCmh2o +
+                          (lDeltaPressure * lCurveRemaining));
+}
+
 void phaseControllerProcess(uint32_t nowMs)
 {
     uint32_t lExpirationElapsedMs;
-    float lPeepPressure;
 
     if (breathSchedulerRunningGet() == 0U) {
         phaseControllerIdleEnter();
@@ -255,10 +288,9 @@ void phaseControllerProcess(uint32_t nowMs)
             break;
 
         case PHASE_EXP:
-            lPeepPressure = gPhaseController.activePlan.peepCmh2o;
-            (void)phaseControlSet(PHASE_REF_PRESSURE, lPeepPressure);
-            (void)phaseControlSet(PHASE_REF_FLOW, 0.0F);
             lExpirationElapsedMs = nowMs - gPhaseController.expirationStartedMs;
+            phaseControllerPressureFallProcess(lExpirationElapsedMs);
+            (void)phaseControlSet(PHASE_REF_FLOW, 0.0F);
             if ((gPhaseController.activePlan.timeTriggerEnabled != 0U) &&
                 (lExpirationElapsedMs >= gPhaseController.activePlan.expiratoryTimeMs)) {
                 if (phaseControllerInspirationStart(BREATH_TRIGGER_REASON_TIME, nowMs) !=

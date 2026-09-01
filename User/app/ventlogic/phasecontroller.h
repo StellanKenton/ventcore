@@ -21,6 +21,7 @@ extern "C" {
 #define PHASE_CONTROL_SUCCESS             1
 #define PHASE_CONTROL_ERROR_PARAM         (-1)
 #define PHASE_CONTROL_ERROR_STATE         (-2)
+#define PHASE_PRESSURE_FALL_TIME_MS        168U
 
 typedef enum {
     PHASE_NONE = 0,
