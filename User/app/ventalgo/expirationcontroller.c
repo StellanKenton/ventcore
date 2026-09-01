@@ -145,7 +145,7 @@ static void expirationControllerStateEnter(eExpirationControllerState state,
     } else if (state == EXPIRATION_CONTROLLER_CAPTURE) {
         (void)pidReset(&gExpirationPeepPid);
         gExpirationBlowerTarget = 0U;
-        gExpirationValveDuty = EXPIRATION_CONTROLLER_EXP_VALVE_OPEN_DUTY;
+        gExpirationValveDuty = EXPIRATION_CONTROLLER_RELEASE_VALVE_DUTY;
         gExpirationCaptureElapsedMs = 0U;
         gExpirationCaptureStableCount = 0U;
         gExpirationPeepTrackPending = 0U;
@@ -170,6 +170,7 @@ static int8_t expirationControllerCaptureProcess(const stBreathPlan *plan,
     float lBlowerFeedforward;
     float lCaptureProgress;
     float lCaptureValveDuty;
+    float lRemaining;
     float lPatientPressure = controlDataGet(PAT_REAL_PRS);
     float lPressureError = lPatientPressure - plan->peepCmh2o;
     float lPressureSlope = expirationControllerPressureSlopeGet(lPatientPressure);
@@ -192,7 +193,13 @@ static int8_t expirationControllerCaptureProcess(const stBreathPlan *plan,
         (float)EXPIRATION_CONTROLLER_CAPTURE_RAMP_TIME_MS,
         0.0F,
         1.0F);
-    lCaptureValveDuty = lValveTarget * lCaptureProgress;
+    lRemaining = 1.0F - lCaptureProgress;
+    /* Close quickly at first, then slow down toward the target. */
+    lCaptureProgress = 1.0F - (lRemaining * lRemaining);
+    lCaptureValveDuty =
+        (float)EXPIRATION_CONTROLLER_RELEASE_VALVE_DUTY +
+        ((lValveTarget - (float)EXPIRATION_CONTROLLER_RELEASE_VALVE_DUTY) *
+         lCaptureProgress);
     /* Close the expiratory valve first, then ramp the blower to feedforward. */
 
     gExpirationBlowerTarget = lBlowerFeedforward;
@@ -247,7 +254,7 @@ static int8_t expirationControllerReleaseProcess(const stBreathPlan *plan, stAct
         EXPIRATION_CONTROLLER_CAPTURE_MARGIN_MAX);
     if (lPressureError > lCaptureMargin) {
         gExpirationBlowerTarget = lBlowerFeedforward;
-        gExpirationValveDuty = EXPIRATION_CONTROLLER_EXP_VALVE_OPEN_DUTY;
+        gExpirationValveDuty = EXPIRATION_CONTROLLER_RELEASE_VALVE_DUTY;
         request->blowerTarget = gExpirationBlowerTarget;
         request->expiratoryValveDuty = gExpirationValveDuty;
         request->validMask = ACTUATOR_REQUEST_VALID_BREATH_OUTPUTS;
