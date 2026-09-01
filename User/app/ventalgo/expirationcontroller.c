@@ -338,7 +338,9 @@ static int8_t expirationControllerPeepProcess(const stBreathPlan *plan,
     float lEffort;
     float lEntryProgress;
     float lExcessPressure;
+    float lValveClosing;
     float lValveDuty;
+    float lValveDutyBase;
     float lValveDutyMaximum;
     float lValveOpening;
     float lPatientPressure;
@@ -380,29 +382,43 @@ static int8_t expirationControllerPeepProcess(const stBreathPlan *plan,
         lValveOpening,
         0.0F,
         EXPIRATION_CONTROLLER_PEEP_RELIEF_MAX_OPENING);
-    lValveDuty = (float)EXPIRATION_CONTROLLER_EXP_VALVE_CLOSED_DUTY - lValveOpening;
+    lValveClosing = ((-lExcessPressure) -
+                     EXPIRATION_CONTROLLER_PEEP_SUPPORT_DEADBAND) *
+                    EXPIRATION_CONTROLLER_PEEP_SUPPORT_GAIN;
+    lValveClosing = expirationControllerClamp(
+        lValveClosing,
+        0.0F,
+        EXPIRATION_CONTROLLER_PEEP_SUPPORT_MAX_CLOSING);
+    lValveDutyBase = expirationControllerClamp(
+        EXPIRATION_CONTROLLER_PEEP_VALVE_BASE_OFFSET +
+        (plan->peepCmh2o * EXPIRATION_CONTROLLER_PEEP_VALVE_PRESSURE_GAIN),
+        0.0F,
+        (float)EXPIRATION_CONTROLLER_EXP_VALVE_CLOSED_DUTY);
+    lValveDuty = expirationControllerClamp(
+        lValveDutyBase + lValveClosing - lValveOpening,
+        0.0F,
+        (float)EXPIRATION_CONTROLLER_EXP_VALVE_CLOSED_DUTY);
     lEntryProgress = expirationControllerClamp(
         (float)gExpirationPeepEntryElapsedMs /
         EXPIRATION_CONTROLLER_PEEP_ENTRY_RAMP_TIME_MS,
         0.0F,
         1.0F);
-    lValveDutyMaximum = (float)gExpirationPeepEntryValveStartDuty +
-                        (((float)EXPIRATION_CONTROLLER_EXP_VALVE_CLOSED_DUTY -
-                          (float)gExpirationPeepEntryValveStartDuty) *
-                         lEntryProgress);
+    lValveDutyMaximum = expirationControllerClamp(
+        (float)gExpirationPeepEntryValveStartDuty +
+        ((lValveDutyBase - (float)gExpirationPeepEntryValveStartDuty) *
+         lEntryProgress) +
+        lValveClosing,
+        0.0F,
+        (float)EXPIRATION_CONTROLLER_EXP_VALVE_CLOSED_DUTY);
     lValveDuty = expirationControllerClamp(lValveDuty, 0.0F, lValveDutyMaximum);
     gExpirationBlowerTarget = (uint16_t)expirationControllerMoveTowards(
         (float)gExpirationBlowerTarget,
         lBlowerTarget,
         EXPIRATION_CONTROLLER_BLOWER_MAX_STEP);
-    if (lValveDuty < (float)gExpirationValveDuty) {
-        gExpirationValveDuty = (uint8_t)lValveDuty;
-    } else {
-        gExpirationValveDuty = (uint8_t)expirationControllerMoveTowards(
-            (float)gExpirationValveDuty,
-            lValveDuty,
-            EXPIRATION_CONTROLLER_EXP_VALVE_CLOSE_MAX_STEP);
-    }
+    gExpirationValveDuty = (uint8_t)expirationControllerMoveTowards(
+        (float)gExpirationValveDuty,
+        lValveDuty,
+        EXPIRATION_CONTROLLER_PEEP_VALVE_MAX_STEP);
     if (gExpirationPeepEntryElapsedMs <
         (uint16_t)EXPIRATION_CONTROLLER_PEEP_ENTRY_RAMP_TIME_MS) {
         gExpirationPeepEntryElapsedMs +=
