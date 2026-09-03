@@ -193,12 +193,48 @@ static int8_t expirationControllerCaptureProcess(const stBreathPlan *plan,
     float lBlowerTarget;
     float lCaptureTolerance;
     float lPatientPressure = controlDataGet(PAT_REAL_PRS);
+    float lPredictionTime;
+    float lPressureError;
     float lPressureSlope = expirationControllerPressureSlopeGet(lPatientPressure);
-    float lPressureError = lPatientPressure +
-                           (lPressureSlope *
-                            EXPIRATION_CONTROLLER_CAPTURE_PREDICTION_TIME_S) -
-                           plan->peepCmh2o;
+    float lValveDeadband;
     float lValveDuty;
+    float lValveError;
+    float lValveGain;
+
+    lPredictionTime = EXPIRATION_CONTROLLER_CAPTURE_PREDICTION_TIME_MAX -
+        ((plan->peepCmh2o -
+          EXPIRATION_CONTROLLER_CAPTURE_PREDICTION_PEEP_BASE) *
+         EXPIRATION_CONTROLLER_CAPTURE_PREDICTION_PEEP_GAIN);
+    lPredictionTime = expirationControllerClamp(
+        lPredictionTime,
+        EXPIRATION_CONTROLLER_CAPTURE_PREDICTION_TIME_MIN,
+        EXPIRATION_CONTROLLER_CAPTURE_PREDICTION_TIME_MAX);
+    lPressureError = lPatientPressure +
+                     (lPressureSlope * lPredictionTime) -
+                     plan->peepCmh2o;
+    lValveGain = EXPIRATION_CONTROLLER_CAPTURE_VALVE_KP_MAX -
+        ((plan->peepCmh2o -
+          EXPIRATION_CONTROLLER_CAPTURE_VALVE_KP_PEEP_BASE) *
+         EXPIRATION_CONTROLLER_CAPTURE_VALVE_KP_PEEP_GAIN);
+    lValveGain = expirationControllerClamp(
+        lValveGain,
+        EXPIRATION_CONTROLLER_CAPTURE_VALVE_KP_MIN,
+        EXPIRATION_CONTROLLER_CAPTURE_VALVE_KP_MAX);
+    lValveDeadband = EXPIRATION_CONTROLLER_CAPTURE_VALVE_DEADBAND_MIN +
+        ((plan->peepCmh2o -
+          EXPIRATION_CONTROLLER_CAPTURE_VALVE_DEADBAND_PEEP_BASE) *
+         EXPIRATION_CONTROLLER_CAPTURE_VALVE_DEADBAND_PEEP_GAIN);
+    lValveDeadband = expirationControllerClamp(
+        lValveDeadband,
+        EXPIRATION_CONTROLLER_CAPTURE_VALVE_DEADBAND_MIN,
+        EXPIRATION_CONTROLLER_CAPTURE_VALVE_DEADBAND_MAX);
+    if (lPressureError > lValveDeadband) {
+        lValveError = lPressureError - lValveDeadband;
+    } else if (lPressureError < (-lValveDeadband)) {
+        lValveError = lPressureError + lValveDeadband;
+    } else {
+        lValveError = 0.0F;
+    }
 
     if ((calibtransPrsSpeed(plan->peepCmh2o, &lBlowerFeedforward) !=
          CALIBTRANS_STATUS_OK) ||
@@ -232,7 +268,7 @@ static int8_t expirationControllerCaptureProcess(const stBreathPlan *plan,
     lValveDuty = EXPIRATION_CONTROLLER_CAPTURE_VALVE_BASE_OFFSET +
                  (plan->peepCmh2o *
                   EXPIRATION_CONTROLLER_CAPTURE_VALVE_PRESSURE_GAIN) +
-                 (-lPressureError * EXPIRATION_CONTROLLER_CAPTURE_VALVE_KP);
+                 (-lValveError * lValveGain);
     lValveDuty = expirationControllerClamp(
         lValveDuty,
         EXPIRATION_CONTROLLER_RELEASE_VALVE_DUTY_MIN,
@@ -245,21 +281,18 @@ static int8_t expirationControllerCaptureProcess(const stBreathPlan *plan,
         lCaptureTolerance,
         EXPIRATION_CONTROLLER_CAPTURE_TOLERANCE_MIN,
         EXPIRATION_CONTROLLER_CAPTURE_TOLERANCE_MAX);
-    if (lValveDuty > (float)gExpirationValveDuty) {
-        gExpirationValveDuty = (uint8_t)expirationControllerMoveTowards(
-            (float)gExpirationValveDuty,
-            lValveDuty,
-            EXPIRATION_CONTROLLER_CAPTURE_VALVE_MAX_STEP);
-    } else {
-        gExpirationValveDuty = (uint8_t)expirationControllerMoveTowards(
-            (float)gExpirationValveDuty,
-            lValveDuty,
-            EXPIRATION_CONTROLLER_CAPTURE_VALVE_MAX_STEP);
-    }
-    /* Confirm both pressure proximity and low motion before handing off to PEEP. */
-    if (gExpirationCaptureElapsedMs < EXPIRATION_CONTROLLER_CAPTURE_RAMP_TIME_MS) {
+    gExpirationValveDuty = (uint8_t)(expirationControllerMoveTowards(
+        (float)gExpirationValveDuty,
+        lValveDuty,
+        EXPIRATION_CONTROLLER_CAPTURE_VALVE_MAX_STEP) +
+        EXPIRATION_CONTROLLER_CAPTURE_VALVE_ROUNDING_OFFSET);
+    if (gExpirationCaptureElapsedMs < EXPIRATION_CONTROLLER_CAPTURE_MAX_TIME_MS) {
         gExpirationCaptureElapsedMs +=
             (uint16_t)(EXPIRATION_CONTROLLER_SAMPLE_PERIOD_S * 1000.0F);
+    }
+    /* Prefer a stable handoff, but do not remain in capture after it settles. */
+    if (gExpirationCaptureElapsedMs < EXPIRATION_CONTROLLER_CAPTURE_RAMP_TIME_MS) {
+        gExpirationCaptureStableCount = 0U;
     } else if ((lPressureError >= (-lCaptureTolerance)) &&
                (lPressureError <= lCaptureTolerance) &&
                (lPressureSlope >=
@@ -270,15 +303,17 @@ static int8_t expirationControllerCaptureProcess(const stBreathPlan *plan,
             EXPIRATION_CONTROLLER_CAPTURE_STABLE_SAMPLE_COUNT) {
             gExpirationCaptureStableCount++;
         }
-        if (gExpirationCaptureStableCount >=
-            EXPIRATION_CONTROLLER_CAPTURE_STABLE_SAMPLE_COUNT) {
-            if (phaseControllerExpirationCaptureNotify() != PHASE_CONTROL_SUCCESS) {
-                return ACTUATOR_REQUEST_ERROR_STATE;
-            }
-            expirationControllerStateEnter(EXPIRATION_CONTROLLER_PEEP, NULL);
-        }
     } else {
         gExpirationCaptureStableCount = 0U;
+    }
+    if ((gExpirationCaptureStableCount >=
+         EXPIRATION_CONTROLLER_CAPTURE_STABLE_SAMPLE_COUNT) ||
+        (gExpirationCaptureElapsedMs >=
+         EXPIRATION_CONTROLLER_CAPTURE_MAX_TIME_MS)) {
+        if (phaseControllerExpirationCaptureNotify() != PHASE_CONTROL_SUCCESS) {
+            return ACTUATOR_REQUEST_ERROR_STATE;
+        }
+        expirationControllerStateEnter(EXPIRATION_CONTROLLER_PEEP, NULL);
     }
     request->blowerTarget = gExpirationBlowerTarget;
     request->expiratoryValveDuty = gExpirationValveDuty;
@@ -445,10 +480,11 @@ static int8_t expirationControllerPeepProcess(const stBreathPlan *plan,
         (float)gExpirationBlowerTarget,
         lBlowerTarget,
         EXPIRATION_CONTROLLER_BLOWER_MAX_STEP);
-    gExpirationValveDuty = (uint8_t)expirationControllerMoveTowards(
+    gExpirationValveDuty = (uint8_t)(expirationControllerMoveTowards(
         (float)gExpirationValveDuty,
         lValveDuty,
-        EXPIRATION_CONTROLLER_PEEP_VALVE_MAX_STEP);
+        EXPIRATION_CONTROLLER_PEEP_VALVE_MAX_STEP) +
+        EXPIRATION_CONTROLLER_PEEP_VALVE_ROUNDING_OFFSET);
     if (gExpirationPeepEntryElapsedMs <
         (uint16_t)EXPIRATION_CONTROLLER_PEEP_ENTRY_RAMP_TIME_MS) {
         gExpirationPeepEntryElapsedMs +=
