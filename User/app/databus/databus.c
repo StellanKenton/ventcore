@@ -23,6 +23,7 @@ static stLpf1 gFlowFilters[2U][2U];
 static stLpf1 gInspFlowTriggerFilter;
 static uint8_t gcontrolDataFiltersInitialized = 0U;
 static uint8_t gPatientPressurePredictionInitialized = 0U;
+static float gMdiffFlowZeroOffsetLpm = 0.0F;
 
 /** Average two 3 ms samples and run two cascaded low-pass filters. */
 static float controlDataLpf2Run(stLpf1 filters[2U], float sample1, float sample2) {
@@ -131,7 +132,7 @@ void controlDataCalibrationProcess(void) {
         controlDataSet(INSP_REAL_PRS, lConverted);
     }
     if (calibtransAdultProxFlow(controlDataGet(MDIFF_PRS_BWF), &lConverted) == CALIBTRANS_STATUS_OK) {
-        controlDataSet(MDIFF_REAL_FLOW, lConverted);
+        controlDataSet(MDIFF_REAL_FLOW, lConverted - gMdiffFlowZeroOffsetLpm);
     }
     if (calibtransAdultProxFlow(controlDataGet(RAW_MDIFF_AD), &lConverted) == CALIBTRANS_STATUS_OK) {
         controlDataSet(MDIFF_RAW_FLOW, lConverted);
@@ -153,4 +154,13 @@ void controlDataCalibrationProcess(void) {
     if (calibtransExpPrs(controlDataGet(EXP_PRS_BWF), &lConverted) == CALIBTRANS_STATUS_OK) {
         controlDataSet(EXP_REAL_PRS, lConverted);
     }
+}
+
+/** Apply a new zero offset to the current and subsequent proximal-flow data. */
+void controlDataMdiffFlowZeroOffsetSet(float offsetLpm) {
+    float lCurrentFlow = controlDataGet(MDIFF_REAL_FLOW);
+
+    controlDataSet(MDIFF_REAL_FLOW,
+                   lCurrentFlow + gMdiffFlowZeroOffsetLpm - offsetLpm);
+    gMdiffFlowZeroOffsetLpm = offsetLpm;
 }

@@ -20,6 +20,9 @@ void controlDataFilterProcess(void);
 /* Convert Butterworth-filtered ADC values to calibrated physical values. */
 void controlDataCalibrationProcess(void);
 
+/* Set the proximal-flow zero offset subtracted from calibrated samples. */
+void controlDataMdiffFlowZeroOffsetSet(float offsetLpm);
+
 #ifdef __cplusplus
 }
 #endif

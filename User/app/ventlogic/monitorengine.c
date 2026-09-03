@@ -212,12 +212,7 @@ void monitorEngineProcess(uint32_t nowMs)
     /* Keep a signed whole-breath integral for volume-balance diagnostics. */
     monitorEngineTidalVolumeIntegrate(MONITOR_TIDA_VOL, lFlow);
 
-    /*
-     * VTi/VTe are net phase volumes, not one-direction-only sums.
-     * This preserves reverse flow near phase transitions and PEEP recovery:
-     *   inspiration: +flow increases VTi, -flow decreases VTi
-     *   expiration : -flow increases VTe, +flow decreases VTe
-     */
+    /* Keep a signed flow integral for each phase. */
     if (gMonitorEngine.runState == MONITOR_STATE_INSP) {
         monitorEngineTidalVolumeIntegrate(MONITOR_TIDA_VOL_INSP, lFlow);
     } else if (gMonitorEngine.runState == MONITOR_STATE_EXP) {

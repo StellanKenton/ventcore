@@ -9,9 +9,11 @@
 ***********************************************************************************/
 #include "phasecontroller.h"
 
+#include <float.h>
 #include <string.h>
 
 #include "controldata.h"
+#include "databus.h"
 
 static stPhaseController gPhaseController;
 static float gPhaseData[PHASE_COUNT];
@@ -61,6 +63,40 @@ static int8_t phaseControllerInitialExpirationStart(uint32_t nowMs)
     gPhaseController.expirationCaptureComplete = 0U;
     gPhaseController.runState = PHASE_EXP;
     return PHASE_CONTROL_SUCCESS;
+}
+
+/** Enter the proximal-flow zero-compensation sampling window. */
+static void phaseControllerCompensationStart(uint32_t nowMs)
+{
+    controlDataMdiffFlowZeroOffsetSet(0.0F);
+    gPhaseController.compensationStartedMs = nowMs;
+    gPhaseController.compensationFlowSum = 0.0F;
+    gPhaseController.compensationSampleCount = 0U;
+    gPhaseController.runState = PHASE_COMPEN;
+}
+
+/** Collect zero-flow samples and apply their mean as proximal-flow offset. */
+static int8_t phaseControllerCompensationProcess(uint32_t nowMs)
+{
+    float lInspFlow = controlDataGet(INSP_FLOW_FILTERED);
+    float lPatientFlow = controlDataGet(MDIFF_REAL_FLOW);
+
+    if ((lInspFlow > -PHASE_COMPENSATION_INSP_FLOW_MAX) &&
+        (lInspFlow < PHASE_COMPENSATION_INSP_FLOW_MAX) &&
+        (lPatientFlow >= -FLT_MAX) && (lPatientFlow <= FLT_MAX)) {
+        gPhaseController.compensationFlowSum += lPatientFlow;
+        gPhaseController.compensationSampleCount++;
+    }
+    if ((nowMs - gPhaseController.compensationStartedMs) <
+        PHASE_COMPENSATION_TIME_MS) {
+        return PHASE_CONTROL_SUCCESS;
+    }
+    if (gPhaseController.compensationSampleCount > 0U) {
+        controlDataMdiffFlowZeroOffsetSet(
+            gPhaseController.compensationFlowSum /
+            (float)gPhaseController.compensationSampleCount);
+    }
+    return phaseControllerInitialExpirationStart(nowMs);
 }
 
 /** Start inspiration using the next plan selected for the trigger reason. */
@@ -263,15 +299,25 @@ static void phaseControllerPressureFallProcess(uint32_t expirationElapsedMs)
 void phaseControllerProcess(uint32_t nowMs)
 {
     uint32_t lExpirationElapsedMs;
+    uint32_t lRunSequence;
 
     if (breathSchedulerRunningGet() == 0U) {
         phaseControllerIdleEnter();
         return;
     }
+    lRunSequence = breathSchedulerRunSequenceGet();
+    if (lRunSequence != gPhaseController.runSequence) {
+        phaseControllerIdleEnter();
+        gPhaseController.runSequence = lRunSequence;
+    }
 
     switch (gPhaseController.runState) {
         case PHASE_IDLE:
-            if (phaseControllerInitialExpirationStart(nowMs) != PHASE_CONTROL_SUCCESS) {
+            phaseControllerCompensationStart(nowMs);
+            break;
+
+        case PHASE_COMPEN:
+            if (phaseControllerCompensationProcess(nowMs) != PHASE_CONTROL_SUCCESS) {
                 phaseControllerIdleEnter();
             }
             break;

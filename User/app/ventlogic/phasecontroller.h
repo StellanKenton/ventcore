@@ -22,6 +22,8 @@ extern "C" {
 #define PHASE_CONTROL_ERROR_PARAM         (-1)
 #define PHASE_CONTROL_ERROR_STATE         (-2)
 #define PHASE_PRESSURE_FALL_TIME_MS        168U
+#define PHASE_COMPENSATION_TIME_MS          60U
+#define PHASE_COMPENSATION_INSP_FLOW_MAX     0.1F
 
 typedef enum {
     PHASE_NONE = 0,
@@ -32,6 +34,7 @@ typedef enum {
 
 typedef enum {
     PHASE_IDLE = 0,
+    PHASE_COMPEN,
     PHASE_INSP,
     PHASE_EXP,
 } ePhaseControllerState;
@@ -40,6 +43,10 @@ typedef struct stPhaseController {
     ePhaseControllerState runState;
     uint32_t inspirationStartedMs;
     uint32_t expirationStartedMs;
+    uint32_t runSequence;
+    uint32_t compensationStartedMs;
+    float compensationFlowSum;
+    uint16_t compensationSampleCount;
     eBreathCycleReason cycleReason;
     uint8_t planValid;
     uint8_t breathStarted;

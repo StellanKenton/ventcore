@@ -111,6 +111,9 @@ eVentMode breathSchedulerModeGet(void);
 /** Return 1 while ventilation is running, otherwise 0. */
 uint8_t breathSchedulerRunningGet(void);
 
+/** Return the sequence incremented on each stopped-to-running transition. */
+uint32_t breathSchedulerRunSequenceGet(void);
+
 /** Apply the latest settings for the selected ventilation mode. */
 int8_t breathSchedulerSettingsUpdate(eVentMode mode);
 

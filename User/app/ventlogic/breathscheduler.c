@@ -21,6 +21,7 @@ static volatile bool gBreathRunning = false;
 static volatile eVentMode gBreathMode = VENT_MD_IDLE;
 static bool gBreathSettingsApplied = false;
 static uint32_t gBreathSequence = 0U;
+static uint32_t gBreathRunSequence = 0U;
 static stBreathPlan gBreathPlanTemplate;
 static stBreathPlan gBreathBackupPlanTemplate;
 static bool gBreathBackupPlanValid = false;
@@ -214,6 +215,7 @@ int8_t breathSchedulerInit(void)
     gBreathMode = VENT_MD_IDLE;
     gBreathSettingsApplied = false;
     gBreathSequence = 0U;
+    gBreathRunSequence = 0U;
     (void)memset(&gBreathPlanTemplate, 0, sizeof(gBreathPlanTemplate));
     (void)memset(&gBreathBackupPlanTemplate, 0,
                  sizeof(gBreathBackupPlanTemplate));
@@ -229,6 +231,9 @@ int8_t breathSchedulerStart(eVentMode mode)
         return lStatus;
     }
     repRtosEnterCritical();
+    if (!gBreathRunning) {
+        gBreathRunSequence++;
+    }
     gBreathRunning = true;
     repRtosExitCritical();
     return BREATH_CONTROL_SUCCESS;
@@ -279,6 +284,16 @@ uint8_t breathSchedulerRunningGet(void)
     lRunning = gBreathRunning ? 1U : 0U;
     repRtosExitCritical();
     return lRunning;
+}
+
+uint32_t breathSchedulerRunSequenceGet(void)
+{
+    uint32_t lSequence;
+
+    repRtosEnterCritical();
+    lSequence = gBreathRunSequence;
+    repRtosExitCritical();
+    return lSequence;
 }
 
 int8_t breathSchedulerSettingsUpdate(eVentMode mode)
