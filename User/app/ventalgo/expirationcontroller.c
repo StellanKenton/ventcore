@@ -196,6 +196,7 @@ static int8_t expirationControllerCaptureProcess(const stBreathPlan *plan,
     float lPredictionTime;
     float lPressureError;
     float lPressureSlope = expirationControllerPressureSlopeGet(lPatientPressure);
+    float lValveClosing;
     float lValveDeadband;
     float lValveDuty;
     float lValveError;
@@ -235,6 +236,13 @@ static int8_t expirationControllerCaptureProcess(const stBreathPlan *plan,
     } else {
         lValveError = 0.0F;
     }
+    lValveClosing = ((plan->peepCmh2o - lPatientPressure) -
+                     EXPIRATION_CONTROLLER_PEEP_SUPPORT_DEADBAND) *
+                    EXPIRATION_CONTROLLER_PEEP_SUPPORT_GAIN;
+    lValveClosing = expirationControllerClamp(
+        lValveClosing,
+        0.0F,
+        EXPIRATION_CONTROLLER_PEEP_SUPPORT_MAX_CLOSING);
 
     if ((calibtransPrsSpeed(plan->peepCmh2o, &lBlowerFeedforward) !=
          CALIBTRANS_STATUS_OK) ||
@@ -268,7 +276,8 @@ static int8_t expirationControllerCaptureProcess(const stBreathPlan *plan,
     lValveDuty = EXPIRATION_CONTROLLER_CAPTURE_VALVE_BASE_OFFSET +
                  (plan->peepCmh2o *
                   EXPIRATION_CONTROLLER_CAPTURE_VALVE_PRESSURE_GAIN) +
-                 (-lValveError * lValveGain);
+                 (-lValveError * lValveGain) +
+                 lValveClosing;
     lValveDuty = expirationControllerClamp(
         lValveDuty,
         EXPIRATION_CONTROLLER_RELEASE_VALVE_DUTY_MIN,

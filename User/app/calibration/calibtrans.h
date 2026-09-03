@@ -54,7 +54,7 @@ int8_t calibtransExpPrs(float adcValue, float *pressureValue);
 int8_t calibtransPrsSpeed(float pressureValue, float *speedRps);
 
 /**
- * @brief Convert an adult proximal-flow ADC value to flow.
+ * @brief Convert an adult proximal-flow ADC value to flow, extrapolating past table endpoints.
  * @param adcValue ADC value to convert.
  * @param flowValue Converted flow output.
  * @return CALIBTRANS_STATUS_OK on success, otherwise a negative error code.
@@ -62,7 +62,7 @@ int8_t calibtransPrsSpeed(float pressureValue, float *speedRps);
 int8_t calibtransAdultProxFlow(float adcValue, float *flowValue);
 
 /**
- * @brief Convert a neonatal proximal-flow ADC value to flow.
+ * @brief Convert a neonatal proximal-flow ADC value to flow, extrapolating past table endpoints.
  * @param adcValue ADC value to convert.
  * @param flowValue Converted flow output.
  * @return CALIBTRANS_STATUS_OK on success, otherwise a negative error code.

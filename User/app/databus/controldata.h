@@ -45,6 +45,7 @@ typedef enum {
     EXP_REAL_PRS,
     PAT_REAL_PRS,
     MDIFF_REAL_FLOW,
+    MDIFF_RAW_FLOW,
 
     PREDICT_PAT_PRS,
     

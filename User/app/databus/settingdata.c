@@ -27,10 +27,10 @@ stVentPatientSettings gVentPatientSettings = {
 
 stVentPacSettings gVentPacSettings = {
     .oxygen = 21.0f,
-    .peep = 15.0f,
+    .peep = 5.0f,
     .Rate = 20.0f,
     .inspiratoryTimeMs = 1350U,
-    .DeltaPressure = 15.0f,
+    .DeltaPressure = 25.0f,
     .riseTimeMs = 200U,
     .triggerType = VENT_TRIGGER_OFF,
     .pressureTriggerCmh2o = -2.0f,

@@ -1,7 +1,7 @@
 /************************************************************************************
 * @file     : calibtrans.c
 * @brief    : Calibration table conversion implementation.
-* @details  : Uses linear interpolation and clamps inputs at calibrated endpoints.
+* @details  : Uses linear interpolation with optional endpoint extrapolation.
 * @author   :
 * @date     :
 * @version  :
@@ -17,15 +17,31 @@ static uint8_t calibtransPointIsValid(const uint8_t *validFlags, uint8_t index) 
     return ((validFlags == NULL) || (validFlags[index] != 0U)) ? 1U : 0U;
 }
 
+static int8_t calibtransLinear(const float *inputValues, const float *outputValues,
+                               uint8_t firstIndex, uint8_t secondIndex,
+                               float inputValue, float *outputValue) {
+    float lInputDelta = inputValues[secondIndex] - inputValues[firstIndex];
+
+    if (lInputDelta == 0.0F) {
+        return CALIBTRANS_ERROR_TABLE;
+    }
+    *outputValue = outputValues[firstIndex] +
+                   ((inputValue - inputValues[firstIndex]) / lInputDelta) *
+                   (outputValues[secondIndex] - outputValues[firstIndex]);
+    return CALIBTRANS_STATUS_OK;
+}
+
 static int8_t calibtransInterpolate(const float *inputValues, const float *outputValues,
                                     const uint8_t *validFlags, uint8_t pointCount,
-                                    uint8_t validCount, float inputValue, float *outputValue) {
+                                    uint8_t validCount, uint8_t extrapolateEndpoints,
+                                    float inputValue, float *outputValue) {
     uint8_t lFirstIndex = 0U;
+    uint8_t lSecondIndex = 0U;
+    uint8_t lPenultimateIndex = 0U;
     uint8_t lLastIndex = 0U;
     uint8_t lPreviousIndex = 0U;
     uint8_t lIndex;
     uint8_t lFoundCount = 0U;
-    float lInputDelta;
 
     if ((inputValues == NULL) || (outputValues == NULL) || (outputValue == NULL) ||
         (pointCount == 0U) || (validCount == 0U) || (inputValue != inputValue)) {
@@ -42,6 +58,11 @@ static int8_t calibtransInterpolate(const float *inputValues, const float *outpu
         }
         if (lFoundCount == 0U) {
             lFirstIndex = lIndex;
+        } else {
+            if (lFoundCount == 1U) {
+                lSecondIndex = lIndex;
+            }
+            lPenultimateIndex = lLastIndex;
         }
         lLastIndex = lIndex;
         lFoundCount++;
@@ -58,6 +79,10 @@ static int8_t calibtransInterpolate(const float *inputValues, const float *outpu
          (inputValue <= inputValues[lFirstIndex])) ||
         ((inputValues[lFirstIndex] > inputValues[lLastIndex]) &&
          (inputValue >= inputValues[lFirstIndex]))) {
+        if (extrapolateEndpoints != 0U) {
+            return calibtransLinear(inputValues, outputValues, lFirstIndex, lSecondIndex,
+                                    inputValue, outputValue);
+        }
         *outputValue = outputValues[lFirstIndex];
         return CALIBTRANS_STATUS_OK;
     }
@@ -65,6 +90,10 @@ static int8_t calibtransInterpolate(const float *inputValues, const float *outpu
          (inputValue >= inputValues[lLastIndex])) ||
         ((inputValues[lFirstIndex] > inputValues[lLastIndex]) &&
          (inputValue <= inputValues[lLastIndex]))) {
+        if (extrapolateEndpoints != 0U) {
+            return calibtransLinear(inputValues, outputValues, lPenultimateIndex, lLastIndex,
+                                    inputValue, outputValue);
+        }
         *outputValue = outputValues[lLastIndex];
         return CALIBTRANS_STATUS_OK;
     }
@@ -79,15 +108,8 @@ static int8_t calibtransInterpolate(const float *inputValues, const float *outpu
         lFoundCount++;
         if (((inputValue >= inputValues[lPreviousIndex]) && (inputValue <= inputValues[lIndex])) ||
             ((inputValue <= inputValues[lPreviousIndex]) && (inputValue >= inputValues[lIndex]))) {
-            lInputDelta = inputValues[lIndex] - inputValues[lPreviousIndex];
-            if (lInputDelta == 0.0f) {
-                return CALIBTRANS_ERROR_TABLE;
-            }
-            *outputValue = outputValues[lPreviousIndex] +
-                           ((inputValue - inputValues[lPreviousIndex]) /
-                            lInputDelta) *
-                           (outputValues[lIndex] - outputValues[lPreviousIndex]);
-            return CALIBTRANS_STATUS_OK;
+            return calibtransLinear(inputValues, outputValues, lPreviousIndex, lIndex,
+                                    inputValue, outputValue);
         }
         lPreviousIndex = lIndex;
     }
@@ -109,6 +131,7 @@ static int8_t calibtransPressure(const float *calibrationAdcValues, uint16_t cur
                                  calibrationPressureValues, NULL,
                                  CALIBRATION_PRESSURE_POINT_COUNT,
                                  CALIBRATION_PRESSURE_POINT_COUNT,
+                                 0U,
                                  lCompensatedAd, pressureValue);
 }
 
@@ -173,6 +196,7 @@ int8_t calibtransPrsSpeed(float pressureValue, float *speedRps) {
     return calibtransInterpolate(lCalibration->pressureValues, lCalibration->speedRps,
                                  NULL, CALIBRATION_PRESSURE_POINT_COUNT,
                                  CALIBRATION_PRESSURE_POINT_COUNT,
+                                 0U,
                                  pressureValue, speedRps);
 }
 
@@ -194,6 +218,7 @@ int8_t calibtransAdultProxFlow(float adcValue, float *flowValue) {
     return calibtransInterpolate(lCalibration->adultFlowAd, lCalibration->adultFlow,
                                  NULL, CALIBRATION_DIFF_FLOW_POINT_COUNT,
                                  CALIBRATION_DIFF_FLOW_POINT_COUNT,
+                                 1U,
                                  lCompensatedAd, flowValue);
 }
 
@@ -215,6 +240,7 @@ int8_t calibtransNeoProxFlow(float adcValue, float *flowValue) {
     return calibtransInterpolate(lCalibration->neoFlowAd, lCalibration->neoFlow,
                                  NULL, CALIBRATION_DIFF_FLOW_POINT_COUNT,
                                  CALIBRATION_DIFF_FLOW_POINT_COUNT,
+                                 1U,
                                  lCompensatedAd, flowValue);
 }
 
@@ -230,7 +256,7 @@ int8_t calibtransOxygenValve(float dutyCycle, float *flowValue) {
     }
     return calibtransInterpolate(lCalibration->dutyCycle, lCalibration->flowValues,
                                  lCalibration->dataValid, CALIBRATION_MIX_POINT_COUNT,
-                                 lCalibration->validCount, dutyCycle, flowValue);
+                                 lCalibration->validCount, 0U, dutyCycle, flowValue);
 }
 
 /**************************End of file********************************/

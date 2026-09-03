@@ -133,6 +133,9 @@ void controlDataCalibrationProcess(void) {
     if (calibtransAdultProxFlow(controlDataGet(MDIFF_PRS_BWF), &lConverted) == CALIBTRANS_STATUS_OK) {
         controlDataSet(MDIFF_REAL_FLOW, lConverted);
     }
+    if (calibtransAdultProxFlow(controlDataGet(RAW_MDIFF_AD), &lConverted) == CALIBTRANS_STATUS_OK) {
+        controlDataSet(MDIFF_RAW_FLOW, lConverted);
+    }
     if (calibtransPeepPrs(controlDataGet(PEEP_PRS_BWF), &lConverted) == CALIBTRANS_STATUS_OK) {
         float lPreviousPatientPressure = controlDataGet(PAT_REAL_PRS);
 
