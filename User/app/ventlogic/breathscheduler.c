@@ -118,13 +118,26 @@ static void breathSchedulerVacPlanApply(const stVentVacSettings *vacSettings,
     float lBreathPeriodMs = 60000.0F / vacSettings->freq;
     float lPauseTimeMs = (float)vacSettings->inspTimeMs * vacSettings->inspPausePct / 100.0F;
     float lFlowTimeMs = (float)vacSettings->inspTimeMs - lPauseTimeMs;
+    float lSafeFlowTimeMs = NUMFILTER_MAX(
+        BREATH_VOLUME_MIN_EFFECTIVE_FLOW_TIME_MS,
+        lFlowTimeMs);
+    float lEffectiveFlowTimeMs = NUMFILTER_MAX(
+        BREATH_VOLUME_MIN_EFFECTIVE_FLOW_TIME_MS,
+        lSafeFlowTimeMs - BREATH_VOLUME_FLOW_RISE_AREA_LOSS_MS);
+    float lStartupVolumeLossMl = NUMFILTER_MIN(
+        BREATH_VOLUME_STARTUP_VOLUME_LOSS_MAX_ML,
+        BREATH_VOLUME_STARTUP_LOSS_TIME_ML_MS / lSafeFlowTimeMs);
     stBreathPlan lPlan = {0};
 
     lPlan.mode = VENT_MD_VAC;
     lPlan.breathType = BREATH_TYPE_MANDATORY_VOLUME;
     lPlan.allowedTriggerType = vacSettings->triggerType;
     lPlan.peepCmh2o = vacSettings->peep;
-    lPlan.inspiratoryFlowLpm = vacSettings->tidalVolume * 60.0F / lFlowTimeMs;
+    /* Compensate rise area and startup backflow without scaling short Ti sharply. */
+    lPlan.inspiratoryFlowLpm =
+        (vacSettings->tidalVolume + lStartupVolumeLossMl) *
+        60.0F /
+                               lEffectiveFlowTimeMs;
     lPlan.targetTidalVolumeMl = vacSettings->tidalVolume;
     lPlan.fio2Percent = vacSettings->oxygen;
     lPlan.pressureTriggerCmh2o = vacSettings->pressureTriggerCmh2o;

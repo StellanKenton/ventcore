@@ -120,12 +120,7 @@ static int8_t phaseControllerInspirationStart(eBreathTriggerReason triggerReason
     gPhaseController.breathStarted = 1U;
     gPhaseController.expirationCaptureComplete = 0U;
     (void)phaseControlSet(PHASE_REF_PRESSURE, lPatientPressure);
-    if (gPhaseController.activePlan.breathType == BREATH_TYPE_MANDATORY_VOLUME) {
-        (void)phaseControlSet(PHASE_REF_FLOW,
-                              gPhaseController.activePlan.inspiratoryFlowLpm);
-    } else {
-        (void)phaseControlSet(PHASE_REF_FLOW, 0.0F);
-    }
+    (void)phaseControlSet(PHASE_REF_FLOW, 0.0F);
     gPhaseController.runState = PHASE_INSP;
     return PHASE_CONTROL_SUCCESS;
 }
@@ -259,13 +254,37 @@ eBreathCycleReason phaseControllerCycleReasonGet(void)
 /** Process the flow-controlled delivery interval. */
 static void phaseControllerVolumeInspirationProcess(uint32_t nowMs)
 {
-    if ((nowMs - gPhaseController.inspirationStartedMs) <
-        gPhaseController.activePlan.riseTimeMs) {
-        (void)phaseControlSet(PHASE_REF_FLOW,
-                              gPhaseController.activePlan.inspiratoryFlowLpm);
-    } else {
+    float lCurveProgress;
+    uint32_t lElapsedMs = nowMs - gPhaseController.inspirationStartedMs;
+
+    if (lElapsedMs >= gPhaseController.activePlan.riseTimeMs) {
         (void)phaseControlSet(PHASE_REF_FLOW, 0.0F);
+        return;
     }
+
+    if (lElapsedMs <= PHASE_FLOW_RISE_HALF_TIME_MS) {
+        lCurveProgress = PHASE_FLOW_RISE_HALF_RATIO *
+                         (float)lElapsedMs /
+                         (float)PHASE_FLOW_RISE_HALF_TIME_MS;
+    } else if (lElapsedMs <= PHASE_FLOW_RISE_NINETY_TIME_MS) {
+        lCurveProgress = PHASE_FLOW_RISE_HALF_RATIO +
+                         (PHASE_FLOW_RISE_NINETY_RATIO -
+                          PHASE_FLOW_RISE_HALF_RATIO) *
+                         (float)(lElapsedMs - PHASE_FLOW_RISE_HALF_TIME_MS) /
+                         (float)(PHASE_FLOW_RISE_NINETY_TIME_MS -
+                                 PHASE_FLOW_RISE_HALF_TIME_MS);
+    } else if (lElapsedMs < PHASE_FLOW_RISE_FULL_TIME_MS) {
+        lCurveProgress = PHASE_FLOW_RISE_NINETY_RATIO +
+                         (1.0F - PHASE_FLOW_RISE_NINETY_RATIO) *
+                         (float)(lElapsedMs - PHASE_FLOW_RISE_NINETY_TIME_MS) /
+                         (float)(PHASE_FLOW_RISE_FULL_TIME_MS -
+                                 PHASE_FLOW_RISE_NINETY_TIME_MS);
+    } else {
+        lCurveProgress = 1.0F;
+    }
+    (void)phaseControlSet(PHASE_REF_FLOW,
+                          gPhaseController.activePlan.inspiratoryFlowLpm *
+                          lCurveProgress);
 }
 
 /** Process the pressure reference fall from peak pressure to PEEP. */

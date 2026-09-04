@@ -41,12 +41,12 @@ stVentVacSettings gVentVacSettings = {
     .oxygen = 21.0f,
     .peep = 5.0f,
     .freq = 15.0f,
-    .inspTimeMs = 2500.0f,
-    .tidalVolume = 250.0f,
+    .inspTimeMs = 2000.0f,
+    .tidalVolume = 500.0f,
     .triggerType = VENT_TRIGGER_OFF,
     .pressureTriggerCmh2o = -6.0f,
     .flowTriggerLpm = 3.0f,
-    .inspPausePct = 40.0f,
+    .inspPausePct = 0.0f,
 };
 
 stVentCpapPsvSettings gVentCpapPsvSettings = {

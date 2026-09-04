@@ -24,6 +24,11 @@ extern "C" {
 #define PHASE_PRESSURE_FALL_TIME_MS        168U
 #define PHASE_COMPENSATION_TIME_MS          60U
 #define PHASE_COMPENSATION_INSP_FLOW_MAX     0.1F
+#define PHASE_FLOW_RISE_HALF_TIME_MS         26U
+#define PHASE_FLOW_RISE_NINETY_TIME_MS       85U
+#define PHASE_FLOW_RISE_FULL_TIME_MS        170U
+#define PHASE_FLOW_RISE_HALF_RATIO            0.5F
+#define PHASE_FLOW_RISE_NINETY_RATIO          0.9F
 
 typedef enum {
     PHASE_NONE = 0,
