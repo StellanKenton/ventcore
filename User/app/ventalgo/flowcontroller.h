@@ -25,6 +25,8 @@ extern "C" {
 #define FLOW_CONTROLLER_FLOW_KD                   0.00F
 #define FLOW_CONTROLLER_HOLD_KP                   0.015F
 #define FLOW_CONTROLLER_HOLD_KI                   0.02F
+#define FLOW_CONTROLLER_PAUSE_KP                  0.003F
+#define FLOW_CONTROLLER_PAUSE_KI                  0.005F
 #define FLOW_CONTROLLER_EFFORT_MIN              (-1.0F)
 #define FLOW_CONTROLLER_EFFORT_MAX                1.0F
 #define FLOW_CONTROLLER_FLOW_INPUT_SCALE          1.0F

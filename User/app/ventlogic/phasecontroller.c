@@ -34,6 +34,7 @@ static void phaseControllerIdleEnter(void)
     gPhaseController.planValid = 0U;
     gPhaseController.breathStarted = 0U;
     gPhaseController.expirationCaptureComplete = 0U;
+    gPhaseController.volumePauseActive = 0U;
     gPhaseController.cycleReason = BREATH_CYCLE_REASON_NONE;
     (void)memset(&gPhaseController.activePlan, 0, sizeof(gPhaseController.activePlan));
     phaseControllerReferencesClear();
@@ -116,6 +117,7 @@ static int8_t phaseControllerInspirationStart(eBreathTriggerReason triggerReason
 
     lPatientPressure = controlDataGet(PAT_REAL_PRS);
     gPhaseController.inspirationStartedMs = nowMs;
+    gPhaseController.volumePauseActive = 0U;
     gPhaseController.cycleReason = BREATH_CYCLE_REASON_NONE;
     gPhaseController.breathStarted = 1U;
     gPhaseController.expirationCaptureComplete = 0U;
@@ -150,6 +152,11 @@ float phaseControlGet(ePhaseControlType type)
 ePhaseControllerState phaseControllerStateGet(void)
 {
     return gPhaseController.runState;
+}
+
+uint8_t phaseControllerVolumePauseActiveGet(void) {
+    return (uint8_t)((gPhaseController.runState == PHASE_INSP) &&
+                     (gPhaseController.volumePauseActive != 0U));
 }
 
 int8_t phaseControllerActivePlanGet(stBreathPlan *plan)
@@ -258,6 +265,8 @@ static void phaseControllerVolumeInspirationProcess(uint32_t nowMs)
     uint32_t lElapsedMs = nowMs - gPhaseController.inspirationStartedMs;
 
     if (lElapsedMs >= gPhaseController.activePlan.riseTimeMs) {
+        gPhaseController.volumePauseActive =
+            (uint8_t)(gPhaseController.activePlan.holdTimeMs > 0U);
         (void)phaseControlSet(PHASE_REF_FLOW, 0.0F);
         return;
     }

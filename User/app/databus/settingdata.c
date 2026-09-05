@@ -6,7 +6,7 @@
 
 stVentLimitSettings gVentLimitSettings = {
     .pressureLow = 1.0f,
-    .pressureHigh = 100.0f,
+    .pressureHigh = 50.0f,
     .minuteVolumeLow = 0.1f,
     .minuteVolumeHigh = 100.0f,
     .tidalVolumeLow = 1U,
@@ -46,7 +46,7 @@ stVentVacSettings gVentVacSettings = {
     .triggerType = VENT_TRIGGER_OFF,
     .pressureTriggerCmh2o = -6.0f,
     .flowTriggerLpm = 3.0f,
-    .inspPausePct = 0.0f,
+    .inspPausePct = 50.0f,
 };
 
 stVentCpapPsvSettings gVentCpapPsvSettings = {

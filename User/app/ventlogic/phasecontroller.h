@@ -56,6 +56,7 @@ typedef struct stPhaseController {
     uint8_t planValid;
     uint8_t breathStarted;
     uint8_t expirationCaptureComplete;
+    uint8_t volumePauseActive;
     stBreathPlan activePlan;
 } stPhaseController;
 
@@ -70,6 +71,9 @@ float phaseControlGet(ePhaseControlType type);
 
 /** Get the current breath phase. */
 ePhaseControllerState phaseControllerStateGet(void);
+
+/** Return the volume-pause state published by the current VentTask phase update. */
+uint8_t phaseControllerVolumePauseActiveGet(void);
 
 /** Copy the immutable plan currently executed by the phase controller. */
 int8_t phaseControllerActivePlanGet(stBreathPlan *plan);

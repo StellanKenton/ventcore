@@ -64,6 +64,14 @@ static void flowControllerStateEnter(eFlowControllerState state)
                             FLOW_CONTROLLER_HOLD_KP,
                             FLOW_CONTROLLER_HOLD_KI,
                             FLOW_CONTROLLER_FLOW_KD);
+    } else if (state == FLOW_CONTROLLER_INSP_PAUSE) {
+        /* Delayed proximal zero-flow feedback requires lower gain than delivery. */
+        (void)pidSetTunings(&gFlowPid,
+                            FLOW_CONTROLLER_PAUSE_KP,
+                            FLOW_CONTROLLER_PAUSE_KI,
+                            FLOW_CONTROLLER_FLOW_KD);
+        (void)pidReset(&gFlowPid);
+        gFlowAppliedEffort = 0.0F;
     } else if (state == FLOW_CONTROLLER_IDLE) {
         (void)pidReset(&gFlowPid);
         gFlowFeedforwardPressureReady = 0U;
@@ -83,22 +91,14 @@ static eFlowControllerState flowControllerActiveStateGet(const stBreathPlan *pla
     lFlowTarget = flowControllerClamp(plan->inspiratoryFlowLpm,
                                       FLOW_CONTROLLER_FLOW_TARGET_MIN,
                                       FLOW_CONTROLLER_FLOW_TARGET_MAX);
-    if (*flowReference <= FLOW_CONTROLLER_FLOW_TARGET_MIN) {
+    if (phaseControllerVolumePauseActiveGet() != 0U) {
+        *flowReference = 0.0F;
         return FLOW_CONTROLLER_INSP_PAUSE;
     }
     if (*flowReference < lFlowTarget) {
         return FLOW_CONTROLLER_INSP_RISE;
     }
     return FLOW_CONTROLLER_INSP_HOLD;
-}
-
-/** Produce the inspiratory-pause request without adding delivered volume. */
-static int8_t flowControllerPauseProcess(stActuatorRequest *request)
-{
-    request->blowerTarget = 0U;
-    request->expiratoryValveDuty = FLOW_CONTROLLER_EXP_VALVE_CLOSED_DUTY;
-    request->validMask = ACTUATOR_REQUEST_VALID_BREATH_OUTPUTS;
-    return ACTUATOR_REQUEST_SUCCESS;
 }
 
 /** Run the flow loop and produce the active inspiratory request. */
@@ -115,7 +115,9 @@ static int8_t flowControllerClosedLoopProcess(const stBreathPlan *plan,
     float lPatientPressure;
     float lPressureLimit;
 
-    lMeasuredFlow = controlDataGet(INSP_FLOW_FILTERED) * FLOW_CONTROLLER_FLOW_INPUT_SCALE;
+    lMeasuredFlow = (state == FLOW_CONTROLLER_INSP_PAUSE) ?
+                    controlDataGet(MDIFF_REAL_FLOW) :
+                    controlDataGet(INSP_FLOW_FILTERED) * FLOW_CONTROLLER_FLOW_INPUT_SCALE;
     if (pidUpdate(&gFlowPid, flowReference, lMeasuredFlow, &lEffort) != PID_STATUS_OK) {
         return ACTUATOR_REQUEST_ERROR_STATE;
     }
@@ -208,6 +210,9 @@ int8_t flowControllerProcess(const stBreathPlan *plan, stActuatorRequest *reques
     lPhase = phaseControllerStateGet();
     if (plan->sequence != gFlowPlanSequence) {
         gFlowPlanSequence = plan->sequence;
+        (void)pidReset(&gFlowPid);
+        gFlowFeedforwardPressureReady = 0U;
+        gFlowAppliedEffort = 0.0F;
         gFlowControllerState = FLOW_CONTROLLER_IDLE;
     }
     switch (lPhase) {
@@ -230,7 +235,11 @@ int8_t flowControllerProcess(const stBreathPlan *plan, stActuatorRequest *reques
                                                    lFlowReference,
                                                    request);
         case FLOW_CONTROLLER_INSP_PAUSE:
-            return flowControllerPauseProcess(request);
+            /* Keep the expiratory valve closed and regulate patient flow to zero. */
+            return flowControllerClosedLoopProcess(plan,
+                                                   gFlowControllerState,
+                                                   0.0F,
+                                                   request);
         case FLOW_CONTROLLER_IDLE:
         default:
             flowControllerStateEnter(FLOW_CONTROLLER_IDLE);
