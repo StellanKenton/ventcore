@@ -119,7 +119,7 @@ static void ventTestStatusShow(void)
     repRtosExitCritical();
 
     if (monitorEngineBreathResultGet(&lBreathResult) == MONITOR_ENGINE_SUCCESS) {
-        LOG_R("VT_BREATH_RESULT,sequence=%lu,mode=%u,type=%u,trigger=%u,cycle_reason=%u,vti100=%ld,vte100=%ld,ppeak100=%ld,peep100=%ld,peak_insp_flow100=%ld,ti_ms=%lu,cycle_ms=%lu,valid=0x%08lX",
+        LOG_R("VT_BREATH_RESULT,sequence=%lu,mode=%u,type=%u,trigger=%u,cycle_reason=%u,vti100=%ld,vte100=%ld,ppeak100=%ld,pplat100=%ld,peep100=%ld,peak_insp_flow100=%ld,ti_ms=%lu,cycle_ms=%lu,valid=0x%08lX",
               (unsigned long)lBreathResult.sequence,
               (unsigned int)lBreathResult.mode,
               (unsigned int)lBreathResult.breathType,
@@ -128,6 +128,7 @@ static void ventTestStatusShow(void)
               (long)ventTestCenti(lBreathResult.vtiMl),
               (long)ventTestCenti(lBreathResult.vteMl),
               (long)ventTestCenti(lBreathResult.ppeakCmh2o),
+              (long)ventTestCenti(lBreathResult.plateauPressureCmh2o),
               (long)ventTestCenti(lBreathResult.peepCmh2o),
               (long)ventTestCenti(lBreathResult.peakInspiratoryFlowLpm),
               (unsigned long)lBreathResult.inspiratoryTimeMs,

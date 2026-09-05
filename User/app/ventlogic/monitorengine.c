@@ -44,6 +44,52 @@ static void monitorEngineTidalVolumeIntegrate(eMonitorDataType type, float flow)
     gMonitorData[type] += flow * MONITOR_FLOW_SAMPLE_VOLUME_ML;
 }
 
+/** Average valid zero-flow pressure samples from the plateau window. */
+static void monitorEnginePlateauPressureProcess(uint32_t nowMs)
+{
+    ePhaseControllerState lPhaseState;
+    float lFlow;
+    float lPressure;
+    uint8_t lSampleActive;
+
+    if ((gMonitorEngine.breathActive == 0U) ||
+        (gMonitorEngine.runState != MONITOR_STATE_INSP)) {
+        return;
+    }
+
+    lPhaseState = phaseControllerStateGet();
+    lSampleActive = phaseControllerVolumePauseActiveGet();
+    if ((lSampleActive == 0U) &&
+        (((nowMs - gMonitorEngine.breathStartedMs) +
+          MONITOR_PLATEAU_END_WINDOW_MS) >=
+         gMonitorEngine.breathPlan.maximumInspiratoryTimeMs)) {
+        lSampleActive = 1U;
+    }
+    /* Include the zero-flow boundary while expiration waits for reverse flow. */
+    if ((lSampleActive == 0U) && (lPhaseState == PHASE_EXP)) {
+        lSampleActive = 1U;
+    }
+    if (lSampleActive == 0U) {
+        return;
+    }
+
+    lFlow = controlDataGet(MDIFF_REAL_FLOW);
+    lPressure = controlDataGet(PAT_REAL_PRS);
+    if ((monitorEngineFinite(lFlow) == 0U) ||
+        (monitorEngineFinite(lPressure) == 0U) ||
+        (lFlow <= -MONITOR_FLOW_DEADBAND_LPM) ||
+        (lFlow >= MONITOR_FLOW_DEADBAND_LPM)) {
+        return;
+    }
+
+    gMonitorEngine.plateauPressureSumCmh2o += lPressure;
+    gMonitorEngine.plateauPressureSampleCount++;
+    (void)monitorEngineSet(
+        MONITOR_PLATEAU_PRS,
+        gMonitorEngine.plateauPressureSumCmh2o /
+        (float)gMonitorEngine.plateauPressureSampleCount);
+}
+
 /** Convert the shared phase to the local monitoring state. */
 static eMonitorEngineState monitorEngineStateFromPhase(ePhaseControllerState phaseState)
 {
@@ -71,6 +117,7 @@ static void monitorEngineBreathResultPublish(uint32_t nowMs)
     lResult.vtiMl = gMonitorData[MONITOR_TIDA_VOL_INSP];
     lResult.vteMl = gMonitorData[MONITOR_TIDA_VOL_EXP];
     lResult.ppeakCmh2o = gMonitorEngine.peakPressureCmh2o;
+    lResult.plateauPressureCmh2o = gMonitorData[MONITOR_PLATEAU_PRS];
     lResult.peepCmh2o = lPeepPressure;
     lResult.peakInspiratoryFlowLpm = gMonitorEngine.peakInspiratoryFlowLpm;
     lResult.cycleReason = gMonitorEngine.cycleReason;
@@ -87,6 +134,10 @@ static void monitorEngineBreathResultPublish(uint32_t nowMs)
     }
     if (monitorEngineFinite(lResult.ppeakCmh2o) != 0U) {
         lResult.validMask |= BREATH_RESULT_VALID_PPEAK;
+    }
+    if ((gMonitorEngine.plateauPressureSampleCount > 0U) &&
+        (monitorEngineFinite(lResult.plateauPressureCmh2o) != 0U)) {
+        lResult.validMask |= BREATH_RESULT_VALID_PLATEAU_PRESSURE;
     }
     if (monitorEngineFinite(lResult.peepCmh2o) != 0U) {
         lResult.validMask |= BREATH_RESULT_VALID_PEEP;
@@ -114,12 +165,15 @@ static int8_t monitorEngineBreathStart(uint32_t nowMs)
     gMonitorEngine.breathStartedMs = nowMs;
     gMonitorEngine.peakPressureCmh2o = lPressure;
     gMonitorEngine.peakInspiratoryFlowLpm = 0.0F;
+    gMonitorEngine.plateauPressureSumCmh2o = 0.0F;
+    gMonitorEngine.plateauPressureSampleCount = 0U;
     gMonitorEngine.inspiratoryTimeMs = 0U;
     gMonitorEngine.cycleReason = BREATH_CYCLE_REASON_NONE;
     gMonitorEngine.breathActive = 1U;
     (void)monitorEngineSet(MONITOR_TIDA_VOL, 0.0F);
     (void)monitorEngineSet(MONITOR_TIDA_VOL_INSP, 0.0F);
     (void)monitorEngineSet(MONITOR_TIDA_VOL_EXP, 0.0F);
+    (void)monitorEngineSet(MONITOR_PLATEAU_PRS, 0.0F);
     return MONITOR_ENGINE_SUCCESS;
 }
 
@@ -133,6 +187,7 @@ void monitorEngineInit(void)
     (void)monitorEngineSet(MONITOR_TIDA_VOL, 0.0F);
     (void)monitorEngineSet(MONITOR_TIDA_VOL_INSP, 0.0F);
     (void)monitorEngineSet(MONITOR_TIDA_VOL_EXP, 0.0F);
+    (void)monitorEngineSet(MONITOR_PLATEAU_PRS, 0.0F);
 }
 
 float monitorEngineGet(eMonitorDataType type)
@@ -158,7 +213,8 @@ int8_t monitorEngineBreathResultGet(stBreathResult *result)
     return MONITOR_ENGINE_SUCCESS;
 }
 
-void monitorEngineProcess(uint32_t nowMs)
+/** Calculate tidal volumes and maintain the completed-breath result. */
+static void monitorEngineTidalVolumeProcess(uint32_t nowMs)
 {
     eMonitorEngineState lNextState =
         monitorEngineStateFromPhase(phaseControllerStateGet());
@@ -224,6 +280,12 @@ void monitorEngineProcess(uint32_t nowMs)
     } else if (gMonitorEngine.runState == MONITOR_STATE_EXP) {
         monitorEngineTidalVolumeIntegrate(MONITOR_TIDA_VOL_EXP, -lFlow);
     }
+}
+
+void monitorEngineProcess(uint32_t nowMs)
+{
+    monitorEnginePlateauPressureProcess(nowMs);
+    monitorEngineTidalVolumeProcess(nowMs);
 }
 
 /**************************End of file********************************/

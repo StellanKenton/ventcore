@@ -36,6 +36,7 @@ void monitorDataUpdate(void) {
     gMonitorWaveformData.tidalVolumeX10 = monitorEngineGet(MONITOR_TIDA_VOL) / 10.0F;
     gMonitorWaveformData.tidalVolumeInspX10 = monitorEngineGet(MONITOR_TIDA_VOL_INSP) / 10.0F;
     gMonitorWaveformData.tidalVolumeExpX10 = monitorEngineGet(MONITOR_TIDA_VOL_EXP) / 10.0F;
+    gMonitorWaveformData.plateauPressureX1 = monitorEngineGet(MONITOR_PLATEAU_PRS);
     gMonitorWaveformData.expirationControllerState = expirationControllerStateGet();
     gMonitorWaveformData.pressureControllerState = pressureControllerStateGet();
     if (actuatorControllerLastRequestGet(&lActuatorRequest) == ACTUATOR_REQUEST_SUCCESS) {

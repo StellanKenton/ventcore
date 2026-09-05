@@ -34,6 +34,7 @@ typedef struct stMonitorWaveformData {
     float tidalVolumeX10;
     float tidalVolumeInspX10;
     float tidalVolumeExpX10;
+    float plateauPressureX1;
     uint16_t blowerTargetX100;
     uint8_t valveDutyX2;
     eExpirationControllerState expirationControllerState;

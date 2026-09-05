@@ -23,6 +23,7 @@ extern "C" {
 #define MONITOR_ENGINE_ERROR_STATE             (-2)
 #define MONITOR_FLOW_DEADBAND_LPM                0.5F
 #define MONITOR_FLOW_SAMPLE_VOLUME_ML            0.1F
+#define MONITOR_PLATEAU_END_WINDOW_MS             100U
 #define BREATH_RESULT_VALID_COMPLETE             (1UL << 0)
 #define BREATH_RESULT_VALID_VTI                  (1UL << 1)
 #define BREATH_RESULT_VALID_VTE                  (1UL << 2)
@@ -31,12 +32,14 @@ extern "C" {
 #define BREATH_RESULT_VALID_CYCLE_TIME           (1UL << 5)
 #define BREATH_RESULT_VALID_INSPIRATORY_TIME     (1UL << 6)
 #define BREATH_RESULT_VALID_PEAK_INSP_FLOW       (1UL << 7)
+#define BREATH_RESULT_VALID_PLATEAU_PRESSURE     (1UL << 8)
 
 typedef enum {
     MONITOR_DATA_NONE = 0,
     MONITOR_TIDA_VOL,
     MONITOR_TIDA_VOL_INSP,
     MONITOR_TIDA_VOL_EXP,
+    MONITOR_PLATEAU_PRS,
     MONITOR_DATA_COUNT,
 } eMonitorDataType;
 
@@ -54,6 +57,7 @@ typedef struct stBreathResult {
     float vtiMl;
     float vteMl;
     float ppeakCmh2o;
+    float plateauPressureCmh2o;
     float peepCmh2o;
     float peakInspiratoryFlowLpm;
     eBreathCycleReason cycleReason;
@@ -68,6 +72,8 @@ typedef struct stMonitorEngine {
     uint32_t inspiratoryTimeMs;
     float peakPressureCmh2o;
     float peakInspiratoryFlowLpm;
+    float plateauPressureSumCmh2o;
+    uint32_t plateauPressureSampleCount;
     eBreathCycleReason cycleReason;
     uint8_t breathActive;
     stBreathPlan breathPlan;
