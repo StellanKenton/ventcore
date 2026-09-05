@@ -7,6 +7,7 @@
 #include "actuatorcontroller.h"
 #include "controldata.h"
 #include "expirationcontroller.h"
+#include "flowcontroller.h"
 #include "phasecontroller.h"
 #include "monitorengine.h"
 #include "pressurecontroller.h"
@@ -39,6 +40,11 @@ void monitorDataUpdate(void) {
     gMonitorWaveformData.plateauPressureX1 = monitorEngineGet(MONITOR_PLATEAU_PRS);
     gMonitorWaveformData.expirationControllerState = expirationControllerStateGet();
     gMonitorWaveformData.pressureControllerState = pressureControllerStateGet();
+    gMonitorWaveformData.volumePauseActive = phaseControllerVolumePauseActiveGet();
+    gMonitorWaveformData.volumePauseSettled = (uint8_t)(
+        (gMonitorWaveformData.volumePauseActive != 0U) &&
+        (flowControllerPauseSettledGet() != 0U));
+    gMonitorWaveformData.leakFlowLpm = monitorEngineGet(MONITOR_LEAK_FLOW);
     if (actuatorControllerLastRequestGet(&lActuatorRequest) == ACTUATOR_REQUEST_SUCCESS) {
         gMonitorWaveformData.blowerTargetX100 = lActuatorRequest.blowerTarget / 100.0f;
         gMonitorWaveformData.valveDutyX2 = lActuatorRequest.expiratoryValveDuty /2.0f;

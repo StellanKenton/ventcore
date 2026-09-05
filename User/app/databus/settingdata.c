@@ -46,7 +46,7 @@ stVentVacSettings gVentVacSettings = {
     .triggerType = VENT_TRIGGER_OFF,
     .pressureTriggerCmh2o = -6.0f,
     .flowTriggerLpm = 3.0f,
-    .inspPausePct = 50.0f,
+    .inspPausePct = 0.0f,
 };
 
 stVentCpapPsvSettings gVentCpapPsvSettings = {

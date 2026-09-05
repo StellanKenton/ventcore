@@ -58,12 +58,17 @@ FIRMWARE_FIELD_NAMES = {
     "valve_x2": "valveDutyX2",
     "expiration_state": "expirationControllerState",
     "pressure_state": "pressureControllerState",
+    "volume_pause": "volumePauseActive",
+    "pause_settled": "volumePauseSettled",
+    "leak_lpm": "leakFlowLpm",
 }
 FLOAT_FIRMWARE_FIELDS = set(FIRMWARE_FIELD_NAMES) - {
     "target_x100",
     "valve_x2",
     "expiration_state",
     "pressure_state",
+    "volume_pause",
+    "pause_settled",
 }
 EXPECTED_FIRMWARE_FIELDS = ["sequence", "time_ms", *FIRMWARE_FIELD_NAMES]
 CSV_NON_WAVEFORM_FIELDS = set(CSV_PREFIX_FIELDS) | {"sequence", "time_ms"}

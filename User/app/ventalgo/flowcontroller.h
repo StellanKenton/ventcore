@@ -25,8 +25,16 @@ extern "C" {
 #define FLOW_CONTROLLER_FLOW_KD                   0.00F
 #define FLOW_CONTROLLER_HOLD_KP                   0.015F
 #define FLOW_CONTROLLER_HOLD_KI                   0.02F
-#define FLOW_CONTROLLER_PAUSE_KP                  0.003F
-#define FLOW_CONTROLLER_PAUSE_KI                  0.005F
+#define FLOW_CONTROLLER_PAUSE_ENTRY_KP            0.003F
+#define FLOW_CONTROLLER_PAUSE_ENTRY_KD            0.00005F
+#define FLOW_CONTROLLER_PAUSE_KP                  0.0003F
+#define FLOW_CONTROLLER_PAUSE_LOW_PRESSURE_KP      0.003F
+#define FLOW_CONTROLLER_PAUSE_GAIN_PRESSURE       30.0F
+#define FLOW_CONTROLLER_PAUSE_KI                  0.02F
+#define FLOW_CONTROLLER_PAUSE_KD                  0.0F
+#define FLOW_CONTROLLER_PAUSE_SETTLE_SAMPLES       20U
+#define FLOW_CONTROLLER_PAUSE_FLOW_WINDOW          2.0F
+#define FLOW_CONTROLLER_PAUSE_SPEED_STEP_MAX      40.0F
 #define FLOW_CONTROLLER_EFFORT_MIN              (-1.0F)
 #define FLOW_CONTROLLER_EFFORT_MAX                1.0F
 #define FLOW_CONTROLLER_FLOW_INPUT_SCALE          1.0F
@@ -49,6 +57,9 @@ typedef enum {
 
 /** Initialize the inspiratory flow controller. */
 void flowControllerInit(void);
+
+/** Read in VentTask after processing; valid only while volume pause is active. */
+uint8_t flowControllerPauseSettledGet(void);
 
 /** Produce one flow-control actuator request for the active breath plan. */
 int8_t flowControllerProcess(const stBreathPlan *plan, stActuatorRequest *request);

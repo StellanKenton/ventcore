@@ -23,7 +23,10 @@ extern "C" {
 #define PHASE_CONTROL_ERROR_STATE         (-2)
 #define PHASE_PRESSURE_FALL_TIME_MS        168U
 #define PHASE_COMPENSATION_TIME_MS          60U
+#define PHASE_COMPENSATION_TIMEOUT_MS     2000U
 #define PHASE_COMPENSATION_INSP_FLOW_MAX     0.1F
+#define PHASE_COMPENSATION_PAT_FLOW_MAX      2.0F
+#define PHASE_COMPENSATION_PRESSURE_MAX      1.0F
 #define PHASE_FLOW_RISE_HALF_TIME_MS         26U
 #define PHASE_FLOW_RISE_NINETY_TIME_MS       85U
 #define PHASE_FLOW_RISE_FULL_TIME_MS        170U
@@ -50,6 +53,7 @@ typedef struct stPhaseController {
     uint32_t expirationStartedMs;
     uint32_t runSequence;
     uint32_t compensationStartedMs;
+    uint32_t compensationQuietStartedMs;
     float compensationFlowSum;
     uint16_t compensationSampleCount;
     eBreathCycleReason cycleReason;

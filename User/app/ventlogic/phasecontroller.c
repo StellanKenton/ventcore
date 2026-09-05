@@ -14,6 +14,7 @@
 
 #include "controldata.h"
 #include "databus.h"
+#include "log.h"
 
 static stPhaseController gPhaseController;
 static float gPhaseData[PHASE_COUNT];
@@ -71,6 +72,7 @@ static void phaseControllerCompensationStart(uint32_t nowMs)
 {
     controlDataMdiffFlowZeroOffsetSet(0.0F);
     gPhaseController.compensationStartedMs = nowMs;
+    gPhaseController.compensationQuietStartedMs = nowMs;
     gPhaseController.compensationFlowSum = 0.0F;
     gPhaseController.compensationSampleCount = 0U;
     gPhaseController.runState = PHASE_COMPEN;
@@ -81,22 +83,40 @@ static int8_t phaseControllerCompensationProcess(uint32_t nowMs)
 {
     float lInspFlow = controlDataGet(INSP_FLOW_FILTERED);
     float lPatientFlow = controlDataGet(MDIFF_REAL_FLOW);
+    float lPatientPressure = controlDataGet(PAT_REAL_PRS);
 
     if ((lInspFlow > -PHASE_COMPENSATION_INSP_FLOW_MAX) &&
         (lInspFlow < PHASE_COMPENSATION_INSP_FLOW_MAX) &&
-        (lPatientFlow >= -FLT_MAX) && (lPatientFlow <= FLT_MAX)) {
+        (lPatientFlow > -PHASE_COMPENSATION_PAT_FLOW_MAX) &&
+        (lPatientFlow < PHASE_COMPENSATION_PAT_FLOW_MAX) &&
+        (lPatientPressure > -PHASE_COMPENSATION_PRESSURE_MAX) &&
+        (lPatientPressure < PHASE_COMPENSATION_PRESSURE_MAX)) {
+        if (gPhaseController.compensationSampleCount == 0U) {
+            gPhaseController.compensationQuietStartedMs = nowMs;
+        }
         gPhaseController.compensationFlowSum += lPatientFlow;
         gPhaseController.compensationSampleCount++;
+        if ((nowMs - gPhaseController.compensationQuietStartedMs) >=
+            PHASE_COMPENSATION_TIME_MS) {
+            lPatientFlow = gPhaseController.compensationFlowSum /
+                           (float)gPhaseController.compensationSampleCount;
+            controlDataMdiffFlowZeroOffsetSet(lPatientFlow);
+            LOG_I("phase", "prox zero100=%ld samples=%u",
+                  (long)(lPatientFlow * 100.0F),
+                  (unsigned int)gPhaseController.compensationSampleCount);
+            return phaseControllerInitialExpirationStart(nowMs);
+        }
+    } else {
+        /* A quiet blower does not imply that the test lung has emptied. */
+        gPhaseController.compensationFlowSum = 0.0F;
+        gPhaseController.compensationSampleCount = 0U;
     }
     if ((nowMs - gPhaseController.compensationStartedMs) <
-        PHASE_COMPENSATION_TIME_MS) {
+        PHASE_COMPENSATION_TIMEOUT_MS) {
         return PHASE_CONTROL_SUCCESS;
     }
-    if (gPhaseController.compensationSampleCount > 0U) {
-        controlDataMdiffFlowZeroOffsetSet(
-            gPhaseController.compensationFlowSum /
-            (float)gPhaseController.compensationSampleCount);
-    }
+    /* Keep the EEPROM-calibrated zero when no valid quiet window is available. */
+    LOG_W("phase", "prox zero skipped: no quiet window");
     return phaseControllerInitialExpirationStart(nowMs);
 }
 

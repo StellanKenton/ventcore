@@ -10,13 +10,16 @@
 #include "venttest.h"
 
 #include <stdint.h>
+#include <stddef.h>
 
 #include "apneaengine.h"
 #include "breathscheduler.h"
+#include "calibtrans.h"
 #include "console.h"
 #include "log.h"
 #include "monitordata.h"
 #include "monitorengine.h"
+#include "phasecontroller.h"
 #include "rtos.h"
 
 static const char *const gVentTestTag = "venttest";
@@ -89,13 +92,15 @@ static bool ventTestUnsignedParse(const char **arguments, uint16_t *value)
 /** Show the supported ventilation test commands. */
 static void ventTestUsageShow(void)
 {
-    LOG_I(gVentTestTag, "usage: vt mode <x> | run <0|1> | pac | vac | psv | psvst | stop | set <peep> <delta> | trigger off | trigger pressure <cmh2o100> | trigger flow <lpm100> | status");
+    LOG_I(gVentTestTag, "usage: vt mode <x> | run <0|1> | pac | vac | psv | psvst | stop | set <peep> <delta> | volume <peep> <ml> [pause_pct] | trigger off | trigger pressure <cmh2o100> | trigger flow <lpm100> | status");
 }
 
 /** Upload only samples recorded since the previous status command. */
 static void ventTestStatusShow(void)
 {
     stBreathResult lBreathResult;
+    stBreathPlan lPlan;
+    float lBlowerLimit;
     uint32_t lCurrentCount;
     uint32_t lDroppedCount = 0U;
     uint32_t lFirstSequence;
@@ -118,6 +123,18 @@ static void ventTestStatusShow(void)
     gVentTestTransientUploadedCount = lCurrentCount;
     repRtosExitCritical();
 
+    /* Report the applied plan, so a pressure-limited tail is not mistaken for pause. */
+    if ((phaseControllerActivePlanGet(&lPlan) == PHASE_CONTROL_SUCCESS) &&
+        (lPlan.breathType == BREATH_TYPE_MANDATORY_VOLUME) &&
+        (lPlan.limitSettings != NULL) &&
+        (calibtransPrsSpeed(lPlan.limitSettings->pressureHigh, &lBlowerLimit) ==
+         CALIBTRANS_STATUS_OK)) {
+        LOG_R("VT_VOLUME_PLAN,flow100=%ld,delivery_ms=%lu,pause_ms=%lu,pressure_limit100=%ld,blower_limit100=%ld",
+              (long)ventTestCenti(lPlan.inspiratoryFlowLpm),
+              (unsigned long)lPlan.riseTimeMs, (unsigned long)lPlan.holdTimeMs,
+              (long)ventTestCenti(lPlan.limitSettings->pressureHigh),
+              (long)ventTestCenti(lBlowerLimit));
+    }
     if (monitorEngineBreathResultGet(&lBreathResult) == MONITOR_ENGINE_SUCCESS) {
         LOG_R("VT_BREATH_RESULT,sequence=%lu,mode=%u,type=%u,trigger=%u,cycle_reason=%u,vti100=%ld,vte100=%ld,ppeak100=%ld,pplat100=%ld,peep100=%ld,peak_insp_flow100=%ld,ti_ms=%lu,cycle_ms=%lu,valid=0x%08lX",
               (unsigned long)lBreathResult.sequence,
@@ -142,12 +159,12 @@ static void ventTestStatusShow(void)
           (unsigned long)lFirstSequence,
           (unsigned long)lDroppedCount);
     LOG_R("VT_MONITOR_SCALE,float_fields=100");
-    LOG_R("sequence,time_ms,air_x2,o2_x2,prox_x2,pinsp_x1,ppeep_x1,pexp_x1,ppat_x1,blower_x10,pref_x1,flowcomp_x1,pcorr_x1,effort_x1,ff_x1,vt_x10,vti_x10,vte_x10,target_x100,valve_x2,expiration_state,pressure_state");
+    LOG_R("sequence,time_ms,air_x2,o2_x2,prox_x2,pinsp_x1,ppeep_x1,pexp_x1,ppat_x1,blower_x10,pref_x1,flowcomp_x1,pcorr_x1,effort_x1,ff_x1,vt_x10,vti_x10,vte_x10,target_x100,valve_x2,expiration_state,pressure_state,volume_pause,pause_settled,leak_lpm");
     for (lIndex = 0U; lIndex < lCount; lIndex++) {
         const stMonitorWaveformData *lSample = &gVentTestTransientUpload[lIndex];
 
         lSequence = lFirstSequence + lIndex;
-        LOG_R("%lu,%lu,%ld,%ld,%ld,%ld,%ld,%ld,%ld,%ld,%ld,%ld,%ld,%ld,%ld,%ld,%ld,%ld,%u,%u,%u,%u",
+        LOG_R("%lu,%lu,%ld,%ld,%ld,%ld,%ld,%ld,%ld,%ld,%ld,%ld,%ld,%ld,%ld,%ld,%ld,%ld,%u,%u,%u,%u,%u,%u,%ld",
               (unsigned long)lSequence,
               (unsigned long)(lSequence * VENT_TEST_TRANSIENT_SAMPLE_INTERVAL_MS),
               (long)ventTestCenti(lSample->airFlowX2),
@@ -169,7 +186,10 @@ static void ventTestStatusShow(void)
               (unsigned int)lSample->blowerTargetX100,
               (unsigned int)lSample->valveDutyX2,
               (unsigned int)lSample->expirationControllerState,
-              (unsigned int)lSample->pressureControllerState);
+              (unsigned int)lSample->pressureControllerState,
+              (unsigned int)lSample->volumePauseActive,
+              (unsigned int)lSample->volumePauseSettled,
+              (long)ventTestCenti(lSample->leakFlowLpm));
     }
     LOG_R("VT_TRANSIENT_END,count=%u", (unsigned int)lCount);
 }
@@ -188,15 +208,19 @@ void ventTestTransientRecord(void)
 static eConsoleCommandResult ventTestConsoleCommand(const char *arguments)
 {
     stVentPacSettings lPreviousSettings;
+    stVentVacSettings lPreviousVacSettings;
     stVentCpapPsvSettings lPreviousCpapPsvSettings;
     stVentPsvStSettings lPreviousPsvStSettings;
     stVentPacSettings *lPacSettings;
+    stVentVacSettings *lVacSettings;
     stVentCpapPsvSettings *lCpapPsvSettings;
     stVentPsvStSettings *lPsvStSettings;
     int8_t lStatus;
     uint16_t lDeltaPressure;
     uint16_t lMode;
     uint16_t lPeep;
+    uint16_t lTidalVolume;
+    uint16_t lPausePct;
     uint16_t lTriggerThreshold;
     uint8_t lRun;
     eVentTriggerType lTriggerType;
@@ -246,6 +270,40 @@ static eConsoleCommandResult ventTestConsoleCommand(const char *arguments)
               (unsigned int)(lDeltaPressure * 100U),
               (unsigned int)((lPeep + lDeltaPressure) * 100U),
               (int)lStatus);
+    } else if (ventTestTokenMatch(&arguments, "volume") &&
+               ventTestUnsignedParse(&arguments, &lPeep) &&
+               ventTestUnsignedParse(&arguments, &lTidalVolume)) {
+        /* An omitted pause preserves the current setting; zero is explicit. */
+        lPausePct = (uint16_t)GetVentVacSettings()->inspPausePct;
+        if ((*ventTestSkipSpaces(arguments) != '\0') &&
+            !ventTestUnsignedParse(&arguments, &lPausePct)) {
+            return CONSOLE_COMMAND_RESULT_INVALID_ARGUMENT;
+        }
+        if ((*ventTestSkipSpaces(arguments) != '\0') || (lPausePct >= 100U)) {
+            return CONSOLE_COMMAND_RESULT_INVALID_ARGUMENT;
+        }
+        if (((float)lPeep < GetVentLimitSettings()->pressureLow) ||
+            ((float)lPeep >= GetVentLimitSettings()->pressureHigh) ||
+            (lTidalVolume < GetVentLimitSettings()->tidalVolumeLow) ||
+            (lTidalVolume > GetVentLimitSettings()->tidalVolumeHigh)) {
+            return CONSOLE_COMMAND_RESULT_INVALID_ARGUMENT;
+        }
+        (void)breathSchedulerStop();
+        lVacSettings = GetVentVacSettings();
+        lPreviousVacSettings = *lVacSettings;
+        lVacSettings->peep = (float)lPeep;
+        lVacSettings->tidalVolume = (float)lTidalVolume;
+        lVacSettings->inspPausePct = (float)lPausePct;
+        lStatus = breathSchedulerTestModeSet((uint8_t)VENT_MD_VAC);
+        if (lStatus != BREATH_CONTROL_SUCCESS) {
+            *lVacSettings = lPreviousVacSettings;
+            (void)breathSchedulerTestModeSet((uint8_t)VENT_MD_VAC);
+        }
+        LOG_I(gVentTestTag, "volume peep=%u ml=%u ti_ms=%u pause_pct=%u rate=%u status=%d",
+              (unsigned int)lPeep, (unsigned int)lTidalVolume,
+              (unsigned int)lVacSettings->inspTimeMs,
+              (unsigned int)lVacSettings->inspPausePct,
+              (unsigned int)lVacSettings->freq, (int)lStatus);
     } else if (ventTestTokenMatch(&arguments, "trigger")) {
         if (ventTestTokenMatch(&arguments, "off") &&
             (*ventTestSkipSpaces(arguments) == '\0')) {
