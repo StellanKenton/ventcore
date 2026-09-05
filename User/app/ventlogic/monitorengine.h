@@ -24,6 +24,9 @@ extern "C" {
 #define MONITOR_FLOW_DEADBAND_LPM                0.5F
 #define MONITOR_FLOW_SAMPLE_VOLUME_ML            0.1F
 #define MONITOR_PLATEAU_END_WINDOW_MS             100U
+#define MONITOR_LEAK_COEFFICIENT_MIN              (-2.0F)
+#define MONITOR_LEAK_COEFFICIENT_MAX               50.0F
+#define MONITOR_LEAK_PRESSURE_SUM_MIN               0.001F
 #define BREATH_RESULT_VALID_COMPLETE             (1UL << 0)
 #define BREATH_RESULT_VALID_VTI                  (1UL << 1)
 #define BREATH_RESULT_VALID_VTE                  (1UL << 2)
@@ -40,6 +43,8 @@ typedef enum {
     MONITOR_TIDA_VOL_INSP,
     MONITOR_TIDA_VOL_EXP,
     MONITOR_PLATEAU_PRS,
+    MONITOR_LEAK_COEFFICIENT,
+    MONITOR_LEAK_FLOW,
     MONITOR_DATA_COUNT,
 } eMonitorDataType;
 
@@ -74,6 +79,8 @@ typedef struct stMonitorEngine {
     float peakInspiratoryFlowLpm;
     float plateauPressureSumCmh2o;
     uint32_t plateauPressureSampleCount;
+    float leakFlowSumLpm;
+    float leakPressureRootSum;
     eBreathCycleReason cycleReason;
     uint8_t breathActive;
     stBreathPlan breathPlan;

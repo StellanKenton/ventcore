@@ -28,6 +28,20 @@ static uint8_t monitorEngineFinite(float value)
     return (uint8_t)((value >= -FLT_MAX) && (value <= FLT_MAX));
 }
 
+/** Calculate a positive square root without pulling in the C math library. */
+static float monitorEngineSqrt(float value)
+{
+    uint32_t lBits;
+    float lRoot;
+
+    (void)memcpy(&lBits, &value, sizeof(lBits));
+    lBits = (lBits >> 1U) + 0x1FC00000UL;
+    (void)memcpy(&lRoot, &lBits, sizeof(lRoot));
+    lRoot = 0.5F * (lRoot + (value / lRoot));
+    lRoot = 0.5F * (lRoot + (value / lRoot));
+    return lRoot;
+}
+
 /** Store a monitor result selected by type. */
 static int8_t monitorEngineSet(eMonitorDataType type, float value)
 {
@@ -42,6 +56,55 @@ static int8_t monitorEngineSet(eMonitorDataType type, float value)
 static void monitorEngineTidalVolumeIntegrate(eMonitorDataType type, float flow)
 {
     gMonitorData[type] += flow * MONITOR_FLOW_SAMPLE_VOLUME_ML;
+}
+
+/** Accumulate paired flow and pressure-root samples for leak estimation. */
+static void monitorEngineLeakAccumulate(float flow)
+{
+    float lPressure = controlDataGet(PAT_REAL_PRS);
+
+    if ((monitorEngineFinite(flow) == 0U) ||
+        (monitorEngineFinite(lPressure) == 0U) ||
+        (lPressure <= 0.0F)) {
+        return;
+    }
+    gMonitorEngine.leakFlowSumLpm += flow;
+    gMonitorEngine.leakPressureRootSum += monitorEngineSqrt(lPressure);
+}
+
+/** Publish the completed-cycle coefficient for Qleak = K * sqrt(Paw). */
+static void monitorEngineLeakCoefficientCalculate(void)
+{
+    float lCoefficient;
+
+    if (gMonitorEngine.leakPressureRootSum <
+        MONITOR_LEAK_PRESSURE_SUM_MIN) {
+        return;
+    }
+    /* The common fixed 6 ms sample interval cancels in this ratio. */
+    lCoefficient = gMonitorEngine.leakFlowSumLpm /
+                   gMonitorEngine.leakPressureRootSum;
+    if (lCoefficient < MONITOR_LEAK_COEFFICIENT_MIN) {
+        lCoefficient = MONITOR_LEAK_COEFFICIENT_MIN;
+    } else if (lCoefficient > MONITOR_LEAK_COEFFICIENT_MAX) {
+        lCoefficient = MONITOR_LEAK_COEFFICIENT_MAX;
+    }
+    (void)monitorEngineSet(MONITOR_LEAK_COEFFICIENT, lCoefficient);
+}
+
+/** Update signed instantaneous leak flow from the latest completed coefficient. */
+static void monitorEngineLeakFlowProcess(void)
+{
+    float lCoefficient = monitorEngineGet(MONITOR_LEAK_COEFFICIENT);
+    float lPressure = controlDataGet(PAT_REAL_PRS);
+    float lLeakFlow = 0.0F;
+
+    if ((monitorEngineFinite(lCoefficient) != 0U) &&
+        (monitorEngineFinite(lPressure) != 0U) &&
+        (lPressure > 0.0F)) {
+        lLeakFlow = lCoefficient * monitorEngineSqrt(lPressure);
+    }
+    (void)monitorEngineSet(MONITOR_LEAK_FLOW, lLeakFlow);
 }
 
 /** Average valid zero-flow pressure samples from the plateau window. */
@@ -73,7 +136,8 @@ static void monitorEnginePlateauPressureProcess(uint32_t nowMs)
         return;
     }
 
-    lFlow = controlDataGet(MDIFF_REAL_FLOW);
+    lFlow = controlDataGet(MDIFF_REAL_FLOW) -
+            monitorEngineGet(MONITOR_LEAK_FLOW);
     lPressure = controlDataGet(PAT_REAL_PRS);
     if ((monitorEngineFinite(lFlow) == 0U) ||
         (monitorEngineFinite(lPressure) == 0U) ||
@@ -167,6 +231,8 @@ static int8_t monitorEngineBreathStart(uint32_t nowMs)
     gMonitorEngine.peakInspiratoryFlowLpm = 0.0F;
     gMonitorEngine.plateauPressureSumCmh2o = 0.0F;
     gMonitorEngine.plateauPressureSampleCount = 0U;
+    gMonitorEngine.leakFlowSumLpm = 0.0F;
+    gMonitorEngine.leakPressureRootSum = 0.0F;
     gMonitorEngine.inspiratoryTimeMs = 0U;
     gMonitorEngine.cycleReason = BREATH_CYCLE_REASON_NONE;
     gMonitorEngine.breathActive = 1U;
@@ -188,6 +254,8 @@ void monitorEngineInit(void)
     (void)monitorEngineSet(MONITOR_TIDA_VOL_INSP, 0.0F);
     (void)monitorEngineSet(MONITOR_TIDA_VOL_EXP, 0.0F);
     (void)monitorEngineSet(MONITOR_PLATEAU_PRS, 0.0F);
+    (void)monitorEngineSet(MONITOR_LEAK_COEFFICIENT, 0.0F);
+    (void)monitorEngineSet(MONITOR_LEAK_FLOW, 0.0F);
 }
 
 float monitorEngineGet(eMonitorDataType type)
@@ -231,6 +299,8 @@ static void monitorEngineTidalVolumeProcess(uint32_t nowMs)
     if ((lNextState == MONITOR_STATE_INSP) &&
         (gMonitorEngine.runState != MONITOR_STATE_INSP)) {
         if (gMonitorEngine.breathActive != 0U) {
+            monitorEngineLeakCoefficientCalculate();
+            monitorEngineLeakFlowProcess();
             monitorEngineBreathResultPublish(nowMs);
         }
         if (monitorEngineBreathStart(nowMs) != MONITOR_ENGINE_SUCCESS) {
@@ -250,6 +320,8 @@ static void monitorEngineTidalVolumeProcess(uint32_t nowMs)
         (gMonitorEngine.breathActive == 0U)) {
         return;
     }
+
+    monitorEngineLeakAccumulate(lFlow);
 
     if (gMonitorEngine.runState == MONITOR_STATE_INSP) {
         lPressure = controlDataGet(PAT_REAL_PRS);
@@ -284,6 +356,7 @@ static void monitorEngineTidalVolumeProcess(uint32_t nowMs)
 
 void monitorEngineProcess(uint32_t nowMs)
 {
+    monitorEngineLeakFlowProcess();
     monitorEnginePlateauPressureProcess(nowMs);
     monitorEngineTidalVolumeProcess(nowMs);
 }

@@ -13,6 +13,7 @@
 
 #include "calibtrans.h"
 #include "controldata.h"
+#include "monitorengine.h"
 #include "phasecontroller.h"
 #include "pid.h"
 
@@ -92,7 +93,12 @@ static eFlowControllerState flowControllerActiveStateGet(const stBreathPlan *pla
                                       FLOW_CONTROLLER_FLOW_TARGET_MIN,
                                       FLOW_CONTROLLER_FLOW_TARGET_MAX);
     if (phaseControllerVolumePauseActiveGet() != 0U) {
-        *flowReference = 0.0F;
+        *flowReference = (plan->mode == VENT_MD_VAC) ?
+                         flowControllerClamp(
+                             monitorEngineGet(MONITOR_LEAK_FLOW),
+                             FLOW_CONTROLLER_FLOW_TARGET_MIN,
+                             FLOW_CONTROLLER_FLOW_TARGET_MAX) :
+                         0.0F;
         return FLOW_CONTROLLER_INSP_PAUSE;
     }
     if (*flowReference < lFlowTarget) {
@@ -235,10 +241,10 @@ int8_t flowControllerProcess(const stBreathPlan *plan, stActuatorRequest *reques
                                                    lFlowReference,
                                                    request);
         case FLOW_CONTROLLER_INSP_PAUSE:
-            /* Keep the expiratory valve closed and regulate patient flow to zero. */
+            /* Replace circuit leak while keeping net patient flow at zero. */
             return flowControllerClosedLoopProcess(plan,
                                                    gFlowControllerState,
-                                                   0.0F,
+                                                   lFlowReference,
                                                    request);
         case FLOW_CONTROLLER_IDLE:
         default:
