@@ -162,8 +162,15 @@ void monitorEngineProcess(uint32_t nowMs)
 {
     eMonitorEngineState lNextState =
         monitorEngineStateFromPhase(phaseControllerStateGet());
-    float lFlow;
+    float lFlow = controlDataGet(MDIFF_REAL_FLOW);
     float lPressure;
+
+    /* Confirm expiration with negative patient flow before leaving inspiration. */
+    if ((gMonitorEngine.runState == MONITOR_STATE_INSP) &&
+        (lNextState == MONITOR_STATE_EXP) &&
+        !(lFlow < 0.0F)) {
+        lNextState = MONITOR_STATE_INSP;
+    }
 
     if ((lNextState == MONITOR_STATE_INSP) &&
         (gMonitorEngine.runState != MONITOR_STATE_INSP)) {
@@ -197,7 +204,6 @@ void monitorEngineProcess(uint32_t nowMs)
         }
     }
 
-    lFlow = controlDataGet(MDIFF_REAL_FLOW);
     if ((monitorEngineFinite(lFlow) == 0U) ||
         ((lFlow > -MONITOR_FLOW_DEADBAND_LPM) &&
          (lFlow < MONITOR_FLOW_DEADBAND_LPM))) {
