@@ -34,6 +34,7 @@ void controlDataMdiffFlowZeroOffsetSet(float offsetLpm) {
 float controlDataMdiffFlowZeroOffsetGet(void) { return gOffset; }
 uint8_t breathSchedulerRunningGet(void) { return 1U; }
 uint32_t breathSchedulerRunSequenceGet(void) { return gRunSequence; }
+void monitorEngineBreathComplete(uint32_t nowMs) { (void)nowMs; }
 int8_t breathSchedulerNextPlanGet(eBreathTriggerReason reason, stBreathPlan *plan) {
     (void)reason;
     *plan = (stBreathPlan){0};

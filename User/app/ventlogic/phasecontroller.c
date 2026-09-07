@@ -14,6 +14,7 @@
 #include "controldata.h"
 #include "databus.h"
 #include "log.h"
+#include "monitorengine.h"
 
 static stPhaseController gPhaseController;
 static float gPhaseData[PHASE_COUNT];
@@ -23,6 +24,7 @@ static void phaseControllerReferencesClear(void)
 {
     (void)phaseControlSet(PHASE_REF_PRESSURE, 0.0F);
     (void)phaseControlSet(PHASE_REF_FLOW, 0.0F);
+    (void)phaseControlSet(PHASE_REF_VOLUME, 0.0F);
 }
 
 /** Enter idle and discard the active breath plan. */
@@ -125,6 +127,8 @@ static int8_t phaseControllerInspirationStart(eBreathTriggerReason triggerReason
 {
     float lPatientPressure;
 
+    /* Publish the just-ended VTI before the scheduler builds this inspiration. */
+    monitorEngineBreathComplete(nowMs);
     if ((gPhaseController.breathStarted != 0U) ||
         (triggerReason == BREATH_TRIGGER_REASON_APNEA_BACKUP)) {
         if (phaseControllerPlanLoad(triggerReason) != PHASE_CONTROL_SUCCESS) {
@@ -136,6 +140,7 @@ static int8_t phaseControllerInspirationStart(eBreathTriggerReason triggerReason
 
     lPatientPressure = controlDataGet(PAT_REAL_PRS);
     gPhaseController.inspirationStartedMs = nowMs;
+    (void)phaseControlSet(PHASE_REF_VOLUME, 0.0F);
     gPhaseController.volumePauseActive = 0U;
     gPhaseController.cycleReason = BREATH_CYCLE_REASON_NONE;
     gPhaseController.breathStarted = 1U;
@@ -277,42 +282,54 @@ eBreathCycleReason phaseControllerCycleReasonGet(void)
     return gPhaseController.cycleReason;
 }
 
-/** Process the flow-controlled delivery interval. */
-static void phaseControllerVolumeInspirationProcess(uint32_t nowMs)
-{
+/** Return normalized flow and its exact area for the existing piecewise ramp. */
+static float phaseControllerFlowCurve(float elapsedMs, float *areaMs) {
+    const float lTimes[] = {0.0F, PHASE_FLOW_RISE_HALF_TIME_MS,
+                           PHASE_FLOW_RISE_NINETY_TIME_MS, PHASE_FLOW_RISE_FULL_TIME_MS};
+    const float lRatios[] = {0.0F, PHASE_FLOW_RISE_HALF_RATIO,
+                            PHASE_FLOW_RISE_NINETY_RATIO, 1.0F};
+    float lDuration;
+    float lRatio;
+    uint8_t lIndex;
+
+    *areaMs = 0.0F;
+    for (lIndex = 1U; lIndex < 4U; lIndex++) {
+        lDuration = lTimes[lIndex] - lTimes[lIndex - 1U];
+        if (elapsedMs < lTimes[lIndex]) {
+            lDuration = elapsedMs - lTimes[lIndex - 1U];
+        }
+        lRatio = lRatios[lIndex - 1U] +
+            (lRatios[lIndex] - lRatios[lIndex - 1U]) * lDuration /
+            (lTimes[lIndex] - lTimes[lIndex - 1U]);
+        *areaMs += 0.5F * (lRatios[lIndex - 1U] + lRatio) * lDuration;
+        if (elapsedMs <= lTimes[lIndex]) {
+            return lRatio;
+        }
+    }
+    *areaMs += elapsedMs - PHASE_FLOW_RISE_FULL_TIME_MS;
+    return 1.0F;
+}
+
+/** Publish flow and a user-volume trajectory normalized over the delivery ramp. */
+static void phaseControllerVolumeInspirationProcess(uint32_t nowMs) {
     float lCurveProgress;
+    float lAreaMs;
+    float lTotalAreaMs;
     uint32_t lElapsedMs = nowMs - gPhaseController.inspirationStartedMs;
 
     if (lElapsedMs >= gPhaseController.activePlan.riseTimeMs) {
         gPhaseController.volumePauseActive =
             (uint8_t)(gPhaseController.activePlan.holdTimeMs > 0U);
         (void)phaseControlSet(PHASE_REF_FLOW, 0.0F);
+        (void)phaseControlSet(PHASE_REF_VOLUME, gPhaseController.activePlan.targetTidalVolumeMl);
         return;
     }
-
-    if (lElapsedMs <= PHASE_FLOW_RISE_HALF_TIME_MS) {
-        lCurveProgress = PHASE_FLOW_RISE_HALF_RATIO *
-                         (float)lElapsedMs /
-                         (float)PHASE_FLOW_RISE_HALF_TIME_MS;
-    } else if (lElapsedMs <= PHASE_FLOW_RISE_NINETY_TIME_MS) {
-        lCurveProgress = PHASE_FLOW_RISE_HALF_RATIO +
-                         (PHASE_FLOW_RISE_NINETY_RATIO -
-                          PHASE_FLOW_RISE_HALF_RATIO) *
-                         (float)(lElapsedMs - PHASE_FLOW_RISE_HALF_TIME_MS) /
-                         (float)(PHASE_FLOW_RISE_NINETY_TIME_MS -
-                                 PHASE_FLOW_RISE_HALF_TIME_MS);
-    } else if (lElapsedMs < PHASE_FLOW_RISE_FULL_TIME_MS) {
-        lCurveProgress = PHASE_FLOW_RISE_NINETY_RATIO +
-                         (1.0F - PHASE_FLOW_RISE_NINETY_RATIO) *
-                         (float)(lElapsedMs - PHASE_FLOW_RISE_NINETY_TIME_MS) /
-                         (float)(PHASE_FLOW_RISE_FULL_TIME_MS -
-                                 PHASE_FLOW_RISE_NINETY_TIME_MS);
-    } else {
-        lCurveProgress = 1.0F;
-    }
+    lCurveProgress = phaseControllerFlowCurve((float)lElapsedMs, &lAreaMs);
+    (void)phaseControllerFlowCurve((float)gPhaseController.activePlan.riseTimeMs, &lTotalAreaMs);
+    (void)phaseControlSet(PHASE_REF_VOLUME,
+        (lTotalAreaMs > 0.0F) ? gPhaseController.activePlan.targetTidalVolumeMl * lAreaMs / lTotalAreaMs : 0.0F);
     (void)phaseControlSet(PHASE_REF_FLOW,
-                          gPhaseController.activePlan.inspiratoryFlowLpm *
-                          lCurveProgress);
+        gPhaseController.activePlan.inspiratoryFlowLpm * lCurveProgress);
 }
 
 /** Process the pressure reference fall from peak pressure to PEEP. */

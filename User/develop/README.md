@@ -7,6 +7,11 @@ target board.
 
 ## Files
 
+- `test_vti_rtt.py`: startup convergence recording through Device Tool RTT on a test
+  lung. `py -3 user/develop/test_vti_rtt.py --output build/vti_rtt/run --seconds 44
+  --peep 5 --pause 0` starts VAC at 500 mL, records every result/feedback and 6 ms
+  waveform, and stops on completion. Create `stop` in the output directory to abort.
+
 - `test_vac_matrix.py`: simulated-lung VAC matrix collection through
   `quick_deploy.py rtt`. Run with `--output build/vac_baseline`; defaults to
   PEEP 5/10/15 and volume 300/500/700, 29 seconds per group. Saves raw RTT,
@@ -16,12 +21,17 @@ target board.
   power-on default is 0. This pause matrix explicitly requests 50 percent.
   `vt volume 15 500 0` selects a full delivery interval without pause. `volume_pause`
   marks the exact pause interval; `pause_settled` indicates the entry-to-PI
-  transition and `leak_lpm` records signed estimated patient leak in hundredths
-  of L/min. The actual VAC flow target clamps this estimate to 0..120 L/min.
+  transition and `leak_lpm` records the shared nonnegative patient leak compensation
+  in hundredths of L/min, limited by `MONITOR_PATIENT_LEAK_FLOW_MAX_LPM` (120 L/min).
   `VT_VOLUME_PLAN` reports the applied flow reference (hundredths of L/min),
   delivery/pause milliseconds, pressure limit (hundredths of cmH2O), and calibrated
   blower limit (hundredths of command units). Zero pause does not prevent a
   pressure-limited delivery tail; check these limits when volume remains low.
+  `VT_VOLUME_FEEDBACK` reports the active plan sequence, user target, EMA VTI,
+  correction and internal delivery target (volume fields in hundredths of mL).
+  Feedback uses proximal VTI without subtracting downstream leak. EMA alpha is 0.5 for both VTI and its applied correction. The outer loop removes
+  the lag of already-applied corrections before updating with startup gain 1.2 then gain 1.0, a 0.5%
+  deadband, 25% step and +/-30% total bound.
   Steady metrics use the last 400 ms of a 1-second pause: flow standard deviation,
   peak-to-peak amplitude, mean target error and error RMS. Check `steady_settled`
   before interpreting them. Raw/hysteretic crossings remain auxiliary metrics;
@@ -31,9 +41,19 @@ target board.
   Missing samples invalidate the capture. `metadata.json` records controller
   tunings and source/firmware hashes alongside raw logs, CSV and summary JSON.
 - `device_tool.py`: command line entry point.
+- `test_vti_compensation.py`: real scheduler/phase/monitor/flow-controller host regression.
+  Run `py -3 user/develop/test_vti_compensation.py`. Tests first-sample EMA initialization,
+  next-breath application, duplicate/stale rejection, volume-to-flow conversion, bounds,
+  convergence under a scripted 80 mL delivery loss, invalid/limited breaths and resets.
+  This is a software model, not a test-lung validation of the selected tuning.
+- `test_monitor_leak.py`: production monitor and pause-controller integration test.
+  Run `py -3 user/develop/test_monitor_leak.py` with native GCC/Clang. Covers known
+  leakage, positive expiratory proximal flow, signed diagnostics, invalid samples,
+  stop/restart, mid-breath re-zeroing, incomplete cycles and compensation limits.
 - `device_tool_config.json`: per-computer tool paths and target settings.
 - `test_flow_pause.py`: native host regression for VAC pause entry and zero-flow
-  control using the production controller and PID with sensor stubs. Run
+  control, plus VAC feedforward formula, compliance boundaries and pressure limits;
+  uses the production controller and PID with sensor stubs. Run
   `py -3 user/develop/test_flow_pause.py`; native GCC/Clang is required (`CC`
   overrides discovery). Temporary host builds do not access the board or replace
   Device Tool firmware builds. Scripted inputs verify command behavior, not

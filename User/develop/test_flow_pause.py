@@ -23,6 +23,8 @@ HARNESS = r'''
 static float gData[CONTROL_DATA_COUNT];
 static float gRefs[PHASE_COUNT];
 static float gLeak;
+static float gCapturedFeedforward;
+static uint8_t gCaptureFeedforward;
 static uint8_t gPause;
 static ePhaseControllerState gPhase = PHASE_INSP;
 static int8_t gCalibrationStatus = CALIBTRANS_STATUS_OK;
@@ -34,9 +36,14 @@ int8_t phaseControlSet(ePhaseControlType type, float value) {
     return PHASE_CONTROL_SUCCESS;
 }
 float monitorEngineGet(eMonitorDataType type) { (void)type; return gLeak; }
+void monitorEngineVolumeLimitedNotify(void) {}
 uint8_t phaseControllerVolumePauseActiveGet(void) { return gPause; }
 ePhaseControllerState phaseControllerStateGet(void) { return gPhase; }
 int8_t calibtransPrsSpeed(float pressureValue, float *speedRps) {
+    if (gCaptureFeedforward != 0U) {
+        gCapturedFeedforward = pressureValue;
+        gCaptureFeedforward = 0U;
+    }
     *speedRps = pressureValue * 10.0F;
     return gCalibrationStatus;
 }
@@ -48,16 +55,64 @@ static uint16_t testStep(const stBreathPlan *plan) {
     return lRequest.blowerTarget;
 }
 
+/** Check the exact VAC pressure model independently of PID output. */
+static void testVacFeedforward(void) {
+    const float lVolumes[] = {300.0F, 420.0F, 500.0F, 1400.0F, 1500.0F};
+    const float lCompliance[] = {30.0F, 30.0F, 500.0F / 14.0F, 100.0F, 100.0F};
+    stVentLimitSettings lLimits = {.pressureLow = 1.0F, .pressureHigh = 60.0F};
+    stBreathPlan lPlan = {.sequence = 1U, .mode = VENT_MD_VAC,
+        .breathType = BREATH_TYPE_MANDATORY_VOLUME, .peepCmh2o = 5.0F,
+        .inspiratoryFlowLpm = 30.0F, .limitSettings = &lLimits};
+    stActuatorRequest lRequest;
+    unsigned int lIndex;
+    float lExpected;
+
+    gRefs[PHASE_REF_FLOW] = 30.0F;
+    gData[INSP_FLOW_FILTERED] = 30.0F;
+    gData[PAT_REAL_PRS] = 40.0F;
+    for (lIndex = 0U; lIndex < 5U; lIndex++) {
+        flowControllerInit();
+        lPlan.targetTidalVolumeMl = lVolumes[lIndex];
+        lPlan.deliveryTargetMl = lVolumes[lIndex] + 100.0F;
+        gRefs[PHASE_REF_VOLUME] = 0.5F * lVolumes[lIndex];
+        gCaptureFeedforward = 1U;
+        (void)testStep(&lPlan);
+        lExpected = 5.0F + 0.5F * lVolumes[lIndex] / lCompliance[lIndex] + 0.077355F;
+        assert(fabsf(gCapturedFeedforward - lExpected) < 0.001F);
+        /* Actual pressure is not added on top of the elastic model. */
+        gData[PAT_REAL_PRS] = 10.0F;
+        gCaptureFeedforward = 1U;
+        (void)testStep(&lPlan);
+        assert(fabsf(gCapturedFeedforward - lExpected) < 0.001F);
+    }
+    gRefs[PHASE_REF_VOLUME] = 0.0F;
+    gCaptureFeedforward = 1U;
+    (void)testStep(&lPlan);
+    assert(fabsf(gCapturedFeedforward - 5.077355F) < 0.001F);
+    gRefs[PHASE_REF_VOLUME] = 3000.0F;
+    gCaptureFeedforward = 1U;
+    (void)testStep(&lPlan);
+    assert(fabsf(gCapturedFeedforward - 20.077355F) < 0.001F);
+    lLimits.pressureHigh = 8.0F;
+    gCaptureFeedforward = 1U;
+    (void)testStep(&lPlan);
+    assert(gCapturedFeedforward == 8.0F);
+    gRefs[PHASE_REF_VOLUME] = NAN;
+    assert(flowControllerProcess(&lPlan, &lRequest) == ACTUATOR_REQUEST_ERROR_STATE);
+    gRefs[PHASE_REF_VOLUME] = 0.0F;
+}
+
 /** Verify zero-flow control, transition limits, delayed feedback and failure handling. */
 int main(void) {
     stVentLimitSettings lLimits = {.pressureLow = 1.0F, .pressureHigh = 60.0F};
     stBreathPlan lPlan = {.sequence = 1U, .mode = VENT_MD_VAC,
-        .breathType = BREATH_TYPE_MANDATORY_VOLUME,
+        .breathType = BREATH_TYPE_MANDATORY_VOLUME, .targetTidalVolumeMl = 500.0F, .peepCmh2o = 5.0F,
         .inspiratoryFlowLpm = 30.0F, .limitSettings = &lLimits};
     stActuatorRequest lRequest;
     uint16_t lPrevious, lTarget, lZeroFlowTarget;
     unsigned int lIndex;
 
+    testVacFeedforward();
     flowControllerInit();
     assert(flowControllerPauseSettledGet() == 0U);
     gRefs[PHASE_REF_FLOW] = 30.0F;

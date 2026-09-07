@@ -134,6 +134,12 @@ static void ventTestStatusShow(void)
               (unsigned long)lPlan.riseTimeMs, (unsigned long)lPlan.holdTimeMs,
               (long)ventTestCenti(lPlan.limitSettings->pressureHigh),
               (long)ventTestCenti(lBlowerLimit));
+        LOG_R("VT_VOLUME_FEEDBACK,sequence=%lu,target100=%ld,filtered_vti100=%ld,correction100=%ld,delivery_target100=%ld",
+              (unsigned long)lPlan.sequence,
+              (long)ventTestCenti(lPlan.targetTidalVolumeMl),
+              (long)ventTestCenti(lPlan.filteredVtiMl),
+              (long)ventTestCenti(lPlan.volumeCorrectionMl),
+              (long)ventTestCenti(lPlan.deliveryTargetMl));
     }
     if (monitorEngineBreathResultGet(&lBreathResult) == MONITOR_ENGINE_SUCCESS) {
         LOG_R("VT_BREATH_RESULT,sequence=%lu,mode=%u,type=%u,trigger=%u,cycle_reason=%u,vti100=%ld,vte100=%ld,ppeak100=%ld,pplat100=%ld,peep100=%ld,peak_insp_flow100=%ld,ti_ms=%lu,cycle_ms=%lu,valid=0x%08lX",

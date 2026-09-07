@@ -22,7 +22,7 @@
 | `module/rtos/portrtos.*` | FreeRTOS 原生接口绑定 |
 | `tools/controller/` | 轻量控制算法；当前提供带输出限幅和积分抗饱和的固定周期浮点 PID |
 | `tools/ringbuffer/` | 日志输出使用的轻量级字节环形缓冲区 |
-| `develop/` | VS Code Device Tool 的 CMake 构建、烧录、复位与 RTT 工具；`test_flow_pause.py` 使用真实控制器与模拟输入验证 VAC 暂停控制 |
+| `develop/` | VS Code Device Tool 的 CMake 构建、烧录、复位与 RTT 工具；`test_flow_pause.py` 验证暂停控制，`test_monitor_leak.py` 验证泄漏估计，`test_vti_compensation.py` 验证逐呼吸补偿，`test_vti_rtt.py` 通过 Device Tool RTT 记录启动收敛 |
 
 `vt volume <peep> <ml> [pause_pct]` 通过 RTT 设置 VAC 参数；暂停百分比为 0..99，省略时保留当前值，上电默认 0。`vt volume 15 500 0` 设置无暂停，供气覆盖完整吸气时间，目标流量按有效供气时间计算，`vt run 1` 启动；`vt status` 波形的 `volume_pause` 标记暂停阶段，`pause_settled` 标记已切入稳定段 PI，`leak_lpm` 记录患者侧泄漏估计。`develop/test_vac_matrix.py` 经 Device Tool RTT 入口完成模拟肺九组测试，保存原始日志、波形及逐呼吸振幅、泄漏目标误差统计；过零次数仅作辅助诊断。
 | `FreeRTOSConfig.h` | FreeRTOS 工程配置 |
@@ -30,5 +30,25 @@
 项目代码只能通过 `rtos.h` 使用任务、调度、tick 和临界区能力；FreeRTOS 原生 API 仅允许出现在 `portrtos.c`。日志统一使用 `LOG_I`、`LOG_W`、`LOG_E` 等宏，不能直接使用标准库输出函数。
 
 当前 GD32F470 板载 HXTAL 为 8 MHz，系统使用 `240M_PLL_8M_HXTAL` 配置；该配置决定 RTOS tick 和 APB 外设（包括 VCM UART 230400）的实际时基。
+
+泄漏估计按 `涡轮 → inpFlowSensor → 呼气阀排气支路接点 → midFlowSensor → lung` 的气路定义；呼出气体反向经过 midFlowSensor 后由呼气阀排出。仅 midFlowSensor 下游泄漏计入患者侧补偿，`inpFlow - midFlow` 包含呼气阀正常排气，不能直接作为暂停的近端流量目标。
+
+Monitor 按实际吸气计划的 sequence 切分泄漏累计窗口，必须观察到呼气阶段才结算上一周期，不依赖 midFlow 是否出现负值。原有 VTi/VTe 的负流量呼气确认逻辑保留，与泄漏窗口独立。停止、零点补偿阶段、无有效计划或近端流量重新调零时清除旧估计及未完成周期；吸气中失效后等待下一次吸气边界，第一完整周期结束前使用零补偿。任一样本流量/压力非有限或压力不大于零，整个估计窗口无效；该窗口结束时清除旧 K、回退零补偿，不用删减后的样本发布估计。
+
+`MONITOR_LEAK_BALANCE_COEFFICIENT` 保存有效窗口计算的带符号原始比值；`MONITOR_LEAK_COEFFICIENT` 是限幅到 0..50 的非负 K；`MONITOR_LEAK_VALID` 表示上一窗口通过完整性与数值检查。`MONITOR_LEAK_FLOW` 为 K 乘当前患者压力平方根后的统一补偿量，暂停控制与平台压零流量判定共同使用。独立上限 `MONITOR_PATIENT_LEAK_FLOW_MAX_LPM` 暂保留原值 120 L/min，尚非重新验证的台架限值。无效窗口的原始比值置零，应结合有效标志读取。
+
+上述有效标志不证明肺内储气量首尾相同，也不检测传感器陈旧数据；固定 6 ms、周期首尾储气量近似一致和漏口特性近似恒定仍是估计前提。净储气变化及传感器偏差仍可能被识别为泄漏。暂停期不根据瞬时 midFlow 重新学习 K，避免将供气尾流变成补偿目标。
+
+VAC 容量外环沿用 `MONITOR_TIDA_VOL_INSP` 的近端 VTI 定义（含吸气暂停阶段，未扣患者侧泄漏）。Phase Controller 在加载下一次吸气计划前调用 `monitorEngineBreathComplete()`，结算上一完整周期并将 VTI 送入 Scheduler；Monitor 的 sequence 边界处理保留为补充入口，通过完成标志避免重复发布。`monitorEngineProcess()` 仍仅按顺序调用处理函数。只有同一配置代次、当前计划序号且未消费过的反馈可以参与下一计划，旧配置结果不会重新激活补偿。
+
+首次有效 VTI 直接初始化 `filteredVtiMl`，之后执行 `filteredVtiMl += 0.5 * (vtiMl - filteredVtiMl)`。同时按相同 alpha 平滑产生该 VTI 的计划补偿量 `filteredAppliedCorrectionMl`。外环误差为 `target - filteredVti - (currentCorrection - filteredAppliedCorrection)`，扣除已经施加但尚未反映在 VTI 均值中的补偿，避免重复追补历史欠量。超过用户目标 0.5% 的死区时，首次有效周期以增益 1.2、后续以增益 1.0 更新补偿，每周期步长不超过目标量 25%，累计补偿不超过 ±30%。首次有效反馈同时恢复压力上限快照，避免启动调零发生在初始计划加载后时，下一计划误清除首周期补偿。内部 `deliveryTargetMl = targetTidalVolumeMl + volumeCorrectionMl`，沿用有效供气时间、上升沿面积损失和启动损失公式计算流量；用户目标与暂停时长不变。宏位于 `breathscheduler.h`，当前台架验证范围见 `build/vti_rtt/`。
+
+无有效完整周期、非有限/非正 VTI、未确认实际呼气、非正常时间切换、供气段压力/流量/风机上限或控制器失败时，外环不更新 EMA 和补偿。`BREATH_RESULT_VOLUME_LIMITED` 标记被限幅的周期；非有限采样清除结果中的 `BREATH_RESULT_VALID_VTI`。停机、重新启动、模式或 VAC 设置变化、重新调零会清理外环；压力上限改变时下一计划清理旧补偿。容量修正仅作用于下一周期供气段，暂停目标仍由患者侧泄漏估计决定。
+
+`vt status` 的 `VT_VOLUME_FEEDBACK` 行输出当前计划序号、用户目标、平滑 VTI、补偿量和内部供气目标；体积字段均为 mL 的百分之一。`test_vti_compensation.py` 验证 EMA、实际周期结算时序、重复/旧反馈、限幅、配置重置和固定 80 mL 损失的多周期收敛；软件模型通过不等于已验证实机肺容量或气路稳定性。
+
+RTT 启动回归（500 mL、PEEP 5、Ti 2000 ms、15 次/分、无暂停）保存在 `build/vti_rtt/comparison.json` 及对应目录的原始日志/波形。原版本第 7 次结果才到 497 mL（约 30.4 s）；修正后两次独立启动从第 2 次起均在 475..525 mL 内（约 10.3 s）。首次进入 490..510 mL 的结果时间分别约 10.3 s 和 18.4 s，后续仍有约 488..518 mL 波动，不能解读为每次均满足 ±1%。时间从 run 命令到完整周期结果接收，包含初始呼气及呼气结束后发布的等待。测试结束均收到停止确认，未覆盖其他管路、PEEP 或暂停比例。
+
+VAC 供气段压力前馈使用 `Pff = PEEP + Vref/C + 0.00008595*Qref*Qref`。C 为 `clamp(用户目标VT/14, 30, 100)`，单位 mL/cmH₂O；Qref 为实际经过控制器限幅的当前参考流量，单位 L/min，系数按该单位使用，尚需台架确认。`PHASE_REF_VOLUME` 是现有分段流量上升曲线累计面积按整个供气窗口归一化后的用户目标容量轨迹（mL），吸气入口为零、供气结束为用户 VT，支持短于上升沿的供气窗口。它不使用 `deliveryTargetMl` 中的额外容量补偿。新模型替换供气段原有实测压力加线性/二次压降模型，保留 PID、绝对压力/转速上限和 VTI 限幅反馈；暂停段继续使用原有实测压力前馈与泄漏流量控制。
 
 VAC 吸气暂停继续使用近端流量反馈，不锁定患者压力。入口采用 Kp=0.003、Kd=0.00005、Ki=0 制动供气尾段；至少经过 120 ms，且近端流量下降到泄漏目标上方 2 L/min 以内后，开启 Ki=0.02 的积分补偿。此时按患者压力一次性选择稳定段参数：低于 30 cmH₂O 保留 Kp=0.003、Kd=0.00005；达到或超过 30 cmH₂O 使用 Kp=0.0003、Kd=0，减少高压力工况的反馈振荡。本次暂停内不反复切换增益。暂停风机指令每 6 ms 最多变化 40 个指令单位，绝对压力对应转速上限优先于变化率限制，限幅时撤回同方向积分增量。患者侧漏气才计入近端流量目标，呼气阀侧流量不能直接当作患者侧漏气目标。验证重点是暂停稳定后 patflow 相对泄漏补偿目标的偏差与振幅，不以原始过零次数作为验收标准。

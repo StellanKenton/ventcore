@@ -30,6 +30,13 @@ extern "C" {
 #define BREATH_VOLUME_STARTUP_LOSS_TIME_ML_MS   30000.0F
 #define BREATH_VOLUME_STARTUP_VOLUME_LOSS_MAX_ML    30.0F
 #define BREATH_VOLUME_MIN_EFFECTIVE_FLOW_TIME_MS    1.0F
+/* Initial outer-loop tuning, to be validated on the test lung. */
+#define BREATH_VOLUME_FILTER_ALPHA                  0.5F
+#define BREATH_VOLUME_CORRECTION_GAIN               1.0F
+#define BREATH_VOLUME_STARTUP_CORRECTION_GAIN       1.2F
+#define BREATH_VOLUME_CORRECTION_STEP_RATIO         0.25F
+#define BREATH_VOLUME_CORRECTION_LIMIT_RATIO        0.30F
+#define BREATH_VOLUME_ERROR_DEADBAND_RATIO          0.005F
 
 typedef enum {
     BREATH_TYPE_NONE = 0,
@@ -67,6 +74,7 @@ typedef enum {
 
 typedef struct stBreathPlan {
     uint32_t sequence;
+    uint32_t configurationSequence;
     eVentMode mode;
     eBreathType breathType;
     eBreathTriggerReason triggerReason;
@@ -75,6 +83,9 @@ typedef struct stBreathPlan {
     float inspiratoryPressureCmh2o;
     float inspiratoryFlowLpm;
     float targetTidalVolumeMl;
+    float deliveryTargetMl;
+    float filteredVtiMl;
+    float volumeCorrectionMl;
     float fio2Percent;
     float pressureLimitCmh2o;
     /** Shared live limits; changes take effect without replacing the active plan. */
@@ -93,6 +104,22 @@ typedef struct stBreathPlan {
     uint32_t backupBreathIntervalMs;
     uint8_t timeTriggerEnabled;
 } stBreathPlan;
+
+typedef struct stBreathVolumeFeedback {
+    float filteredVtiMl;
+    float filteredAppliedCorrectionMl;
+    float correctionMl;
+    float pressureLimitCmh2o;
+    uint32_t lastSequence;
+    uint8_t initialized;
+    uint8_t consumed;
+} stBreathVolumeFeedback;
+
+/** Clear VAC learning after stop, settings changes or sensor re-zeroing. */
+void breathSchedulerVolumeReset(void);
+
+/** Consume one completed proximal VTI in VentTask before loading the next plan. */
+void breathSchedulerVolumeFeedback(const stBreathPlan *plan, float vtiMl, uint8_t valid);
 
 /** Configure the scheduler and leave it idle. */
 int8_t breathSchedulerInit(void);

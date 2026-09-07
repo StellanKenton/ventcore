@@ -14,6 +14,7 @@
 #include <string.h>
 
 #include "controldata.h"
+#include "databus.h"
 #include "phasecontroller.h"
 #include "rtos.h"
 
@@ -66,6 +67,7 @@ static void monitorEngineLeakAccumulate(float flow)
     if ((monitorEngineFinite(flow) == 0U) ||
         (monitorEngineFinite(lPressure) == 0U) ||
         (lPressure <= 0.0F)) {
+        gMonitorEngine.leakCycleInvalid = 1U;
         return;
     }
     gMonitorEngine.leakFlowSumLpm += flow;
@@ -77,32 +79,46 @@ static void monitorEngineLeakCoefficientCalculate(void)
 {
     float lCoefficient;
 
-    if (gMonitorEngine.leakPressureRootSum <
-        MONITOR_LEAK_PRESSURE_SUM_MIN) {
+    (void)monitorEngineSet(MONITOR_LEAK_VALID, 0.0F);
+    (void)monitorEngineSet(MONITOR_LEAK_COEFFICIENT, 0.0F);
+    (void)monitorEngineSet(MONITOR_LEAK_BALANCE_COEFFICIENT, 0.0F);
+    if ((gMonitorEngine.leakCycleInvalid != 0U) ||
+        (monitorEngineFinite(gMonitorEngine.leakFlowSumLpm) == 0U) ||
+        (monitorEngineFinite(gMonitorEngine.leakPressureRootSum) == 0U) ||
+        (gMonitorEngine.leakPressureRootSum < MONITOR_LEAK_PRESSURE_SUM_MIN)) {
         return;
     }
     /* The common fixed 6 ms sample interval cancels in this ratio. */
     lCoefficient = gMonitorEngine.leakFlowSumLpm /
                    gMonitorEngine.leakPressureRootSum;
+    if (monitorEngineFinite(lCoefficient) == 0U) {
+        return;
+    }
+    (void)monitorEngineSet(MONITOR_LEAK_BALANCE_COEFFICIENT, lCoefficient);
     if (lCoefficient < MONITOR_LEAK_COEFFICIENT_MIN) {
         lCoefficient = MONITOR_LEAK_COEFFICIENT_MIN;
     } else if (lCoefficient > MONITOR_LEAK_COEFFICIENT_MAX) {
         lCoefficient = MONITOR_LEAK_COEFFICIENT_MAX;
     }
     (void)monitorEngineSet(MONITOR_LEAK_COEFFICIENT, lCoefficient);
+    (void)monitorEngineSet(MONITOR_LEAK_VALID, 1.0F);
 }
 
-/** Update signed instantaneous leak flow from the latest completed coefficient. */
+/** Publish the shared nonnegative downstream leak compensation. */
 static void monitorEngineLeakFlowProcess(void)
 {
     float lCoefficient = monitorEngineGet(MONITOR_LEAK_COEFFICIENT);
     float lPressure = controlDataGet(PAT_REAL_PRS);
     float lLeakFlow = 0.0F;
 
-    if ((monitorEngineFinite(lCoefficient) != 0U) &&
+    if ((monitorEngineGet(MONITOR_LEAK_VALID) != 0.0F) &&
+        (monitorEngineFinite(lCoefficient) != 0U) && (lCoefficient > 0.0F) &&
         (monitorEngineFinite(lPressure) != 0U) &&
         (lPressure > 0.0F)) {
         lLeakFlow = lCoefficient * monitorEngineSqrt(lPressure);
+        if (lLeakFlow > MONITOR_PATIENT_LEAK_FLOW_MAX_LPM) {
+            lLeakFlow = MONITOR_PATIENT_LEAK_FLOW_MAX_LPM;
+        }
     }
     (void)monitorEngineSet(MONITOR_LEAK_FLOW, lLeakFlow);
 }
@@ -116,6 +132,7 @@ static void monitorEnginePlateauPressureProcess(uint32_t nowMs)
     uint8_t lSampleActive;
 
     if ((gMonitorEngine.breathActive == 0U) ||
+        (gMonitorEngine.breathCompleted != 0U) ||
         (gMonitorEngine.runState != MONITOR_STATE_INSP)) {
         return;
     }
@@ -190,7 +207,8 @@ static void monitorEngineBreathResultPublish(uint32_t nowMs)
     lResult.validMask = BREATH_RESULT_VALID_COMPLETE |
                         BREATH_RESULT_VALID_CYCLE_TIME |
                         BREATH_RESULT_VALID_INSPIRATORY_TIME;
-    if (monitorEngineFinite(lResult.vtiMl) != 0U) {
+    if ((monitorEngineFinite(lResult.vtiMl) != 0U) &&
+        (gMonitorEngine.volumeInvalid == 0U)) {
         lResult.validMask |= BREATH_RESULT_VALID_VTI;
     }
     if (monitorEngineFinite(lResult.vteMl) != 0U) {
@@ -209,10 +227,46 @@ static void monitorEngineBreathResultPublish(uint32_t nowMs)
     if (monitorEngineFinite(lResult.peakInspiratoryFlowLpm) != 0U) {
         lResult.validMask |= BREATH_RESULT_VALID_PEAK_INSP_FLOW;
     }
+    if (gMonitorEngine.volumeLimited != 0U) {
+        lResult.validMask |= BREATH_RESULT_VOLUME_LIMITED;
+    }
     repRtosEnterCritical();
     gMonitorLatestBreathResult = lResult;
     gMonitorBreathResultAvailable = 1U;
     repRtosExitCritical();
+    breathSchedulerVolumeFeedback(&gMonitorEngine.breathPlan, lResult.vtiMl,
+        (uint8_t)(((lResult.validMask & BREATH_RESULT_VALID_VTI) != 0U) &&
+                  (gMonitorEngine.volumeLimited == 0U) &&
+                  (gMonitorEngine.runState == MONITOR_STATE_EXP) &&
+                  (lResult.cycleReason == BREATH_CYCLE_REASON_TIME)));
+}
+
+/** Complete a cycle once, shared by explicit and observed breath boundaries. */
+static void monitorEngineBreathFinish(uint32_t nowMs) {
+    if ((gMonitorEngine.breathActive != 0U) &&
+        (gMonitorEngine.expirationSeen != 0U) &&
+        (gMonitorEngine.breathCompleted == 0U)) {
+        monitorEngineLeakCoefficientCalculate();
+        monitorEngineBreathResultPublish(nowMs);
+        gMonitorEngine.breathCompleted = 1U;
+    }
+}
+
+void monitorEngineBreathComplete(uint32_t nowMs) {
+    if (gMonitorEngine.flowZeroOffsetLpm != controlDataMdiffFlowZeroOffsetGet()) {
+        monitorEngineInit();
+        return;
+    }
+    if (phaseControllerStateGet() == PHASE_EXP) {
+        monitorEngineBreathFinish(nowMs);
+    }
+}
+
+void monitorEngineVolumeLimitedNotify(void) {
+    if ((gMonitorEngine.breathActive != 0U) &&
+        (gMonitorEngine.breathCompleted == 0U)) {
+        gMonitorEngine.volumeLimited = 1U;
+    }
 }
 
 /** Start accumulation for the plan that just entered inspiration. */
@@ -233,6 +287,11 @@ static int8_t monitorEngineBreathStart(uint32_t nowMs)
     gMonitorEngine.plateauPressureSampleCount = 0U;
     gMonitorEngine.leakFlowSumLpm = 0.0F;
     gMonitorEngine.leakPressureRootSum = 0.0F;
+    gMonitorEngine.leakCycleInvalid = 0U;
+    gMonitorEngine.expirationSeen = 0U;
+    gMonitorEngine.breathCompleted = 0U;
+    gMonitorEngine.volumeInvalid = 0U;
+    gMonitorEngine.volumeLimited = 0U;
     gMonitorEngine.inspiratoryTimeMs = 0U;
     gMonitorEngine.cycleReason = BREATH_CYCLE_REASON_NONE;
     gMonitorEngine.breathActive = 1U;
@@ -245,6 +304,7 @@ static int8_t monitorEngineBreathStart(uint32_t nowMs)
 
 void monitorEngineInit(void)
 {
+    breathSchedulerVolumeReset();
     (void)memset(&gMonitorEngine, 0, sizeof(gMonitorEngine));
     (void)memset(&gMonitorLatestBreathResult, 0,
                  sizeof(gMonitorLatestBreathResult));
@@ -256,6 +316,9 @@ void monitorEngineInit(void)
     (void)monitorEngineSet(MONITOR_PLATEAU_PRS, 0.0F);
     (void)monitorEngineSet(MONITOR_LEAK_COEFFICIENT, 0.0F);
     (void)monitorEngineSet(MONITOR_LEAK_FLOW, 0.0F);
+    (void)monitorEngineSet(MONITOR_LEAK_BALANCE_COEFFICIENT, 0.0F);
+    (void)monitorEngineSet(MONITOR_LEAK_VALID, 0.0F);
+    gMonitorEngine.flowZeroOffsetLpm = controlDataMdiffFlowZeroOffsetGet();
 }
 
 float monitorEngineGet(eMonitorDataType type)
@@ -289,6 +352,10 @@ static void monitorEngineTidalVolumeProcess(uint32_t nowMs)
     float lFlow = controlDataGet(MDIFF_REAL_FLOW);
     float lPressure;
 
+    if ((gMonitorEngine.breathActive == 0U) || (gMonitorEngine.breathCompleted != 0U)) {
+        return;
+    }
+
     /* Confirm expiration with negative patient flow before leaving inspiration. */
     if ((gMonitorEngine.runState == MONITOR_STATE_INSP) &&
         (lNextState == MONITOR_STATE_EXP) &&
@@ -296,17 +363,7 @@ static void monitorEngineTidalVolumeProcess(uint32_t nowMs)
         lNextState = MONITOR_STATE_INSP;
     }
 
-    if ((lNextState == MONITOR_STATE_INSP) &&
-        (gMonitorEngine.runState != MONITOR_STATE_INSP)) {
-        if (gMonitorEngine.breathActive != 0U) {
-            monitorEngineLeakCoefficientCalculate();
-            monitorEngineLeakFlowProcess();
-            monitorEngineBreathResultPublish(nowMs);
-        }
-        if (monitorEngineBreathStart(nowMs) != MONITOR_ENGINE_SUCCESS) {
-            gMonitorEngine.breathActive = 0U;
-        }
-    } else if ((lNextState == MONITOR_STATE_EXP) &&
+    if ((lNextState == MONITOR_STATE_EXP) &&
                (gMonitorEngine.runState != MONITOR_STATE_EXP)) {
         if (gMonitorEngine.breathActive != 0U) {
             gMonitorEngine.inspiratoryTimeMs = nowMs - gMonitorEngine.breathStartedMs;
@@ -316,12 +373,9 @@ static void monitorEngineTidalVolumeProcess(uint32_t nowMs)
     }
     gMonitorEngine.runState = lNextState;
 
-    if ((gMonitorEngine.runState == MONITOR_STATE_IDLE) ||
-        (gMonitorEngine.breathActive == 0U)) {
+    if (gMonitorEngine.runState == MONITOR_STATE_IDLE) {
         return;
     }
-
-    monitorEngineLeakAccumulate(lFlow);
 
     if (gMonitorEngine.runState == MONITOR_STATE_INSP) {
         lPressure = controlDataGet(PAT_REAL_PRS);
@@ -354,8 +408,64 @@ static void monitorEngineTidalVolumeProcess(uint32_t nowMs)
     }
 }
 
+/** Handle cycle boundaries, reset invalid sessions and accumulate leak samples. */
+static void monitorEngineBreathProcess(uint32_t nowMs)
+{
+    stBreathPlan lPlan;
+    ePhaseControllerState lPhase = phaseControllerStateGet();
+
+    /* Discard partial cycles and old coefficients across idle or re-zeroing. */
+    if ((lPhase != PHASE_INSP && lPhase != PHASE_EXP) ||
+        (gMonitorEngine.flowZeroOffsetLpm != controlDataMdiffFlowZeroOffsetGet()) ||
+        (phaseControllerActivePlanGet(&lPlan) != PHASE_CONTROL_SUCCESS)) {
+        monitorEngineInit();
+        /* Recovery during inspiration must wait for a fresh phase boundary. */
+        gMonitorEngine.inspirationObserved = (uint8_t)(lPhase == PHASE_INSP);
+        return;
+    }
+    /* Plan boundaries are independent of proximal-flow direction. */
+    if ((lPhase == PHASE_INSP) &&
+        (((gMonitorEngine.breathActive == 0U) &&
+          (gMonitorEngine.inspirationObserved == 0U)) ||
+         ((gMonitorEngine.breathActive != 0U) &&
+          (lPlan.sequence != gMonitorEngine.breathPlan.sequence)))) {
+        if ((gMonitorEngine.breathActive != 0U) &&
+            (gMonitorEngine.expirationSeen != 0U)) {
+            monitorEngineBreathFinish(nowMs);
+        } else {
+            (void)monitorEngineSet(MONITOR_LEAK_VALID, 0.0F);
+            (void)monitorEngineSet(MONITOR_LEAK_COEFFICIENT, 0.0F);
+            (void)monitorEngineSet(MONITOR_LEAK_BALANCE_COEFFICIENT, 0.0F);
+        }
+        if (monitorEngineBreathStart(nowMs) != MONITOR_ENGINE_SUCCESS) {
+            monitorEngineInit();
+            gMonitorEngine.inspirationObserved = 1U;
+            return;
+        }
+        gMonitorEngine.runState = MONITOR_STATE_INSP;
+    }
+    gMonitorEngine.inspirationObserved = (uint8_t)(lPhase == PHASE_INSP);
+    if ((gMonitorEngine.breathActive != 0U) && (gMonitorEngine.breathCompleted == 0U)) {
+        if ((monitorEngineFinite(controlDataGet(MDIFF_REAL_FLOW)) == 0U) ||
+            (monitorEngineFinite(controlDataGet(PAT_REAL_PRS)) == 0U)) {
+            gMonitorEngine.volumeInvalid = 1U;
+        }
+        if ((lPhase == PHASE_INSP) && (lPlan.limitSettings != NULL) &&
+            (controlDataGet(PAT_REAL_PRS) >= lPlan.limitSettings->pressureHigh)) {
+            gMonitorEngine.volumeLimited = 1U;
+        }
+        if ((lPhase == PHASE_EXP) && (gMonitorEngine.expirationSeen == 0U)) {
+            gMonitorEngine.expirationSeen = 1U;
+            gMonitorEngine.inspiratoryTimeMs = nowMs - gMonitorEngine.breathStartedMs;
+            gMonitorEngine.cycleReason = phaseControllerCycleReasonGet();
+        }
+        monitorEngineLeakAccumulate(controlDataGet(MDIFF_REAL_FLOW));
+    }
+}
+
 void monitorEngineProcess(uint32_t nowMs)
 {
+    monitorEngineBreathProcess(nowMs);
     monitorEngineLeakFlowProcess();
     monitorEnginePlateauPressureProcess(nowMs);
     monitorEngineTidalVolumeProcess(nowMs);

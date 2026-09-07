@@ -101,7 +101,7 @@ static eFlowControllerState flowControllerActiveStateGet(const stBreathPlan *pla
                          flowControllerClamp(
                              monitorEngineGet(MONITOR_LEAK_FLOW),
                              FLOW_CONTROLLER_FLOW_TARGET_MIN,
-                             FLOW_CONTROLLER_FLOW_TARGET_MAX) :
+                             MONITOR_PATIENT_LEAK_FLOW_MAX_LPM) :
                          0.0F;
         return FLOW_CONTROLLER_INSP_PAUSE;
     }
@@ -125,6 +125,8 @@ static int8_t flowControllerClosedLoopProcess(const stBreathPlan *plan,
     float lPatientPressure;
     float lPressureLimit;
     float lLimitedEffort;
+    float lVolumeReference;
+    float lCompliance;
     float lIntegralBefore = gFlowPid.integral;
 
     lMeasuredFlow = (state == FLOW_CONTROLLER_INSP_PAUSE) ?
@@ -134,6 +136,7 @@ static int8_t flowControllerClosedLoopProcess(const stBreathPlan *plan,
     if (!(lPatientPressure >= -FLT_MAX && lPatientPressure <= FLT_MAX) ||
         !(lMeasuredFlow >= -FLT_MAX && lMeasuredFlow <= FLT_MAX) ||
         !(flowReference >= -FLT_MAX && flowReference <= FLT_MAX)) {
+        monitorEngineVolumeLimitedNotify();
         return ACTUATOR_REQUEST_ERROR_STATE;
     }
     if (state == FLOW_CONTROLLER_INSP_PAUSE) {
@@ -153,6 +156,7 @@ static int8_t flowControllerClosedLoopProcess(const stBreathPlan *plan,
         }
     }
     if (pidUpdate(&gFlowPid, flowReference, lMeasuredFlow, &lEffort) != PID_STATUS_OK) {
+        monitorEngineVolumeLimitedNotify();
         return ACTUATOR_REQUEST_ERROR_STATE;
     }
     if (state == FLOW_CONTROLLER_INSP_HOLD) {
@@ -161,8 +165,16 @@ static int8_t flowControllerClosedLoopProcess(const stBreathPlan *plan,
     } else {
         gFlowAppliedEffort = lEffort;
     }
+    if ((state != FLOW_CONTROLLER_INSP_PAUSE) &&
+        ((plan->inspiratoryFlowLpm > FLOW_CONTROLLER_FLOW_TARGET_MAX) ||
+         (lEffort >= FLOW_CONTROLLER_EFFORT_MAX))) {
+        monitorEngineVolumeLimitedNotify();
+    }
 
     lPressureLimit = plan->limitSettings->pressureHigh;
+    if (lPatientPressure >= lPressureLimit) {
+        monitorEngineVolumeLimitedNotify();
+    }
     lPatientPressure = flowControllerClamp(controlDataGet(PAT_REAL_PRS),
                                            plan->limitSettings->pressureLow,
                                            lPressureLimit);
@@ -174,20 +186,42 @@ static int8_t flowControllerClosedLoopProcess(const stBreathPlan *plan,
             FLOW_CONTROLLER_FEEDFORWARD_PRESSURE_ALPHA *
             (lPatientPressure - gFlowFeedforwardPressure);
     }
-    /* Follow lung pressure without feeding its sample-to-sample ripple back. */
-    lFeedforwardPressure = gFlowFeedforwardPressure +
+    if ((plan->mode == VENT_MD_VAC) && (state != FLOW_CONTROLLER_INSP_PAUSE)) {
+        lVolumeReference = phaseControlGet(PHASE_REF_VOLUME);
+        if (!(plan->targetTidalVolumeMl > 0.0F && plan->targetTidalVolumeMl <= FLT_MAX) ||
+            !(plan->peepCmh2o >= 0.0F && plan->peepCmh2o <= FLT_MAX) ||
+            !(lVolumeReference >= 0.0F && lVolumeReference <= FLT_MAX)) {
+            monitorEngineVolumeLimitedNotify();
+            return ACTUATOR_REQUEST_ERROR_STATE;
+        }
+        lCompliance = flowControllerClamp(
+            plan->targetTidalVolumeMl / FLOW_CONTROLLER_VAC_ELASTIC_PRESSURE,
+            FLOW_CONTROLLER_VAC_COMPLIANCE_MIN, FLOW_CONTROLLER_VAC_COMPLIANCE_MAX);
+        lFeedforwardPressure = plan->peepCmh2o +
+            flowControllerClamp(lVolumeReference, 0.0F, plan->targetTidalVolumeMl) / lCompliance +
+            FLOW_CONTROLLER_VAC_CIRCUIT_COEFFICIENT * flowReference * flowReference;
+    } else {
+        /* Preserve measured-pressure feedforward for pause and other volume modes. */
+        lFeedforwardPressure = gFlowFeedforwardPressure +
                            (FLOW_CONTROLLER_FLOW_FF_LINEAR * flowReference) +
                            (FLOW_CONTROLLER_FLOW_FF_QUADRATIC *
                             flowReference * flowReference);
+    }
+    if ((state != FLOW_CONTROLLER_INSP_PAUSE) &&
+        (lFeedforwardPressure >= lPressureLimit)) {
+        monitorEngineVolumeLimitedNotify();
+    }
     lFeedforwardPressure = flowControllerClamp(lFeedforwardPressure,
                                                 plan->limitSettings->pressureLow,
                                                 lPressureLimit);
     if (calibtransPrsSpeed(lFeedforwardPressure, &lBlowerFeedforward) !=
         CALIBTRANS_STATUS_OK) {
+        monitorEngineVolumeLimitedNotify();
         return ACTUATOR_REQUEST_ERROR_STATE;
     }
     if (calibtransPrsSpeed(lPressureLimit, &lBlowerMaximum) !=
         CALIBTRANS_STATUS_OK) {
+        monitorEngineVolumeLimitedNotify();
         return ACTUATOR_REQUEST_ERROR_STATE;
     }
 
@@ -209,6 +243,9 @@ static int8_t flowControllerClosedLoopProcess(const stBreathPlan *plan,
         (((lEffort > lLimitedEffort) && (gFlowPid.integral > lIntegralBefore)) ||
          ((lEffort < lLimitedEffort) && (gFlowPid.integral < lIntegralBefore)))) {
         gFlowPid.integral = lIntegralBefore;
+    }
+    if ((state != FLOW_CONTROLLER_INSP_PAUSE) && (lEffort > lLimitedEffort)) {
+        monitorEngineVolumeLimitedNotify();
     }
     request->blowerTarget = (uint16_t)lLimitedEffort;
     gFlowBlowerTarget = (float)request->blowerTarget;
@@ -253,9 +290,11 @@ int8_t flowControllerProcess(const stBreathPlan *plan, stActuatorRequest *reques
     }
     flowControllerRequestClear(request);
     if (gFlowControllerReady == 0U) {
+        monitorEngineVolumeLimitedNotify();
         return ACTUATOR_REQUEST_ERROR_STATE;
     }
     if (plan->limitSettings == NULL) {
+        monitorEngineVolumeLimitedNotify();
         return ACTUATOR_REQUEST_ERROR_STATE;
     }
     if (plan->breathType != BREATH_TYPE_MANDATORY_VOLUME) {
@@ -291,7 +330,7 @@ int8_t flowControllerProcess(const stBreathPlan *plan, stActuatorRequest *reques
                                                    lFlowReference,
                                                    request);
         case FLOW_CONTROLLER_INSP_PAUSE:
-            /* Replace circuit leak while keeping net patient flow at zero. */
+            /* Replace only downstream patient leak; valve outflow is upstream. */
             return flowControllerClosedLoopProcess(plan,
                                                    gFlowControllerState,
                                                    lFlowReference,

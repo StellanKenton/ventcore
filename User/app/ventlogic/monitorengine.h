@@ -24,9 +24,11 @@ extern "C" {
 #define MONITOR_FLOW_DEADBAND_LPM                0.5F
 #define MONITOR_FLOW_SAMPLE_VOLUME_ML            0.1F
 #define MONITOR_PLATEAU_END_WINDOW_MS             100U
-#define MONITOR_LEAK_COEFFICIENT_MIN              (-2.0F)
+#define MONITOR_LEAK_COEFFICIENT_MIN               0.0F
 #define MONITOR_LEAK_COEFFICIENT_MAX               50.0F
 #define MONITOR_LEAK_PRESSURE_SUM_MIN               0.001F
+/* Independent compensation cap; retain the previous limit pending bench tuning. */
+#define MONITOR_PATIENT_LEAK_FLOW_MAX_LPM          120.0F
 #define BREATH_RESULT_VALID_COMPLETE             (1UL << 0)
 #define BREATH_RESULT_VALID_VTI                  (1UL << 1)
 #define BREATH_RESULT_VALID_VTE                  (1UL << 2)
@@ -36,6 +38,7 @@ extern "C" {
 #define BREATH_RESULT_VALID_INSPIRATORY_TIME     (1UL << 6)
 #define BREATH_RESULT_VALID_PEAK_INSP_FLOW       (1UL << 7)
 #define BREATH_RESULT_VALID_PLATEAU_PRESSURE     (1UL << 8)
+#define BREATH_RESULT_VOLUME_LIMITED            (1UL << 9)
 
 typedef enum {
     MONITOR_DATA_NONE = 0,
@@ -45,6 +48,10 @@ typedef enum {
     MONITOR_PLATEAU_PRS,
     MONITOR_LEAK_COEFFICIENT,
     MONITOR_LEAK_FLOW,
+    /* Signed diagnostic ratio before physical compensation clamps. */
+    MONITOR_LEAK_BALANCE_COEFFICIENT,
+    /* Completed-window numeric validity, not proof of lung volume balance. */
+    MONITOR_LEAK_VALID,
     MONITOR_DATA_COUNT,
 } eMonitorDataType;
 
@@ -81,6 +88,13 @@ typedef struct stMonitorEngine {
     uint32_t plateauPressureSampleCount;
     float leakFlowSumLpm;
     float leakPressureRootSum;
+    float flowZeroOffsetLpm;
+    uint8_t leakCycleInvalid;
+    uint8_t expirationSeen;
+    uint8_t inspirationObserved;
+    uint8_t breathCompleted;
+    uint8_t volumeInvalid;
+    uint8_t volumeLimited;
     eBreathCycleReason cycleReason;
     uint8_t breathActive;
     stBreathPlan breathPlan;
@@ -94,6 +108,12 @@ float monitorEngineGet(eMonitorDataType type);
 
 /** Copy the latest completed breath result. */
 int8_t monitorEngineBreathResultGet(stBreathResult *result);
+
+/** Finish expiration in VentTask before Phase Controller loads the next plan. */
+void monitorEngineBreathComplete(uint32_t nowMs);
+
+/** Latch a delivery limit or controller failure for the active volume breath. */
+void monitorEngineVolumeLimitedNotify(void);
 
 /** Update monitoring and publish a result when the next inspiration begins. */
 void monitorEngineProcess(uint32_t nowMs);

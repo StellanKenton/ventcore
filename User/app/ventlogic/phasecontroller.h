@@ -37,6 +37,7 @@ typedef enum {
     PHASE_NONE = 0,
     PHASE_REF_PRESSURE,
     PHASE_REF_FLOW,
+    PHASE_REF_VOLUME,
     PHASE_COUNT,
 } ePhaseControlType;
 
