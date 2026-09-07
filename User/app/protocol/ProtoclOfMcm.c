@@ -21,8 +21,6 @@
 
 
 /* ==================== 静态变量定义 ==================== */
-static bool gProtocolSettingsDirty;
-static bool gProtocolCommandPending;
 static uint16_t MCMConnectedCounter = 0;
 /* 接收主ID缓存变量 */
 static RxVentParamsCache_t g_rxVentParamsCache;
@@ -38,7 +36,7 @@ static RxDiagnosisCache_t g_rxDiagnosisCache;
 
 /* 发送主ID缓存变量 */
 // static TxWaveDataCache_t g_txWaveDataCache; /* Pending machine port. */
-// static TxMonitorParamsCache_t g_txMonitorParamsCache; /* Pending machine port. */
+static TxMonitorParamsCache_t g_txMonitorParamsCache;
 // static TxPhysAlarmCache_t g_txPhysAlarmCache; /* Pending machine port. */
 // static TxTechAlarmCache_t g_txTechAlarmCache; /* Pending machine port. */
 static TxSpecialFuncCache_t g_txSpecialFuncCache;
@@ -124,7 +122,7 @@ void ProtocolProcessRxPacket(const ProtocolPacket_t* packet)
         case PROTOCOL_RX_MID_VENT_PARAMS:
             /* 处理通气参数 - 更新到通气参数缓存 */
             ProtocolUpdateRxVentParamsCache(packet);
-            gProtocolSettingsDirty = true;
+            protocolReceivedSettingsMark();
             break;
             
         case PROTOCOL_RX_MID_VENT_SWITCH:
@@ -140,7 +138,7 @@ void ProtocolProcessRxPacket(const ProtocolPacket_t* packet)
         case PROTOCOL_RX_MID_ALARM_LIMITS:
             /* 处理报警限 - 更新到报警限缓存 */
             ProtocolUpdateRxAlarmLimitsCache(packet);
-            gProtocolSettingsDirty = true;
+            protocolReceivedSettingsMark();
             break;
             
         case PROTOCOL_RX_MID_SELF_TEST:
@@ -535,7 +533,7 @@ void ProtocolUpdateRxVentSwitchCache(const ProtocolPacket_t* packet)
             switch (subId->m_subId) {
                 case 0x00: 
                     if (value > 1U) { break; }
-                    gProtocolCommandPending = true;
+                    protocolReceivedCommandMark();
                     g_rxVentSwitchCache.m_command = value;
                     g_rxVentSwitchCache.m_command_scale = subId->m_scale;
                     if(g_rxVentSwitchCache.m_command == 0x00) {
@@ -1625,6 +1623,199 @@ static int32_t protocolWaveValue(float value, int32_t minimum, int32_t maximum) 
     if (value < (float)minimum) { return minimum; }
     if (value > (float)maximum) { return maximum; }
     return (int32_t)value;
+}
+
+/** Send the currently available completed-breath monitor values. */
+static void protocolMonitorSubIdAppend(SubIDCache_t *subIds, uint8_t *count,
+                                       uint8_t id, uint64_t value,
+                                       uint8_t size, uint8_t scale)
+{
+    if (!g_txMonitorParamsCache.m_valid[id]) {
+        return;
+    }
+    subIds[*count].m_id = id;
+    subIds[*count].m_value = value;
+    subIds[*count].m_size = size;
+    subIds[*count].m_scale = scale;
+    ++(*count);
+}
+
+void ProtocolSendMonitorParamsFromCache(uint8_t instance)
+{
+#if PROTOCOL_MONITOR_PARAMS_SEND_ENABLE
+    static uint8_t lTxData[64];
+    static SubIDCache_t lSubIds[13];
+    uint64_t lIeValue = 0U;
+    uint8_t lCount = 0U;
+
+    protocolMonitorSubIdAppend(lSubIds, &lCount, 0x01U,
+        (uint16_t)g_txMonitorParamsCache.m_pPeak, E_PPEAK_SIZE, E_PPEAK_SCALE);
+    protocolMonitorSubIdAppend(lSubIds, &lCount, 0x02U,
+        (uint16_t)g_txMonitorParamsCache.m_pPlat, E_PPLAT_SIZE, E_PPLAT_SCALE);
+    protocolMonitorSubIdAppend(lSubIds, &lCount, 0x04U,
+        g_txMonitorParamsCache.m_peep, E_PEEP_SIZE, E_PEEP_SCALE);
+    protocolMonitorSubIdAppend(lSubIds, &lCount, 0x05U,
+        g_txMonitorParamsCache.m_tvi, E_TVI_SIZE, E_TVI_SCALE);
+    protocolMonitorSubIdAppend(lSubIds, &lCount, 0x06U,
+        g_txMonitorParamsCache.m_tve, E_TVE_SIZE, E_TVE_SCALE);
+    protocolMonitorSubIdAppend(lSubIds, &lCount, 0x07U,
+        g_txMonitorParamsCache.m_tveSpn, E_TVESPN_SIZE, E_TVESPN_SCALE);
+    protocolMonitorSubIdAppend(lSubIds, &lCount, 0x0EU,
+        g_txMonitorParamsCache.m_inspFlow, E_INSPFLOW_SIZE, E_INSPFLOW_SCALE);
+    protocolMonitorSubIdAppend(lSubIds, &lCount, 0x10U,
+        g_txMonitorParamsCache.m_frTotal, E_FRTOTAL_SIZE, E_FRTOTAL_SCALE);
+    protocolMonitorSubIdAppend(lSubIds, &lCount, 0x11U,
+        g_txMonitorParamsCache.m_frMand, E_FRMAND_SIZE, E_FRMAND_SCALE);
+    protocolMonitorSubIdAppend(lSubIds, &lCount, 0x12U,
+        g_txMonitorParamsCache.m_frSpn, E_FRSPN_SIZE, E_FRSPN_SCALE);
+    protocolMonitorSubIdAppend(lSubIds, &lCount, 0x13U,
+        g_txMonitorParamsCache.m_ti, E_TI_SIZE, E_TI_SCALE);
+    protocolMonitorSubIdAppend(lSubIds, &lCount, 0x14U,
+        g_txMonitorParamsCache.m_te, E_TE_SIZE, E_TE_SCALE);
+    memcpy(&lIeValue, &g_txMonitorParamsCache.m_ie,
+           sizeof(g_txMonitorParamsCache.m_ie));
+    protocolMonitorSubIdAppend(lSubIds, &lCount, 0x15U,
+        lIeValue, E_IE_SIZE, E_IE_SCALE);
+
+    if (lCount > 0U) {
+        uint16_t lSendLength = ProtocolCreateSubIdData(
+            lTxData, PROTOCOL_ADDR_VCM_TO_MCM, false,
+            PROTOCOL_TX_MID_MONITOR_PARAMS, (uint8_t *)lSubIds, lCount);
+        if ((lSendLength > 0U) &&
+            (ProtocolSendData(instance, PROTOCOL_PRIORITY_HIGH,
+                              lTxData, lSendLength) == PROTOCOL_OK)) {
+            memset(g_txMonitorParamsCache.m_valid, 0,
+                   sizeof(g_txMonitorParamsCache.m_valid));
+        }
+    }
+#else
+    (void)instance;
+#endif
+}
+
+/** Publish each completed breath once; retry cached data if the TX queue is full. */
+void ProtocolDetectDataPreProcess(uint8_t instance, uint32_t taskCounter)
+{
+#if PROTOCOL_MONITOR_PARAMS_SEND_ENABLE
+    static uint32_t lLastSequence = UINT32_MAX;
+    stBreathResult lResult;
+    uint32_t lExpiratoryTimeMs;
+    uint16_t lFrequency;
+    float lCycleTimeMs;
+    float lInspiratoryTimeMs;
+
+    if ((taskCounter % 50U) != 0U) {
+        return;
+    }
+    if (!breathSchedulerRunningGet()) {
+        memset(g_txMonitorParamsCache.m_valid, 0,
+               sizeof(g_txMonitorParamsCache.m_valid));
+        lLastSequence = UINT32_MAX;
+        return;
+    }
+
+    if ((monitorEngineBreathResultGet(&lResult) == MONITOR_ENGINE_SUCCESS) &&
+        ((lResult.validMask & BREATH_RESULT_VALID_COMPLETE) != 0U) &&
+        (lResult.sequence != lLastSequence)) {
+        lLastSequence = lResult.sequence;
+        memset(g_txMonitorParamsCache.m_valid, 0,
+               sizeof(g_txMonitorParamsCache.m_valid));
+        lCycleTimeMs = monitorEngineGet(MONITOR_LAST_CYCLE_TIME_MS);
+        lInspiratoryTimeMs = monitorEngineGet(MONITOR_LAST_INSP_TIME_MS);
+
+        if ((lResult.validMask & BREATH_RESULT_VALID_PPEAK) != 0U) {
+            g_txMonitorParamsCache.m_pPeak = (int16_t)protocolWaveValue(
+                monitorEngineGet(MONITOR_LAST_PPEAK) *
+                    (float)ProtocolGetScale(E_PPEAK_SCALE),
+                INT16_MIN, INT16_MAX);
+            g_txMonitorParamsCache.m_valid[0x01U] = true;
+        }
+        if ((lResult.validMask & BREATH_RESULT_VALID_PLATEAU_PRESSURE) != 0U) {
+            g_txMonitorParamsCache.m_pPlat = (int16_t)protocolWaveValue(
+                monitorEngineGet(MONITOR_LAST_PLATEAU_PRS) *
+                    (float)ProtocolGetScale(E_PPLAT_SCALE),
+                INT16_MIN, INT16_MAX);
+            g_txMonitorParamsCache.m_valid[0x02U] = true;
+        }
+        if ((lResult.validMask & BREATH_RESULT_VALID_PEEP) != 0U) {
+            g_txMonitorParamsCache.m_peep = (uint16_t)protocolWaveValue(
+                monitorEngineGet(MONITOR_LAST_PEEP) *
+                    (float)ProtocolGetScale(E_PEEP_SCALE),
+                0, UINT16_MAX);
+            g_txMonitorParamsCache.m_valid[0x04U] = true;
+        }
+        if ((lResult.validMask & BREATH_RESULT_VALID_VTI) != 0U) {
+            g_txMonitorParamsCache.m_tvi = (uint16_t)protocolWaveValue(
+                monitorEngineGet(MONITOR_LAST_TIDA_VOL_INSP) *
+                    (float)ProtocolGetScale(E_TVI_SCALE),
+                0, UINT16_MAX);
+            g_txMonitorParamsCache.m_valid[0x05U] = true;
+        }
+        if ((lResult.validMask & BREATH_RESULT_VALID_VTE) != 0U) {
+            g_txMonitorParamsCache.m_tve = (uint16_t)protocolWaveValue(
+                monitorEngineGet(MONITOR_LAST_TIDA_VOL_EXP) *
+                    (float)ProtocolGetScale(E_TVE_SCALE),
+                0, UINT16_MAX);
+            g_txMonitorParamsCache.m_valid[0x06U] = true;
+            if (lResult.breathType == BREATH_TYPE_SPONTANEOUS_PRESSURE_SUPPORT) {
+                g_txMonitorParamsCache.m_tveSpn = g_txMonitorParamsCache.m_tve;
+                g_txMonitorParamsCache.m_valid[0x07U] = true;
+            }
+        }
+        if ((lResult.validMask & BREATH_RESULT_VALID_PEAK_INSP_FLOW) != 0U) {
+            g_txMonitorParamsCache.m_inspFlow = (uint16_t)protocolWaveValue(
+                monitorEngineGet(MONITOR_LAST_PEAK_INSP_FLOW) *
+                    (float)ProtocolGetScale(E_INSPFLOW_SCALE),
+                0, UINT16_MAX);
+            g_txMonitorParamsCache.m_valid[0x0EU] = true;
+        }
+        if (((lResult.validMask & BREATH_RESULT_VALID_CYCLE_TIME) != 0U) &&
+            (lCycleTimeMs > 0.0F)) {
+            lFrequency = (uint16_t)protocolWaveValue(
+                60000.0F / lCycleTimeMs, 0, UINT8_MAX);
+            g_txMonitorParamsCache.m_frTotal = lFrequency;
+            g_txMonitorParamsCache.m_valid[0x10U] = true;
+            if (lResult.breathType == BREATH_TYPE_SPONTANEOUS_PRESSURE_SUPPORT) {
+                g_txMonitorParamsCache.m_frSpn = lFrequency;
+                g_txMonitorParamsCache.m_valid[0x12U] = true;
+            } else if ((lResult.breathType == BREATH_TYPE_MANDATORY_PRESSURE) ||
+                       (lResult.breathType == BREATH_TYPE_MANDATORY_VOLUME)) {
+                g_txMonitorParamsCache.m_frMand = lFrequency;
+                g_txMonitorParamsCache.m_valid[0x11U] = true;
+            }
+        }
+        if ((lResult.validMask & BREATH_RESULT_VALID_INSPIRATORY_TIME) != 0U) {
+            g_txMonitorParamsCache.m_ti = (uint16_t)protocolWaveValue(
+                lInspiratoryTimeMs / 10.0F, 0, UINT16_MAX);
+            g_txMonitorParamsCache.m_valid[0x13U] = true;
+        }
+        if (((lResult.validMask & (BREATH_RESULT_VALID_CYCLE_TIME |
+                                  BREATH_RESULT_VALID_INSPIRATORY_TIME)) ==
+             (BREATH_RESULT_VALID_CYCLE_TIME |
+              BREATH_RESULT_VALID_INSPIRATORY_TIME)) &&
+            (lCycleTimeMs >= lInspiratoryTimeMs)) {
+            lExpiratoryTimeMs = (uint32_t)(lCycleTimeMs - lInspiratoryTimeMs);
+            g_txMonitorParamsCache.m_te = (uint16_t)protocolWaveValue(
+                (float)lExpiratoryTimeMs / 10.0F, 0, UINT16_MAX);
+            g_txMonitorParamsCache.m_valid[0x14U] = true;
+            if (lExpiratoryTimeMs > 0U) {
+                g_txMonitorParamsCache.m_ie =
+                    lInspiratoryTimeMs / (float)lExpiratoryTimeMs;
+                g_txMonitorParamsCache.m_valid[0x15U] = true;
+            }
+        }
+
+        /* Unavailable monitor outputs remain unset: FiO2, Pmean, minute volumes,
+         * leak percentage, expiratory peak flow, resistance, compliance, RCexp,
+         * WOB, PEEPi/PEEPtotal, P0.1, NIF, PTP, TVE/IBW, oxygen source pressure
+         * and derived oxygen/mechanics indices. */
+    }
+
+    ProtocolSendMonitorParamsFromCache(instance);
+#else
+    (void)instance;
+    (void)taskCounter;
+#endif
 }
 
 void ProtocolWaveDataProcess(uint8_t instance, uint32_t taskCounter)
@@ -2898,7 +3089,7 @@ void ProtocolDataPreProcess(uint8_t instance)
     ProtocolHeartbeatDataProcess(instance, taskCounter);
 
     /*定时处理监测参数*/
-    // ProtocolDetectDataPreProcess(instance, taskCounter); /* Pending machine port. */
+    ProtocolDetectDataPreProcess(instance, taskCounter);
 
     /*定时处理生理报警*/
     // ProtocolPhysAlarmDataProcess(instance, taskCounter); /* Pending machine port. */
@@ -2990,138 +3181,6 @@ const RxDiagnosisCache_t* ProtocolGetRxDiagnosisCache(void)
 const RxCalibrationCache_t* ProtocolGetRxCalibDataCache(void)
 {
     return &g_rxCalibrationCache;
-}
-
-/** Apply cached host fields in VentTask before the control chain runs. */
-void protocolApplyReceivedSettings(void) {
-    static uint8_t gLastSource;
-    static stVentPatientSettings gLocalPatient;
-    uint8_t lSource = GetVentPatientSettings()->useHostSettings == 1U;
-    int8_t lStatus = BREATH_CONTROL_SUCCESS;
-    repRtosEnterCritical();
-    bool lChanged = (lSource && gProtocolSettingsDirty) || lSource != gLastSource;
-    if (lSource != gLastSource) {
-        if (lSource) { gLocalPatient = *GetVentPatientSettings(); }
-        else { *GetVentPatientSettings() = gLocalPatient; GetVentPatientSettings()->useHostSettings = 0U; }
-    }
-    if (lSource && lChanged) {
-        const RxVentParamsCache_t *lParams = &g_rxVentParamsCache;
-        const RxAlarmLimitsCache_t *lLimits = &g_rxAlarmLimitsCache;
-        stVentPacSettings *lPac = GetVentPacSettings();
-        stVentVacSettings *lVac = GetVentVacSettings();
-        stVentCpapPsvSettings *lPsv = GetVentCpapPsvSettings();
-        stVentPsvStSettings *lSt = GetVentPsvStSettings();
-        stVentLimitSettings *lAlarm = GetVentLimitSettings();
-        if (lParams->m_valid[0x06]) {
-            lPac->oxygen = (float)lParams->m_fio2 * 1.0f / ProtocolGetScale(lParams->m_fio2_scale);
-            lVac->oxygen = (float)lParams->m_fio2 * 1.0f / ProtocolGetScale(lParams->m_fio2_scale);
-            lPsv->oxygenPercent = (float)lParams->m_fio2 * 1.0f / ProtocolGetScale(lParams->m_fio2_scale);
-            lSt->oxygenPercent = (float)lParams->m_fio2 * 1.0f / ProtocolGetScale(lParams->m_fio2_scale);
-        }
-        if (lParams->m_valid[0x07]) {
-            lPac->DeltaPressure = (float)lParams->m_deltaPinsp * 1.0f / ProtocolGetScale(lParams->m_deltaPinsp_scale);
-        }
-        if (lParams->m_valid[0x08]) {
-            lPac->peep = (float)lParams->m_peep * 1.0f / ProtocolGetScale(lParams->m_peep_scale);
-            lVac->peep = (float)lParams->m_peep * 1.0f / ProtocolGetScale(lParams->m_peep_scale);
-            lPsv->peepCmh2o = (float)lParams->m_peep * 1.0f / ProtocolGetScale(lParams->m_peep_scale);
-            lSt->peepCmh2o = (float)lParams->m_peep * 1.0f / ProtocolGetScale(lParams->m_peep_scale);
-        }
-        if (lParams->m_valid[0x09]) {
-            lPsv->pressureSupportCmh2o = (float)lParams->m_deltaPsupp * 1.0f / ProtocolGetScale(lParams->m_deltaPsupp_scale);
-            lSt->pressureSupportCmh2o = (float)lParams->m_deltaPsupp * 1.0f / ProtocolGetScale(lParams->m_deltaPsupp_scale);
-        }
-        if (lParams->m_valid[0x0C]) {
-            lSt->backupInspiratoryPressureCmh2o = (float)lParams->m_deltaApneaP * 1.0f / ProtocolGetScale(lParams->m_deltaApneaP_scale);
-        }
-        if (lParams->m_valid[0x0E]) {
-            lVac->tidalVolume = (float)lParams->m_tidalVolume * 1.0f / ProtocolGetScale(lParams->m_tidalVolume_scale);
-        }
-        if (lParams->m_valid[0x11]) {
-            lPac->flowTriggerLpm = (float)lParams->m_trigFlow * 1.0f / ProtocolGetScale(lParams->m_trigFlow_scale);
-            lVac->flowTriggerLpm = (float)lParams->m_trigFlow * 1.0f / ProtocolGetScale(lParams->m_trigFlow_scale);
-            lPsv->flowTriggerLpm = (float)lParams->m_trigFlow * 1.0f / ProtocolGetScale(lParams->m_trigFlow_scale);
-            lSt->flowTriggerLpm = (float)lParams->m_trigFlow * 1.0f / ProtocolGetScale(lParams->m_trigFlow_scale);
-        }
-        if (lParams->m_valid[0x12]) {
-            lPac->pressureTriggerCmh2o = (float)lParams->m_trigPress * 1.0f / ProtocolGetScale(lParams->m_trigPress_scale);
-            lVac->pressureTriggerCmh2o = (float)lParams->m_trigPress * 1.0f / ProtocolGetScale(lParams->m_trigPress_scale);
-            lPsv->pressureTriggerCmh2o = (float)lParams->m_trigPress * 1.0f / ProtocolGetScale(lParams->m_trigPress_scale);
-            lSt->pressureTriggerCmh2o = (float)lParams->m_trigPress * 1.0f / ProtocolGetScale(lParams->m_trigPress_scale);
-        }
-        if (lParams->m_valid[0x13]) {
-            lPsv->cycleOffPercent = (float)lParams->m_exhTrigPercent * 1.0f / ProtocolGetScale(lParams->m_exhTrigPercent_scale);
-            lSt->cycleOffPercent = (float)lParams->m_exhTrigPercent * 1.0f / ProtocolGetScale(lParams->m_exhTrigPercent_scale);
-        }
-        if (lParams->m_valid[0x14]) {
-            lPac->Rate = (float)lParams->m_rate * 1.0f / ProtocolGetScale(lParams->m_rate_scale);
-            lVac->freq = (float)lParams->m_rate * 1.0f / ProtocolGetScale(lParams->m_rate_scale);
-        }
-        if (lParams->m_valid[0x16]) {
-            lSt->backupRespiratoryRateBpm = (float)lParams->m_apneaRate * 1.0f / ProtocolGetScale(lParams->m_apneaRate_scale);
-        }
-        if (lParams->m_valid[0x17]) {
-            lPac->inspiratoryTimeMs = (float)lParams->m_ti * 1000.0f / ProtocolGetScale(lParams->m_ti_scale);
-            lVac->inspTimeMs = (float)lParams->m_ti * 1000.0f / ProtocolGetScale(lParams->m_ti_scale);
-        }
-        if (lParams->m_valid[0x18]) {
-            lPsv->maxInspiratoryTimeMs = (float)lParams->m_tiMax * 1000.0f / ProtocolGetScale(lParams->m_tiMax_scale);
-            lSt->maxInspiratoryTimeMs = (float)lParams->m_tiMax * 1000.0f / ProtocolGetScale(lParams->m_tiMax_scale);
-        }
-        if (lParams->m_valid[0x19]) {
-            lSt->backupInspiratoryTimeMs = (float)lParams->m_apneaTi * 1000.0f / ProtocolGetScale(lParams->m_apneaTi_scale);
-        }
-        if (lParams->m_valid[0x1A]) {
-            lPac->riseTimeMs = (float)lParams->m_riseTime * 1000.0f / ProtocolGetScale(lParams->m_riseTime_scale);
-            lPsv->riseTimeMs = (float)lParams->m_riseTime * 1000.0f / ProtocolGetScale(lParams->m_riseTime_scale);
-            lSt->riseTimeMs = (float)lParams->m_riseTime * 1000.0f / ProtocolGetScale(lParams->m_riseTime_scale);
-            lSt->backupRiseTimeMs = (float)lParams->m_riseTime * 1000.0f / ProtocolGetScale(lParams->m_riseTime_scale);
-        }
-        if (lParams->m_valid[0x26]) {
-            lVac->inspPausePct = (float)lParams->m_inspPausePercent * 1.0f / ProtocolGetScale(lParams->m_inspPausePercent_scale);
-        }
-        if (lParams->m_valid[0x29]) {
-            lPsv->pressureLimitCmh2o = (float)lParams->m_peakPressure * 1.0f / ProtocolGetScale(lParams->m_peakPressure_scale);
-            lSt->pressureLimitCmh2o = (float)lParams->m_peakPressure * 1.0f / ProtocolGetScale(lParams->m_peakPressure_scale);
-        }
-        if (lParams->m_valid[0x24] || lParams->m_valid[0x25]) {
-            eVentTriggerType lTrigger = lParams->m_assistTrig == 0U ? VENT_TRIGGER_OFF :
-                (lParams->m_FlowTrigger == 1U ? VENT_TRIGGER_FLOW : VENT_TRIGGER_PRESSURE);
-            lPac->triggerType = lVac->triggerType = lPsv->triggerType = lSt->triggerType = lTrigger;
-        }
-        if (lParams->m_valid[2] && lParams->m_patientType < VENT_PATIENT_TYPE_COUNT) {
-            GetVentPatientSettings()->Type = (eVentPatientType)lParams->m_patientType;
-        }
-        if (lParams->m_valid[4]) { GetVentPatientSettings()->IdealBodyHeightCm = lParams->m_idealHeight / ProtocolGetScale(lParams->m_idealHeight_scale); }
-        if (lParams->m_valid[5]) { GetVentPatientSettings()->IdealBodyWeightKg = lParams->m_idealWeight / ProtocolGetScale(lParams->m_idealWeight_scale); }
-        if (lLimits->m_valid[0]) { lAlarm->pressureLow = (float)lLimits->m_pAirwayLow / ProtocolGetScale(lLimits->m_pAirwayLow_scale); }
-        if (lLimits->m_valid[1]) { lAlarm->pressureHigh = (float)lLimits->m_pAirwayHigh / ProtocolGetScale(lLimits->m_pAirwayHigh_scale); }
-        if (lLimits->m_valid[2]) { lAlarm->minuteVolumeHigh = (float)lLimits->m_mvHigh / ProtocolGetScale(lLimits->m_mvHigh_scale); }
-        if (lLimits->m_valid[3]) { lAlarm->minuteVolumeLow = (float)lLimits->m_mvLow / ProtocolGetScale(lLimits->m_mvLow_scale); }
-        if (lLimits->m_valid[4]) { lAlarm->tidalVolumeHigh = (float)lLimits->m_tveHigh / ProtocolGetScale(lLimits->m_tveHigh_scale); }
-        if (lLimits->m_valid[5]) { lAlarm->tidalVolumeLow = (float)lLimits->m_tveLow / ProtocolGetScale(lLimits->m_tveLow_scale); }
-        if (lLimits->m_valid[6]) { lAlarm->o2PercentHigh = (float)lLimits->m_fio2High / ProtocolGetScale(lLimits->m_fio2High_scale); }
-        if (lLimits->m_valid[7]) { lAlarm->o2PercentLow = (float)lLimits->m_fio2Low / ProtocolGetScale(lLimits->m_fio2Low_scale); }
-        if (lLimits->m_valid[8]) { lAlarm->frequencyHigh = (float)lLimits->m_frTotalHigh / ProtocolGetScale(lLimits->m_frTotalHigh_scale); }
-        if (lLimits->m_valid[9]) { lAlarm->frequencyLow = (float)lLimits->m_frTotalLow / ProtocolGetScale(lLimits->m_frTotalLow_scale); }
-        if (lLimits->m_valid[10]) { lAlarm->apneaTimeHigh = (float)lLimits->m_apneaTime / ProtocolGetScale(lLimits->m_apneaTime_scale); }
-        if (lLimits->m_valid[10]) {
-            lPsv->apneaAlarmTimeMs = (uint32_t)lAlarm->apneaTimeHigh * 1000U;
-            lSt->apneaTimeMs = lPsv->apneaAlarmTimeMs;
-        }
-    }
-    bool lCommand = gProtocolCommandPending;
-    uint8_t lRun = g_rxVentSwitchCache.m_command;
-    eVentMode lMode = lSource ? (g_rxVentParamsCache.m_valid[1] ? g_rxVentParamsCache.m_modeRecv : VENT_MD_IDLE) : breathSchedulerModeGet();
-    if (!lSource && lMode == VENT_MD_IDLE) { lMode = VENT_MD_PAC; }
-    gProtocolSettingsDirty = false;
-    gProtocolCommandPending = false;
-    gLastSource = lSource;
-    repRtosExitCritical();
-    if (lCommand && lRun == 0U) { lStatus = breathSchedulerStop(); }
-    else if (lCommand && lRun == 1U) { lStatus = breathSchedulerStart(lMode); }
-    else if (lChanged && breathSchedulerRunningGet()) { lStatus = breathSchedulerSettingsUpdate(lMode); }
-    if (lStatus != BREATH_CONTROL_SUCCESS) { LOG_W("protocol", "vent command/settings rejected: %d", (int)lStatus); }
 }
 
 /**************************End of file********************************/

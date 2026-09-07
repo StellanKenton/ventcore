@@ -289,6 +289,14 @@ static void monitorEngineBreathResultPublish(uint32_t nowMs)
         lResult.validMask |= BREATH_RESULT_VOLUME_LIMITED;
     }
     repRtosEnterCritical();
+    gMonitorData[MONITOR_LAST_TIDA_VOL_INSP] = lResult.vtiMl;
+    gMonitorData[MONITOR_LAST_TIDA_VOL_EXP] = lResult.vteMl;
+    gMonitorData[MONITOR_LAST_PPEAK] = lResult.ppeakCmh2o;
+    gMonitorData[MONITOR_LAST_PLATEAU_PRS] = lResult.plateauPressureCmh2o;
+    gMonitorData[MONITOR_LAST_PEEP] = lResult.peepCmh2o;
+    gMonitorData[MONITOR_LAST_PEAK_INSP_FLOW] = lResult.peakInspiratoryFlowLpm;
+    gMonitorData[MONITOR_LAST_INSP_TIME_MS] = (float)lResult.inspiratoryTimeMs;
+    gMonitorData[MONITOR_LAST_CYCLE_TIME_MS] = (float)lResult.cycleTimeMs;
     gMonitorLatestBreathResult = lResult;
     gMonitorBreathResultAvailable = 1U;
     repRtosExitCritical();
@@ -369,20 +377,12 @@ void monitorEngineInit(void)
 {
     breathSchedulerVolumeReset();
     (void)memset(&gMonitorEngine, 0, sizeof(gMonitorEngine));
+    (void)memset(gMonitorData, 0, sizeof(gMonitorData));
     (void)memset(&gMonitorLatestBreathResult, 0,
                  sizeof(gMonitorLatestBreathResult));
     gMonitorEngine.runState = MONITOR_STATE_IDLE;
     gMonitorBreathResultAvailable = 0U;
-    (void)monitorEngineSet(MONITOR_TIDA_VOL, 0.0F);
-    (void)monitorEngineSet(MONITOR_TIDA_VOL_INSP, 0.0F);
-    (void)monitorEngineSet(MONITOR_TIDA_VOL_EXP, 0.0F);
-    (void)monitorEngineSet(MONITOR_PLATEAU_PRS, 0.0F);
-    (void)monitorEngineSet(MONITOR_LEAK_COEFFICIENT, 0.0F);
-    (void)monitorEngineSet(MONITOR_LEAK_FLOW, 0.0F);
-    (void)monitorEngineSet(MONITOR_LEAK_BALANCE_COEFFICIENT, 0.0F);
-    (void)monitorEngineSet(MONITOR_LEAK_VALID, 0.0F);
     gMonitorEngine.flowZeroOffsetLpm = controlDataMdiffFlowZeroOffsetGet();
-    (void)monitorEngineSet(MONITOR_DYN_PEEP, 0.0F);
 }
 
 float monitorEngineGet(eMonitorDataType type)

@@ -190,10 +190,6 @@ static void commTask(void *argument) {
         if ((uint32_t)(lNowMs - lLastReportMs) >= COMM_TASK_REPORT_INTERVAL_MS) {
             stProtocolHeartbeatStats lStats;
             protocolHeartbeatStatsGet(&lStats);
-            LOG_I("comm", "heartbeat rx=%lu tx=%lu pending=%u overflow=%lu online=%u",
-                  (unsigned long)lStats.received, (unsigned long)lStats.transmitted,
-                  (unsigned int)lStats.pending, (unsigned long)lStats.overflow,
-                  (unsigned int)ProtocolIsMCMConnected());
             lLastReportMs = lNowMs;
         }
         (void)repRtosTaskDelayUntilMs(&lPreviousWakeMs, COMM_TASK_INTERVAL_MS);

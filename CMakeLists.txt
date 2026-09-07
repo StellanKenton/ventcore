@@ -34,6 +34,7 @@ add_executable(ventcore
     User/app/protocol/ProtoclOfMcm.c
     User/app/protocol/ProtoclOfPackets.c
     User/app/protocol/ProtoclOfProcess.c
+    User/app/protocol/ProtoclOfTrasn.c
     User/bsp/uart/uart.c
     User/app/databus/settingdata.c
     User/app/physalarm/physalarmapnea.c

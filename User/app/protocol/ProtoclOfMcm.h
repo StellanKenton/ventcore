@@ -58,7 +58,7 @@ extern "C" {
 
 /* ==================== 数据发送开启定义 ==================== */
 #define PROTOCOL_WAVE_DATA_SEND_ENABLE         1        /* 通气波形数据发送开关 */
-#define PROTOCOL_MONITOR_PARAMS_SEND_ENABLE    0        /* 通气监测参数发送开关 */
+#define PROTOCOL_MONITOR_PARAMS_SEND_ENABLE    1        /* 通气监测参数发送开关 */
 #define PROTOCOL_HEARTBEAT_SEND_ENABLE         1        /* 心跳发送开关 */
 #define PROTOCOL_TECHALARM_SEND_ENABLE         0        /* 技术报警发送开关 */
 #define PROTOCOL_SELFTEST_SEND_ENABLE          0        /* 自检发送开关 */
@@ -69,6 +69,9 @@ extern "C" {
 #define PROTOCOL_MCM_DISCONNECT_TIMEOUT_MS        5000   /* MCM断连超时时间，单位：毫秒 */
 /* VentTask only; cache publication and settings copies use RTOS critical sections. */
 void protocolApplyReceivedSettings(void);
+/* Receive path only; notify the settings transfer module of cached updates. */
+void protocolReceivedSettingsMark(void);
+void protocolReceivedCommandMark(void);
 
 typedef struct stProtocolHeartbeatStats {
     uint32_t received;
@@ -998,7 +1001,7 @@ void ProtocolWaveDataProcess(uint8_t instance, uint32_t taskCounter);
  */
 void ProtocolHeartbeatDataProcess(uint8_t instance, uint32_t taskCounter);
 /**
- * @brief 处理发送的自检数据
+ * @brief 处理发送的通气监测参数
  * @param instance USART实例
  * @param taskCounter 任务计数器
  */

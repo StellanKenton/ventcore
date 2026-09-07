@@ -59,6 +59,15 @@ typedef enum {
     MONITOR_LEAK_VALID,
     /* Completed expiration: latest five valid points, otherwise its minimum. */
     MONITOR_DYN_PEEP,
+    /* Stable numeric snapshot of the latest completed breath. */
+    MONITOR_LAST_TIDA_VOL_INSP,
+    MONITOR_LAST_TIDA_VOL_EXP,
+    MONITOR_LAST_PPEAK,
+    MONITOR_LAST_PLATEAU_PRS,
+    MONITOR_LAST_PEEP,
+    MONITOR_LAST_PEAK_INSP_FLOW,
+    MONITOR_LAST_INSP_TIME_MS,
+    MONITOR_LAST_CYCLE_TIME_MS,
     MONITOR_DATA_COUNT,
 } eMonitorDataType;
 
