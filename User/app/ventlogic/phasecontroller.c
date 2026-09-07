@@ -9,7 +9,6 @@
 ***********************************************************************************/
 #include "phasecontroller.h"
 
-#include <float.h>
 #include <string.h>
 
 #include "controldata.h"
@@ -70,7 +69,6 @@ static int8_t phaseControllerInitialExpirationStart(uint32_t nowMs)
 /** Enter the proximal-flow zero-compensation sampling window. */
 static void phaseControllerCompensationStart(uint32_t nowMs)
 {
-    controlDataMdiffFlowZeroOffsetSet(0.0F);
     gPhaseController.compensationStartedMs = nowMs;
     gPhaseController.compensationQuietStartedMs = nowMs;
     gPhaseController.compensationFlowSum = 0.0F;
@@ -100,7 +98,8 @@ static int8_t phaseControllerCompensationProcess(uint32_t nowMs)
             PHASE_COMPENSATION_TIME_MS) {
             lPatientFlow = gPhaseController.compensationFlowSum /
                            (float)gPhaseController.compensationSampleCount;
-            controlDataMdiffFlowZeroOffsetSet(lPatientFlow);
+            controlDataMdiffFlowZeroOffsetSet(
+                controlDataMdiffFlowZeroOffsetGet() + lPatientFlow);
             LOG_I("phase", "prox zero100=%ld samples=%u",
                   (long)(lPatientFlow * 100.0F),
                   (unsigned int)gPhaseController.compensationSampleCount);

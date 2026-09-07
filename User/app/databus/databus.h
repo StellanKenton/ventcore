@@ -23,6 +23,9 @@ void controlDataCalibrationProcess(void);
 /* Set the proximal-flow zero offset subtracted from calibrated samples. */
 void controlDataMdiffFlowZeroOffsetSet(float offsetLpm);
 
+/* Return the proximal-flow zero offset currently applied to calibrated samples. */
+float controlDataMdiffFlowZeroOffsetGet(void);
+
 #ifdef __cplusplus
 }
 #endif

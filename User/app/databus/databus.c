@@ -164,3 +164,8 @@ void controlDataMdiffFlowZeroOffsetSet(float offsetLpm) {
                    lCurrentFlow + gMdiffFlowZeroOffsetLpm - offsetLpm);
     gMdiffFlowZeroOffsetLpm = offsetLpm;
 }
+
+/** Return the proximal-flow zero offset currently in use. */
+float controlDataMdiffFlowZeroOffsetGet(void) {
+    return gMdiffFlowZeroOffsetLpm;
+}
