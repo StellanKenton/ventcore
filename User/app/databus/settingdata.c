@@ -6,7 +6,7 @@
 
 stVentLimitSettings gVentLimitSettings = {
     .pressureLow = 1.0f,
-    .pressureHigh = 50.0f,
+    .pressureHigh = 100.0f,
     .minuteVolumeLow = 0.1f,
     .minuteVolumeHigh = 100.0f,
     .tidalVolumeLow = 1U,
