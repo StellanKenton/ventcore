@@ -23,6 +23,9 @@ extern "C" {
 #define PHYS_ALARM_PRESSURE_LOW_CONFIRM_BREATHS    3U
 #define PHYS_ALARM_VTE_CONFIRM_BREATHS              4U
 #define PHYS_ALARM_VTE_HIGH_IMMEDIATE_RATIO          1.5F
+#define PHYS_ALARM_PEEP_HIGH_OFFSET_CMH2O            5.0F
+#define PHYS_ALARM_PEEP_LOW_OFFSET_CMH2O             3.0F
+#define PHYS_ALARM_PEEP_RECOVERY_MS                200U
 
 typedef struct stPhysAlarmVentRuntime {
     uint32_t referenceMs;
@@ -47,6 +50,12 @@ bool physAlarmVentExhaledVolumeHighDetect(uint32_t nowMs);
 
 /** Detect completed breaths whose Vte is below VteMin. */
 bool physAlarmVentExhaledVolumeLowDetect(uint32_t nowMs);
+
+/** Detect high completed-cycle PEEP at inspiration, with timed recovery. */
+bool physAlarmVentPeepHighDetect(uint32_t nowMs);
+
+/** Detect low completed-cycle PEEP at inspiration, with timed recovery. */
+bool physAlarmVentPeepLowDetect(uint32_t nowMs);
 
 #ifdef __cplusplus
 }

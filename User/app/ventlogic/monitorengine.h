@@ -24,6 +24,11 @@ extern "C" {
 #define MONITOR_FLOW_DEADBAND_LPM                0.5F
 #define MONITOR_FLOW_SAMPLE_VOLUME_ML            0.1F
 #define MONITOR_PLATEAU_END_WINDOW_MS             100U
+#define MONITOR_DYN_PEEP_WINDOW_SIZE                5U
+#define MONITOR_DYN_PEEP_SAMPLE_INTERVAL_S          0.006F
+#define MONITOR_DYN_PEEP_SLOPE_LIMIT                5.0F
+#define MONITOR_DYN_PEEP_FLOW_LIMIT_LPM             1.0F
+#define MONITOR_DYN_PEEP_FLOW_SLOPE_LIMIT           0.5F
 #define MONITOR_LEAK_COEFFICIENT_MIN               0.0F
 #define MONITOR_LEAK_COEFFICIENT_MAX               50.0F
 #define MONITOR_LEAK_PRESSURE_SUM_MIN               0.001F
@@ -52,6 +57,8 @@ typedef enum {
     MONITOR_LEAK_BALANCE_COEFFICIENT,
     /* Completed-window numeric validity, not proof of lung volume balance. */
     MONITOR_LEAK_VALID,
+    /* Completed expiration: latest five valid points, otherwise its minimum. */
+    MONITOR_DYN_PEEP,
     MONITOR_DATA_COUNT,
 } eMonitorDataType;
 
@@ -86,6 +93,13 @@ typedef struct stMonitorEngine {
     float peakInspiratoryFlowLpm;
     float plateauPressureSumCmh2o;
     uint32_t plateauPressureSampleCount;
+    float peepSamplesCmh2o[MONITOR_DYN_PEEP_WINDOW_SIZE];
+    float peepPreviousCmh2o;
+    float peepPreviousFlowLpm;
+    float peepMinimumCmh2o;
+    uint8_t peepSampleCount;
+    uint8_t peepSampleIndex;
+    uint8_t peepPreviousValid;
     float leakFlowSumLpm;
     float leakPressureRootSum;
     float flowZeroOffsetLpm;

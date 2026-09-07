@@ -40,6 +40,18 @@ static stPhysAlarmRegistration gPhysAlarmRegistrations[PHYS_ALARM_COUNT] = {
         .detector = physAlarmVentExhaledVolumeLowDetect,
         .active = false,
     },
+    [PHYS_ALARM_PEEP_HIGH] = {
+        .type = PHYS_ALARM_PEEP_HIGH,
+        .enabled = true,
+        .detector = physAlarmVentPeepHighDetect,
+        .active = false,
+    },
+    [PHYS_ALARM_PEEP_LOW] = {
+        .type = PHYS_ALARM_PEEP_LOW,
+        .enabled = true,
+        .detector = physAlarmVentPeepLowDetect,
+        .active = false,
+    },
 };
 
 /** Update an alarm state while allowing readers from other tasks. */

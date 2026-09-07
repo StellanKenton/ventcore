@@ -20,6 +20,7 @@ HARNESS = r'''
 #include "phasecontroller.h"
 #include "calibtrans.h"
 #include "rtos.h"
+#include "physalarmmanager.h"
 
 static float gData[CONTROL_DATA_COUNT];
 static float gOffset;
@@ -29,6 +30,7 @@ static uint8_t gPause;
 static stVentLimitSettings gLimits = {.pressureLow = 1.0F, .pressureHigh = 60.0F};
 static stBreathPlan gPlan;
 
+stVentLimitSettings *GetVentLimitSettings(void) { return &gLimits; }
 float controlDataGet(ControlData_Index_EnumDef index) { return gData[index]; }
 float controlDataMdiffFlowZeroOffsetGet(void) { return gOffset; }
 ePhaseControllerState phaseControllerStateGet(void) { return gPhase; }
@@ -85,11 +87,166 @@ static void knownLeak(void) {
     assert(fabsf(monitorEngineGet(MONITOR_LEAK_FLOW) - 10.0F) < 0.001F);
 }
 
+/** Verify PEEP windows, rejected samples, short windows and cycle isolation. */
+static void dynamicPeep(void) {
+    unsigned int lIndex;
+
+    reset();
+    sample(PHASE_INSP, 30.0F, 25.0F);
+    sample(PHASE_EXP, 0.0F, 2.0F);
+    sample(PHASE_EXP, 0.0F, 5.0F);
+    for (lIndex = 1U; lIndex <= 7U; lIndex++) {
+        sample(PHASE_EXP, 0.0F, 5.0F + 0.01F * (float)lIndex);
+    }
+    sample(PHASE_EXP, 0.0F, 9.0F); /* Rejection preserves the window. */
+    monitorEngineBreathComplete(gNow);
+    assert(fabsf(monitorEngineGet(MONITOR_DYN_PEEP) - 5.05F) < 0.0001F);
+    sample(PHASE_EXP, 0.0F, 1.0F); /* Completed cycles are immutable. */
+    assert(fabsf(monitorEngineGet(MONITOR_DYN_PEEP) - 5.05F) < 0.0001F);
+
+    /* Fewer than five valid points use this cycle's minimum. */
+    for (lIndex = 0U; lIndex < 5U; lIndex++) {
+        gPlan.sequence++;
+        sample(PHASE_INSP, 30.0F, 25.0F);
+        sample(PHASE_EXP, 1.0F, 3.0F);
+        sample(PHASE_EXP, 1.0F, 6.0F);
+        for (unsigned int lPoint = 0U; lPoint < lIndex; lPoint++) {
+            sample(PHASE_EXP, 1.0F, 6.0F);
+        }
+        monitorEngineBreathComplete(gNow);
+        assert(monitorEngineGet(MONITOR_DYN_PEEP) == 3.0F);
+    }
+
+    /* Nonconsecutive valid points count; bad pressure breaks adjacency. */
+    gPlan.sequence++;
+    sample(PHASE_INSP, 30.0F, 25.0F);
+    sample(PHASE_EXP, -1.0F, 1.0F);
+    for (lIndex = 0U; lIndex < 5U; lIndex++) {
+        sample(PHASE_EXP, -1.0F, 5.0F + (float)lIndex);
+        sample(PHASE_EXP, -1.0F, 5.0F + (float)lIndex);
+        sample(PHASE_EXP, -1.0F, NAN);
+    }
+    gPlan.sequence++;
+    sample(PHASE_INSP, 30.0F, 25.0F); /* Observed completion path. */
+    assert(monitorEngineGet(MONITOR_DYN_PEEP) == 7.0F);
+
+    /* The slope threshold is strict in both directions. */
+    sample(PHASE_EXP, -1.0F, 0.0F);
+    for (lIndex = 0U; lIndex < 8U; lIndex++) {
+        sample(PHASE_EXP, -1.0F, (lIndex % 2U == 0U) ? 0.03F : 0.0F);
+    }
+    monitorEngineBreathComplete(gNow);
+    assert(monitorEngineGet(MONITOR_DYN_PEEP) == 0.0F);
+    sample(PHASE_IDLE, 0.0F, 0.0F);
+    assert(monitorEngineGet(MONITOR_DYN_PEEP) == 0.0F);
+}
+
+/** Check inclusive flow limits and strict adjacent flow-rate limits. */
+static void dynamicPeepFlow(void) {
+    const float lFlows[] = {1.0F, -1.0F, 1.001F, -1.001F,
+                           0.0029F, -0.0029F, 0.003F, -0.003F,
+                           0.004F, -0.004F, NAN, INFINITY};
+    unsigned int lCase;
+    unsigned int lIndex;
+
+    for (lCase = 0U; lCase < sizeof(lFlows) / sizeof(lFlows[0]); lCase++) {
+        reset();
+        sample(PHASE_INSP, 30.0F, 25.0F);
+        sample(PHASE_EXP, 0.0F, 2.0F);
+        for (lIndex = 0U; lIndex < 12U; lIndex++) {
+            float lFlow = lFlows[lCase];
+            if ((lCase >= 4U) && ((lIndex % 2U) == 0U)) {
+                lFlow = 0.0F;
+            }
+            sample(PHASE_EXP, lFlow, 5.0F);
+        }
+        monitorEngineBreathComplete(gNow);
+        assert(monitorEngineGet(MONITOR_DYN_PEEP) ==
+               ((lCase < 2U || lCase == 4U || lCase == 5U) ? 5.0F : 2.0F));
+    }
+}
+
+/** Publish a cycle's minimum and enter the next inspiration. */
+static void peepAlarmNextBreath(float pressure) {
+    sample(PHASE_EXP, 0.0F, pressure);
+    monitorEngineBreathComplete(gNow);
+    gPlan.sequence++;
+    sample(PHASE_INSP, 30.0F, 25.0F);
+}
+
+/** Exercise registered PEEP alarms against production completed-cycle values. */
+static void peepAlarms(void) {
+    unsigned int lCase;
+    for (lCase = 0U; lCase < 2U; lCase++) {
+        ePhysAlarmType lType = lCase == 0U ? PHYS_ALARM_PEEP_HIGH : PHYS_ALARM_PEEP_LOW;
+        float lBad = lCase == 0U ? 11.0F : 1.0F;
+        float lEqual = lCase == 0U ? 10.0F : 2.0F;
+        uint32_t lStart;
+        reset();
+        physAlarmManagerInit();
+        sample(PHASE_INSP, 30.0F, 25.0F);
+        physAlarmManagerProcess(gNow);
+        assert(!physAlarmManagerStateGet(lType)); /* No previous cycle. */
+        sample(PHASE_EXP, 0.0F, lBad);
+        monitorEngineBreathComplete(gNow);
+        physAlarmManagerProcess(gNow);
+        assert(!physAlarmManagerStateGet(lType)); /* Expiration cannot trigger. */
+        gPlan.sequence++;
+        sample(PHASE_INSP, 30.0F, 25.0F);
+        physAlarmManagerProcess(gNow);
+        assert(physAlarmManagerStateGet(lType));
+        assert(!physAlarmManagerStateGet(lCase == 0U ? PHYS_ALARM_PEEP_LOW : PHYS_ALARM_PEEP_HIGH));
+
+        peepAlarmNextBreath(5.0F);
+        lStart = gNow;
+        physAlarmManagerProcess(lStart);
+        physAlarmManagerProcess(lStart + 199U);
+        assert(physAlarmManagerStateGet(lType));
+        gNow += 199U;
+        peepAlarmNextBreath(lEqual); /* Equality interrupts recovery. */
+        physAlarmManagerProcess(gNow);
+        gNow += 250U;
+        physAlarmManagerProcess(gNow);
+        assert(physAlarmManagerStateGet(lType));
+
+        peepAlarmNextBreath(5.0F);
+        lStart = gNow;
+        physAlarmManagerProcess(lStart);
+        physAlarmManagerProcess(lStart + 199U);
+        assert(physAlarmManagerStateGet(lType));
+        physAlarmManagerProcess(lStart + 200U);
+        assert(!physAlarmManagerStateGet(lType));
+        gNow += 200U;
+        peepAlarmNextBreath(lEqual);
+        physAlarmManagerProcess(gNow);
+        assert(!physAlarmManagerStateGet(lType)); /* Equality cannot trigger. */
+        peepAlarmNextBreath(lBad);
+        physAlarmManagerProcess(gNow);
+        assert(physAlarmManagerStateGet(lType));
+        peepAlarmNextBreath(5.0F);
+        lStart = UINT32_MAX - 100U;
+        physAlarmManagerProcess(lStart);
+        physAlarmManagerProcess(lStart + 199U);
+        assert(physAlarmManagerStateGet(lType));
+        physAlarmManagerProcess(lStart + 200U);
+        assert(!physAlarmManagerStateGet(lType));
+        peepAlarmNextBreath(lBad);
+        physAlarmManagerProcess(gNow);
+        assert(physAlarmManagerStateGet(lType));
+        sample(PHASE_IDLE, 0.0F, 0.0F);
+        physAlarmManagerProcess(gNow);
+        assert(!physAlarmManagerStateGet(lType));
+    }
+}
+
 int main(void) {
     stBreathResult lResult;
     stActuatorRequest lRequest;
     uint16_t lTarget;
     unsigned int lIndex;
+    peepAlarms();
+    dynamicPeep();
+    dynamicPeepFlow();
     knownLeak();
     assert(monitorEngineBreathResultGet(&lResult) == MONITOR_ENGINE_SUCCESS);
     assert(lResult.sequence == 1U);
@@ -205,18 +362,20 @@ def main():
         harness = Path(directory) / "monitor_leak_test.c"
         harness.write_text(HARNESS, encoding="utf-8", newline="\n")
         executable = Path(directory) / "monitor_leak_test.exe"
-        includes = ["user/app/ventlogic", "user/app/ventalgo", "user/app/databus",
+        includes = ["user/app/physalarm", "user/app/ventlogic", "user/app/ventalgo", "user/app/databus",
                     "user/app/calibration", "user/module/rtos", "user/tools/controller"]
         command = [compiler, "-std=c11", "-Wall", "-Wextra", "-Werror",
                    *[f"-I{ROOT / path}" for path in includes], str(harness),
                    str(ROOT / "user/app/ventlogic/monitorengine.c"),
+                   str(ROOT / "user/app/physalarm/physalarmvent.c"),
+                   str(ROOT / "user/app/physalarm/physalarmmanager.c"),
                    str(ROOT / "user/app/ventalgo/flowcontroller.c"),
                    str(ROOT / "user/tools/controller/pid.c"), "-o", str(executable)]
         environment = os.environ.copy()
         environment["PATH"] = str(Path(compiler).parent) + os.pathsep + environment["PATH"]
         subprocess.run(command, check=True, env=environment)
         subprocess.run([str(executable)], check=True, env=environment)
-    print("PASS: leak estimate, pause integration, boundaries, invalid data, restart, re-zero, limits")
+    print("PASS: PEEP alarms and recovery, dynamic PEEP pressure/flow windows, leak estimate, pause integration, boundaries, invalid data, restart, re-zero, limits")
 
 
 if __name__ == "__main__":

@@ -53,6 +53,8 @@ target board.
   Run `py -3 user/develop/test_monitor_leak.py` with native GCC/Clang. Covers known
   leakage, positive expiratory proximal flow, signed diagnostics, invalid samples,
   stop/restart, mid-breath re-zeroing, incomplete cycles and compensation limits.
+  Also covers dynamic PEEP pressure/flow validity, five-point windows, PEEP alarm
+  registration, inspiration-only triggering, strict thresholds and 200 ms recovery.
 - `device_tool_config.json`: per-computer tool paths and target settings.
 - `test_flow_pause.py`: native host regression for VAC pause entry and zero-flow
   control, plus VAC feedforward formula, compliance boundaries and pressure limits;

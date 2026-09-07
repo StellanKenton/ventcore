@@ -14,6 +14,7 @@
 #include "controldata.h"
 #include "monitorengine.h"
 #include "phasecontroller.h"
+#include "rtos.h"
 #include "settingdata.h"
 
 static stPhysAlarmVentRuntime gPhysAlarmVentRuntime[PHYS_ALARM_COUNT];
@@ -182,6 +183,66 @@ bool physAlarmVentExhaledVolumeLowDetect(uint32_t nowMs)
         lRuntime->consecutiveBreaths = 0U;
     }
     return lRuntime->active;
+}
+
+/** Check one completed PEEP per inspiration and time strict recovery each call. */
+static bool physAlarmVentPeepDetect(ePhysAlarmType type, uint32_t nowMs) {
+    stPhysAlarmVentRuntime *lRuntime = &gPhysAlarmVentRuntime[type];
+    stBreathPlan lPlan;
+    stBreathResult lResult;
+    ePhaseControllerState lPhase;
+    float lPeep;
+    float lLimit;
+    bool lAvailable;
+    bool lHigh = (type == PHYS_ALARM_PEEP_HIGH);
+    bool lRecovered;
+
+    /* Snapshot VentTask publications together before evaluating in AlarmTask. */
+    repRtosEnterCritical();
+    lPhase = phaseControllerStateGet();
+    lAvailable = (phaseControllerActivePlanGet(&lPlan) == PHASE_CONTROL_SUCCESS) &&
+                 (monitorEngineBreathResultGet(&lResult) == MONITOR_ENGINE_SUCCESS);
+    lPeep = monitorEngineGet(MONITOR_DYN_PEEP);
+    repRtosExitCritical();
+    if ((lPhase != PHASE_INSP) && (lPhase != PHASE_EXP)) {
+        (void)memset(lRuntime, 0, sizeof(*lRuntime));
+        return false;
+    }
+    if (!lAvailable || ((lResult.validMask & BREATH_RESULT_VALID_COMPLETE) == 0U)) {
+        lRuntime->timing = false;
+        return lRuntime->active;
+    }
+    lLimit = lPlan.peepCmh2o + (lHigh ? PHYS_ALARM_PEEP_HIGH_OFFSET_CMH2O :
+                                      -PHYS_ALARM_PEEP_LOW_OFFSET_CMH2O);
+    if ((lPhase == PHASE_INSP) && (lResult.sequence != lPlan.sequence) &&
+        (!lRuntime->sequenceInitialized ||
+         (lRuntime->processedSequence != lPlan.sequence))) {
+        lRuntime->processedSequence = lPlan.sequence;
+        lRuntime->sequenceInitialized = true;
+        if (lHigh ? (lPeep > lLimit) : (lPeep < lLimit)) {
+            lRuntime->active = true;
+            lRuntime->timing = false;
+        }
+    }
+    lRecovered = lHigh ? (lPeep < lLimit) : (lPeep > lLimit);
+    if (!lRuntime->active || !lRecovered) {
+        lRuntime->timing = false;
+    } else if (!lRuntime->timing) {
+        lRuntime->referenceMs = nowMs;
+        lRuntime->timing = true;
+    } else if ((nowMs - lRuntime->referenceMs) >= PHYS_ALARM_PEEP_RECOVERY_MS) {
+        lRuntime->active = false;
+        lRuntime->timing = false;
+    }
+    return lRuntime->active;
+}
+
+bool physAlarmVentPeepHighDetect(uint32_t nowMs) {
+    return physAlarmVentPeepDetect(PHYS_ALARM_PEEP_HIGH, nowMs);
+}
+
+bool physAlarmVentPeepLowDetect(uint32_t nowMs) {
+    return physAlarmVentPeepDetect(PHYS_ALARM_PEEP_LOW, nowMs);
 }
 
 /*************************************** End of file ********************************/
