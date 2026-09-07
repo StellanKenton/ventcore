@@ -13,17 +13,19 @@
 #include <string.h>
 #include <stddef.h>
 //#include "SEGGER_RTT.h"
-#include "ProtoclOfRingBuffer.h"
+#include "ringbuffer.h"
 /* ==================== 静态变量定义 ==================== */
 
 
 /* ==================== 数据包解析函数 ==================== */
 ProtocolStatus_t ProtocolParsePacket(const uint8_t* buffer, uint16_t bufferSize, ProtocolPacket_t* packet)
 {
-    if (!buffer || !packet || bufferSize < PROTOCOL_HEADER_SIZE + PROTOCOL_CRC_SIZE) {
+    if (!buffer || !packet || bufferSize < PROTOCOL_HEADER_PACK_SIZE + PROTOCOL_CRC_SIZE) {
         return PROTOCOL_ERROR;
     }
     
+    if (bufferSize != ProtocolGetPacketSize(buffer) || bufferSize > PROTOCOL_MAX_PACKET_SIZE) { return PROTOCOL_INVALID_PACKET; }
+    memset(packet, 0, sizeof(*packet));
     uint16_t index = 0;
     
     /* 解析帧头 */
@@ -51,7 +53,7 @@ ProtocolStatus_t ProtocolParsePacket(const uint8_t* buffer, uint16_t bufferSize,
     /* 解析子ID */
     while (remainingLength > 0 && packet->m_subIdCount < PROTOCOL_MAX_SUB_ID_COUNT) {
         if (remainingLength < 2) {
-            break;  /* 没有足够的数据用于子ID + 长度 */
+            return PROTOCOL_INVALID_PACKET;
         }
         
         uint8_t subId = buffer[dataIndex++];
@@ -59,7 +61,7 @@ ProtocolStatus_t ProtocolParsePacket(const uint8_t* buffer, uint16_t bufferSize,
         remainingLength -= 2;
         
         if (remainingLength < ((length >> 3) & 0x1F)) {  /* 检查数据长度 */
-            break;
+            return PROTOCOL_INVALID_PACKET;
         }
         
         ProtocolSubId_t* subIdPtr = &packet->m_subIds[packet->m_subIdCount];
@@ -73,7 +75,7 @@ ProtocolStatus_t ProtocolParsePacket(const uint8_t* buffer, uint16_t bufferSize,
             if ((packet->m_payloadSize + subIdPtr->m_dataSize) > PROTOCOL_MAX_PAYLOAD_SIZE) {
                 return PROTOCOL_BUFFER_FULL;
             }
-            if (dataIndex + subIdPtr->m_dataSize > bufferSize) {
+            if (dataIndex + subIdPtr->m_dataSize > bufferSize - PROTOCOL_CRC_SIZE) {
                 return PROTOCOL_ERROR;
             }
             subIdPtr->m_dataOffset = packet->m_payloadSize;
@@ -86,20 +88,8 @@ ProtocolStatus_t ProtocolParsePacket(const uint8_t* buffer, uint16_t bufferSize,
         packet->m_subIdCount++;
     }
     
-    /* 解析剩余的主ID数据 */
-    if (remainingLength > 0) {
-        if ((packet->m_payloadSize + remainingLength) > PROTOCOL_MAX_PAYLOAD_SIZE) {
-            return PROTOCOL_BUFFER_FULL;
-        }
-        if (dataIndex + remainingLength > bufferSize) {
-            return PROTOCOL_ERROR;
-        }
-        packet->m_mainIdDirectOffset = packet->m_payloadSize;
-        memcpy(&packet->m_payload[packet->m_payloadSize], &buffer[dataIndex], remainingLength);
-        packet->m_payloadSize += remainingLength;
-        packet->m_mainIdDirectSize = (uint8_t)remainingLength;
-    }
-    
+    if (remainingLength != 0U) { return PROTOCOL_INVALID_PACKET; }
+
     /* 获取crc */
     packet->m_crc = buffer[bufferSize - 2] | (buffer[bufferSize - 1] << 8);
     
@@ -161,7 +151,7 @@ uint16_t ProtocolCreateSubIdData(uint8_t *Buffer,uint16_t Head,bool needAck,uint
     uint16_t index = 0;
     SubIDCache_t *subIdArray = (SubIDCache_t *)subIds;
     if (!subIdArray || count == 0 || Buffer == NULL) {
-        return PROTOCOL_ERROR;
+        return 0U;
     }
     Buffer[index++] = (Head >> 8) & 0xFF;
     Buffer[index++] = Head & 0xFF;
@@ -188,14 +178,17 @@ uint16_t ProtocolCreateDirectData(uint8_t *Buffer,uint16_t Head,bool needAck,uin
 {
     uint16_t index = 0;
     if (Buffer == NULL) {
-        return PROTOCOL_ERROR;
+        return 0U;
     }
     Buffer[index++] = (Head >> 8) & 0xFF;
     Buffer[index++] = Head & 0xFF;
     Buffer[index++] = mainId;
     Buffer[index++] = needAck ? 0x01 : 0x00;
     Buffer[index++] = dataSize;
-    memcpy(&Buffer[index], data, dataSize);
+    if (dataSize != 0U) {
+        if (data == NULL) { return 0U; }
+        memcpy(&Buffer[index], data, dataSize);
+    }
     index += dataSize;
     uint16_t crc = Crc16Compute(&Buffer[2], index - 2);
     Buffer[index++] = crc & 0xFF;
@@ -283,4 +276,3 @@ uint16_t ProtocolGetScale(uint8_t scale)
 }
 
 /**************************End of file********************************/
-

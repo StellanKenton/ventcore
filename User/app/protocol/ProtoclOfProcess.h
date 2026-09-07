@@ -16,7 +16,7 @@
 #include "ProtoclOfTypeDef.h"
 #include "ProtoclOfConfig.h"
 #include "ProtoclOfPackets.h"
-#include "BspCommUsart.h"
+#include "uart.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -29,7 +29,7 @@ extern "C" {
  * @param instance USART实例
  * @return ProtocolStatus_t 初始化状态
  */
-ProtocolStatus_t ProtocolProcessInit(UsartInstance_t instance);
+ProtocolStatus_t ProtocolProcessInit(uint8_t instance);
 
 /**
  * @brief 反初始化协议处理模块
@@ -40,13 +40,13 @@ void ProtocolProcessDeInit(void);
  * @brief 协议主处理函数 - 在通信任务中调用
  * @param instance USART实例
  */
-void ProtocolProcessMain(UsartInstance_t instance);
+void ProtocolProcessMain(uint8_t instance);
 
 /**
  * @brief 协议调度处理函数
  * @param instance USART实例
  */
-void ProtocolSchedulerProcess(UsartInstance_t instance);
+void ProtocolSchedulerProcess(uint8_t instance);
 
 /* ==================== 数据包接收函数 ==================== */
 /**
@@ -54,30 +54,30 @@ void ProtocolSchedulerProcess(UsartInstance_t instance);
  * @param instance USART实例
  * @return ProtocolStatus_t 接收状态
  */
-ProtocolStatus_t ProtocolReceiveData(UsartInstance_t instance);
+ProtocolStatus_t ProtocolReceiveData(uint8_t instance);
 /**
  * @brief 处理接收到的数据包
  * @param instance USART实例
  * @return ProtocolStatus_t 处理状态
  */
-ProtocolStatus_t ProtocolProcessRxData(UsartInstance_t instance);
+ProtocolStatus_t ProtocolProcessRxData(uint8_t instance);
 /**
  * @brief 注册应答包
  * @param instance USART实例
  * @param data 应答包数据
  */
-void ProtocolRegisterAck(UsartInstance_t instance, const uint8_t* data, uint16_t size);
+void ProtocolRegisterAck(uint8_t instance, const uint8_t* data, uint16_t size);
 /**
  * @brief 处理应答超时检测和重发
  * @param instance USART实例
  */
-void ProtocolProcessAckTimeout(UsartInstance_t instance);
+void ProtocolProcessAckTimeout(uint8_t instance);
 /**
  * @brief 处理收到的应答包
  * @param instance USART实例
  * @param packet 收到的应答包
  */
-void ProtocolProcessReceivedAck(UsartInstance_t instance, const ProtocolPacket_t* packet);
+void ProtocolProcessReceivedAck(uint8_t instance, const ProtocolPacket_t* packet);
 /* ==================== 发送数据预处理函数 ==================== */
 /**
  * @brief 发送数据处理函数
@@ -87,7 +87,7 @@ void ProtocolProcessReceivedAck(UsartInstance_t instance, const ProtocolPacket_t
  * @param length 发送数据的长度
  * @return ProtocolStatus_t 发送状态
  *  */
-ProtocolStatus_t ProtocolSendData(UsartInstance_t instance, uint8_t Priority, uint8_t* pData, uint16_t length);
+ProtocolStatus_t ProtocolSendData(uint8_t instance, uint8_t Priority, uint8_t* pData, uint16_t length);
 
 #ifdef __cplusplus
 }

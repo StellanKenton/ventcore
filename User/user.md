@@ -6,7 +6,9 @@
 |---|---|
 | `main.c` | 初始化日志和控制台、注册 worker tasks 并启动调度器 |
 | `app/calibration/` | 上电只读加载 EEPROM 中五类既有校准记录，校验记录头与 CRC-16，并提供有效性查询和运行期只读访问 |
-| `app/system/taskmanager.*` | 通过 `WorkerTasksRegister()` 创建 defaultTask、VentTask、SensorTask、SysTask、AlarmTask；全部任务使用绝对周期 `DelayUntil`，SensorTask 每 3 ms 采集传感器并处理风机反馈，VentTask 每 6 ms 执行通气控制链 |
+| `app/system/taskmanager.*` | 通过 `WorkerTasksRegister()` 创建 defaultTask、VentTask、SensorTask、SysTask、AlarmTask、CommTask；全部任务使用绝对周期 `DelayUntil`，SensorTask 每 3 ms 采集传感器并处理风机反馈，VentTask 每 6 ms 执行通气控制链 |
+| `app/protocol/` | 保留 MCM 帧与接收缓存；CommTask 每 10 ms 收发，VentTask 应用参数和启停，20 ms 上发波形；旧机型功能以条件编译保留 |
+| `bsp/uart/uart.*` | USART0 PA9 TX / PA10 RX，115200、8N1；中断收发，2048 字节 RX 缓存；公开 API 仅供任务调用 |
 | `app/databus/` | 维护控制数据数组；SensorTask 保存当前及前一周期原始数据，VentTask 基于最新原始数据完成滤波和校准转换 |
 | `app/ventalgo/` | 实现吸气压力、吸气流量、公共 Release/PEEP 和 FiO₂ 控制器；各控制器只生成统一 `stActuatorRequest`，不直接写 BSP |
 | `app/ventlogic/` | Scheduler 为 PAC/VAC/PSV/PSV-ST 生成逐次 `stBreathPlan`，Phase Controller 执行计划，Trigger Engine 检测患者触发，Cycle Engine 完成 PSV 流量切换，Apnea Engine 调度 PSV-ST 备份呼吸，Monitor Engine 发布逐次 `stBreathResult`，Actuator Controller 统一仲裁并写入 BSP |
@@ -59,3 +61,11 @@ VAC 供气段压力前馈使用 `Pff = PEEP + Vref*deliveryTarget/userTarget/30 
 VAC 吸气暂停继续使用近端流量反馈，不锁定患者压力。入口采用 Kp=0.003、Kd=0.00005、Ki=0 制动供气尾段；至少经过 120 ms，且近端流量下降到泄漏目标上方 2 L/min 以内后，开启 Ki=0.02 的积分补偿。此时按患者压力一次性选择稳定段参数：低于 30 cmH₂O 保留 Kp=0.003、Kd=0.00005；达到或超过 30 cmH₂O 使用 Kp=0.0003、Kd=0，减少高压力工况的反馈振荡。本次暂停内不反复切换增益。暂停风机指令每 6 ms 最多变化 40 个指令单位，绝对压力对应转速上限优先于变化率限制，限幅时撤回同方向积分增量。患者侧漏气才计入近端流量目标，呼气阀侧流量不能直接当作患者侧漏气目标。验证重点是暂停稳定后 patflow 相对泄漏补偿目标的偏差与振幅，不以原始过零次数作为验收标准。
 
 `PHYS_ALARM_CPAP_TOO_HIGH` 已启用：以当前呼吸计划 `peepCmh2o` 为基准，`INSP_REAL_PRS` 与 `PAT_REAL_PRS` 同时严格大于 PEEP + 15 cmH₂O 持续 15 s 触发；报警后两路同时严格小于 PEEP + 14.5 cmH₂O 持续 3 s 恢复。等于阈值或任一路不满足条件会中断对应计时，吸呼气切换不清计时。停机、零点补偿阶段清除状态；计划不可用时中断计时并保留报警状态。由 AlarmTask 在临界区获取计划及两路压力快照。`develop/test_monitor_leak.py` 包含阈值、计时边界、中断、阶段切换及 tick 回绕回归。
+
+`stVentPatientSettings.useHostSettings` 默认 0，使用本机固定设置；1 使用独立的 MCM 设置副本。两种情况下均接收并缓存参数和报警限，通气命令 1 启动、0 停止。已绑定 PAC/VAC/CPAP-PSV/PSV-ST 的现有字段，其他模式仅缓存，由 Scheduler 拒绝启动。时间按 scale 解码为秒后转为毫秒。波形沿用压力 ×10、流量 ×10+2000、容量 mL 和毫秒时间戳；相位 1 吸气、2 呼气。CommTask 优先级 5、周期 10 ms、栈 1024 words，低于通气和传感器任务。
+
+本机参数模式保留 Scheduler 当前选择的通气模式；上电尚未选模式时，MCM 启动命令默认使用 PAC。上位机参数模式需先收到模式字段才能启动。触发选择按 `m_assistTrig=0` 关闭、`m_FlowTrigger=1` 流量触发／0 压力触发绑定。115200 波特率及上述物理单位、相位值需在上位机实机联调时核对。`develop/test_protocol.py` 使用真实协议源码和模拟串口验证分包、CRC、缓存、参数源切换、启停、ACK 和波形编码。
+
+CommTask 独占 PA9/PA10 串口和协议队列，SysTask 恢复 20 ms 空任务。每个 CRC 有效的 MCM `0x7F` 心跳收到后返回一次 `FE FF 7F 01 00 + CRC`；保留原应答字节，不为心跳回复注册 ACK 超时重发。请求带 ACK 标记时，另保留通用原帧回显应答。回复进入高优先级队列，队列满时保留待应答计数。RTT 每 5 s 输出 `heartbeat rx/tx/pending/overflow/online`；tx 表示已交给串口发送，不能单独证明上位机收到。连续 5 s 无有效 MCM 帧时 online 为 0，新帧可恢复。
+
+2026-09-07 心跳实机自测：经 Device Tool 编译、烧录校验及 RTT 观察，清除了 main 入口残留硬件断点，并为 RTT 指定 ELF 中的控制块地址。`build/heartbeat_final_rtt.log` 连续报告 rx/tx 相等（最终 65/65），pending=0、overflow=0、online=1；MCM 心跳约每秒一次。tx 为设备串口提交计数，此记录不包含 MCM 界面确认。主机协议回归另验证 1110 次应答及背压、断连恢复。

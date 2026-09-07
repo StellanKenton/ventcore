@@ -31,6 +31,10 @@ add_executable(ventcore
     User/app/databus/controldata.c
     User/app/databus/databus.c
     User/app/databus/monitordata.c
+    User/app/protocol/ProtoclOfMcm.c
+    User/app/protocol/ProtoclOfPackets.c
+    User/app/protocol/ProtoclOfProcess.c
+    User/bsp/uart/uart.c
     User/app/databus/settingdata.c
     User/app/physalarm/physalarmapnea.c
     User/app/physalarm/physalarmmanager.c
@@ -86,6 +90,8 @@ target_include_directories(ventcore PRIVATE
     User
     User/app/calibration
     User/app/databus
+    User/app/protocol
+    User/bsp/uart
     User/app/physalarm
     User/app/system
     User/app/ventalgo

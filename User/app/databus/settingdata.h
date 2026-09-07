@@ -84,6 +84,7 @@ typedef struct stVentLimitSettings {
 
 
 typedef struct stVentPatientSettings {
+    uint8_t useHostSettings; /* 1: MCM parameters; 0: local fixed settings. */
     eVentPatientType Type;
     eVentGasType Gas;
     uint16_t IdealBodyWeightKg;  // min 1, max 300

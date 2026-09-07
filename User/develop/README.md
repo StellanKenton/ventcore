@@ -7,6 +7,8 @@ target board.
 
 ## Files
 
+- `test_protocol.py`: host regression using the production MCM parser, caches and settings binding with a simulated UART. Run `py -3 user/develop/test_protocol.py`; covers fragmented frames, malformed packets, CRC, ACK, source switching, ventilation commands and waveform encoding, plus 1110 heartbeat responses with continuous traffic, bursts, UART busy/queue backpressure, timeout and reconnect. It does not flash or operate the board.
+
 - `test_vti_rtt.py`: startup convergence recording through Device Tool RTT on a test
   lung. `py -3 user/develop/test_vti_rtt.py --output build/vti_rtt/run --seconds 44
   --peep 5 --pause 0` starts VAC at 500 mL, records every result/feedback and 6 ms

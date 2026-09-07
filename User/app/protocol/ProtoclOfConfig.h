@@ -14,7 +14,7 @@
 #define _PROTOCOL_CONFIG_H_
 
 #include "ProtoclOfTypeDef.h"
-//#include "SEGGER_RTT.h"
+#include "log.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -99,8 +99,8 @@ extern "C" {
 /* ==================== 调试配置 ==================== */
 
 #if PROTOCOL_ENABLE_DEBUG
-#define PROTOCOL_DEBUG_PRINT(fmt, ...)  SEGGER_RTT_printf(0, "[PROTOCOL] " fmt "\n", ##__VA_ARGS__)
-#define PROTOCOL_RTT_PRINT(fmt, ...)    SEGGER_RTT_printf(0, fmt, ##__VA_ARGS__)
+#define PROTOCOL_DEBUG_PRINT(fmt, ...)  LOG_I("protocol", fmt, ##__VA_ARGS__)
+#define PROTOCOL_RTT_PRINT(fmt, ...)    LOG_I("protocol", fmt, ##__VA_ARGS__)
 #else
 #define PROTOCOL_DEBUG_PRINT(fmt, ...)
 #define PROTOCOL_RTT_PRINT(fmt, ...)

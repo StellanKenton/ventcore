@@ -1,7 +1,7 @@
 /************************************************************************************
 * @file     : taskmanager.c
 * @brief    : Project task wiring.
-* @details  : Creates the five project worker tasks.
+* @details  : Creates the six project worker tasks.
 * @author   :
 * @date     :
 * @version  :
@@ -26,6 +26,8 @@
 #include "cycleengine.h"
 #include "triggerengine.h"
 #include "venttest.h"
+#include "ProtoclOfMcm.h"
+#include "uart.h"
 
 static const char *const gTaskManagerTag = "taskManager";
 static bool gWorkerTasksCreated = false;
@@ -34,15 +36,25 @@ static repRtosTaskHandle gVentTaskHandle = NULL;
 static repRtosTaskHandle gSensorTaskHandle = NULL;
 static repRtosTaskHandle gSysTaskHandle = NULL;
 static repRtosTaskHandle gAlarmTaskHandle = NULL;
+static repRtosTaskHandle gCommTaskHandle = NULL;
 
 static void defaultTask(void *argument);
 static void ventTask(void *argument);
 static void sensorTask(void *argument);
 static void sysTask(void *argument);
 static void alarmTask(void *argument);
+static void commTask(void *argument);
 static int8_t taskManagerCreateTask(const stRepRtosTaskConfig *config);
 
 static const stRepRtosTaskConfig gWorkerTaskConfigs[] = {
+    {
+        .name = "CommTask",
+        .entry = commTask,
+        .argument = NULL,
+        .stackSize = COMM_TASK_STACK_SIZE,
+        .priority = COMM_TASK_PRIORITY,
+        .handle = &gCommTaskHandle,
+    },
     {
         .name = "defaultTask",
         .entry = defaultTask,
@@ -112,6 +124,7 @@ static void ventTask(void *argument)
     actuatorControllerInit();
     
     for (;;) {
+        protocolApplyReceivedSettings();
         controlDataFilterProcess();
         controlDataCalibrationProcess();
         breathSchedulerProcess();
@@ -160,6 +173,30 @@ static void sysTask(void *argument)
 
     for (;;) {
         (void)repRtosTaskDelayUntilMs(&lPreviousWakeMs, SYS_TASK_INTERVAL_MS);
+    }
+}
+
+/** Own the MCM UART and protocol queues; report heartbeat progress through RTT. */
+static void commTask(void *argument) {
+    uint32_t lPreviousWakeMs = repRtosGetTickMs();
+    uint32_t lLastReportMs = lPreviousWakeMs;
+    (void)argument;
+    ProtocolProcessInit(0U);
+    uartInit();
+    LOG_I(gTaskManagerTag, "CommTask ready: USART0 PA9/PA10 %lu 8N1", (unsigned long)UART_MCM_BAUDRATE);
+    for (;;) {
+        ProtocolProcessMain(0U);
+        uint32_t lNowMs = repRtosGetTickMs();
+        if ((uint32_t)(lNowMs - lLastReportMs) >= COMM_TASK_REPORT_INTERVAL_MS) {
+            stProtocolHeartbeatStats lStats;
+            protocolHeartbeatStatsGet(&lStats);
+            LOG_I("comm", "heartbeat rx=%lu tx=%lu pending=%u overflow=%lu online=%u",
+                  (unsigned long)lStats.received, (unsigned long)lStats.transmitted,
+                  (unsigned int)lStats.pending, (unsigned long)lStats.overflow,
+                  (unsigned int)ProtocolIsMCMConnected());
+            lLastReportMs = lNowMs;
+        }
+        (void)repRtosTaskDelayUntilMs(&lPreviousWakeMs, COMM_TASK_INTERVAL_MS);
     }
 }
 

@@ -36,6 +36,11 @@ extern "C" {
 #define ALARM_TASK_PRIORITY              15U
 #define ALARM_TASK_INTERVAL_MS           10U
 
+#define COMM_TASK_STACK_SIZE             1024U
+#define COMM_TASK_PRIORITY               5U
+#define COMM_TASK_INTERVAL_MS            10U
+#define COMM_TASK_REPORT_INTERVAL_MS     5000U
+
 bool WorkerTasksRegister(void);
 
 #ifdef __cplusplus

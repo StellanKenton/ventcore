@@ -15,8 +15,8 @@
 
 #include <stdint.h>
 #include <stdbool.h>
-#include "ProtoclOfRingBuffer.h"
-#include "BspCommUsart.h"
+#include "ringbuffer.h"
+#include "uart.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -128,15 +128,15 @@ typedef union {
 /*串口处理类*/
 typedef struct {
     /* 发送缓冲区 */
-    CBuff m_highPriority;                                   /* 高优先级队列   */
+    stRingBuffer m_highPriority;                                   /* 高优先级队列   */
     uint8_t *m_highPriorityBuffer;                          /* 高优先级队列缓冲区 */
     uint16_t m_highPriority_Size;                           /* 高优先级队列大小 */
-    CBuff m_normalPriority;                                 /* 普通优先级队列 */
+    stRingBuffer m_normalPriority;                                 /* 普通优先级队列 */
     uint8_t *m_normalPriorityBuffer;                        /* 普通优先级队列缓冲区 */
     uint16_t m_normalPriority_Size;                         /* 普通优先级队列大小 */
 
     /* 接收缓冲区 */
-    CBuff m_RxRingBuffer;                                   /* 接收环形缓冲区 */  
+    stRingBuffer m_RxRingBuffer;                                   /* 接收环形缓冲区 */
     uint8_t *m_RxRBStorage;                                 /* 接收环形缓冲区存储 */
     uint16_t m_RxRBSize;                                    /* 接收环形缓冲区大小 */
 
@@ -144,7 +144,7 @@ typedef struct {
     ProtocolState_t m_protocolState;                        /* 通信状态 */
 
     /* 回调函数 */
-    void (*m_txCallbacks)(UsartInstance_t instance);        /* 发送回调 */
+    void (*m_txCallbacks)(uint8_t instance);        /* 发送回调 */
     void (*m_rxCallbacks)(const ProtocolPacket_t* packet);  /* 接收回调 */
 
     /* 统计信息 */

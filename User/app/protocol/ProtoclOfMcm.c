@@ -11,9 +11,18 @@
 */
 
 #include "ProtoclOfMcm.h"
+#include "breathscheduler.h"
+#include "controldata.h"
+#include "monitorengine.h"
+#include "phasecontroller.h"
+#include "rtos.h"
+#include "log.h"
+#include <math.h>
 
 
 /* ==================== 静态变量定义 ==================== */
+static bool gProtocolSettingsDirty;
+static bool gProtocolCommandPending;
 static uint16_t MCMConnectedCounter = 0;
 /* 接收主ID缓存变量 */
 static RxVentParamsCache_t g_rxVentParamsCache;
@@ -24,26 +33,27 @@ static RxAlarmLimitsCache_t g_rxAlarmLimitsCache;
 static RxSelfTestCache_t g_rxSelfTestCache;
 static RxCalibrationCache_t g_rxCalibrationCache;
 static RxDiagnosisCache_t g_rxDiagnosisCache;
-static RxDataQueryCache_t g_rxDataQueryCache;
-static RxOnlineUpgradeCache_t g_rxOnlineUpgradeCache;
+// static RxDataQueryCache_t g_rxDataQueryCache; /* Pending machine port. */
+// static RxOnlineUpgradeCache_t g_rxOnlineUpgradeCache; /* Pending machine port. */
 
 /* 发送主ID缓存变量 */
-static TxWaveDataCache_t g_txWaveDataCache;
-static TxMonitorParamsCache_t g_txMonitorParamsCache;
-static TxPhysAlarmCache_t g_txPhysAlarmCache;
-static TxTechAlarmCache_t g_txTechAlarmCache;
+// static TxWaveDataCache_t g_txWaveDataCache; /* Pending machine port. */
+// static TxMonitorParamsCache_t g_txMonitorParamsCache; /* Pending machine port. */
+// static TxPhysAlarmCache_t g_txPhysAlarmCache; /* Pending machine port. */
+// static TxTechAlarmCache_t g_txTechAlarmCache; /* Pending machine port. */
 static TxSpecialFuncCache_t g_txSpecialFuncCache;
-static TxCalibDataCache_t g_txCalibDataCache;
-static TxDiagDataCache_t g_txDiagDataCache;
-static TxResultMsgCache_t g_txResultMsgCache;
-static TxErrorRequestCache_t g_txErrorRequestCache;
-static TxVersionInfoCache_t g_txVersionInfoCache;
+// static TxCalibDataCache_t g_txCalibDataCache; /* Pending machine port. */
+// static TxDiagDataCache_t g_txDiagDataCache; /* Pending machine port. */
+// static TxResultMsgCache_t g_txResultMsgCache; /* Pending machine port. */
+// static TxErrorRequestCache_t g_txErrorRequestCache; /* Pending machine port. */
+// static TxVersionInfoCache_t g_txVersionInfoCache; /* Pending machine port. */
 
 static SelfCheckData_t SystemTest = {.curTest = 0xff};
 static WaveData_t newWaveData;
 static bool isMCMOnline = false;
-static bool g_isHeartbeatResponsePending = false;
+static stProtocolHeartbeatStats gHeartbeatStats;
 
+#if 0 /* Legacy machine self-test and flash hooks; pending port. */
 static uint16_t ProtocolConvertSelfTestFloatToU16(float value, float scale)
 {
     float scaledValue;
@@ -93,6 +103,7 @@ static bool ProtocolWriteUpgradeFlag(uint8_t flagCommand)
 
     return (flashStatus == FLASH_COMPLETE) && (*flagAddr == flagValue);
 }
+#endif
 /* ==================== 数据包接收处理 ==================== */
 void ProtocolProcessRxPacket(const ProtocolPacket_t* packet)
 {
@@ -101,15 +112,19 @@ void ProtocolProcessRxPacket(const ProtocolPacket_t* packet)
     }
     MCMConnectedCounter = 0; // 收到数据包，重置断连计数器
     isMCMOnline = true; // 标记MCM在线
+    repRtosEnterCritical();
     /* 根据主ID处理不同的数据包 */
     switch (packet->m_mainId) {
         case PROTOCOL_RX_MID_HEARTBEAT:
             /*心跳处理*/
-            g_isHeartbeatResponsePending = true;
+            ++gHeartbeatStats.received;
+            if (gHeartbeatStats.pending < UINT16_MAX) { ++gHeartbeatStats.pending; }
+            else { ++gHeartbeatStats.overflow; }
             break;
         case PROTOCOL_RX_MID_VENT_PARAMS:
             /* 处理通气参数 - 更新到通气参数缓存 */
             ProtocolUpdateRxVentParamsCache(packet);
+            gProtocolSettingsDirty = true;
             break;
             
         case PROTOCOL_RX_MID_VENT_SWITCH:
@@ -125,38 +140,40 @@ void ProtocolProcessRxPacket(const ProtocolPacket_t* packet)
         case PROTOCOL_RX_MID_ALARM_LIMITS:
             /* 处理报警限 - 更新到报警限缓存 */
             ProtocolUpdateRxAlarmLimitsCache(packet);
+            gProtocolSettingsDirty = true;
             break;
             
         case PROTOCOL_RX_MID_SELF_TEST:
             /* 处理自检 - 更新到自检缓存 */
-            ProtocolUpdateRxSelfTestCache(packet);
+            // ProtocolUpdateRxSelfTestCache(packet); /* Pending machine port. */
             break;
             
         case PROTOCOL_RX_MID_CALIBRATION:
             /* 处理校准 - 更新到校准缓存 */
-            ProtocolUpdateRxCalibrationCache(packet);
+            // ProtocolUpdateRxCalibrationCache(packet); /* Pending machine port. */
             break;
             
         case PROTOCOL_RX_MID_DIAGNOSIS:
             /* 处理诊断 - 更新到诊断缓存 */
-            ProtocolUpdateRxDiagnosisCache(packet);
+            // ProtocolUpdateRxDiagnosisCache(packet); /* Pending machine port. */
             break;
             
         case PROTOCOL_RX_MID_DATA_QUERY:
             /* 处理数据查询 - 更新到数据查询缓存 */
-            ProtocolUpdateRxDataQueryCache(packet);
+            // ProtocolUpdateRxDataQueryCache(packet); /* Pending machine port. */
             break;
         case PROTOCOL_RX_MID_MANUFACTURER:
             ProtocolUpdateRxManufacturerCache(packet);
             break;
         case PROTOCOL_RX_MID_UPGRADE:
             /* 处理升级 */
-            ProtocolUpdateRxOnlineUpgradeCache(packet);
+            // ProtocolUpdateRxOnlineUpgradeCache(packet); /* Pending machine port. */
             break;
             
         default:
             break;
     }
+    repRtosExitCritical();
 }
 
 /* ==================== 接收缓存更新函数 ==================== */
@@ -166,10 +183,10 @@ void ProtocolProcessRxPacket(const ProtocolPacket_t* packet)
  */
 void ProtocolUpdateRxVentParamsCache(const ProtocolPacket_t* packet)
 {
-    E_VENT_MODE_TYPE modeEnum = VENT_MD_STANDBY;
+    eVentMode modeEnum = VENT_MD_IDLE;
     for (uint8_t i = 0; i < packet->m_subIdCount; i++) {
         const ProtocolSubId_t* subId = &packet->m_subIds[i];
-        if (subId->m_isValid && subId->m_subId < PROTOCOL_VENT_PARAMS_SUBID_MAX) {
+        if (subId->m_isValid && subId->m_dataSize >= 1U && subId->m_dataSize <= 2U && subId->m_dataOffset + subId->m_dataSize <= packet->m_payloadSize && subId->m_subId < PROTOCOL_VENT_PARAMS_SUBID_MAX) {
             uint16_t value = 0;
             if (subId->m_dataSize == 1) {
                 value = packet->m_payload[subId->m_dataOffset];
@@ -215,7 +232,7 @@ void ProtocolUpdateRxVentParamsCache(const ProtocolPacket_t* packet)
                             break;
                         case 0x09:  // 预留
                             // 没有对应的枚举，使用默认值
-                            modeEnum = VENT_MD_STANDBY;
+                            modeEnum = VENT_MD_IDLE;
                             break;
                         case 0x0A:  // 氧疗
                             modeEnum = VENT_MD_HFO;
@@ -252,7 +269,7 @@ void ProtocolUpdateRxVentParamsCache(const ProtocolPacket_t* packet)
                             break;
                         default:
                             // 处理未知值
-                            modeEnum = VENT_MD_STANDBY;
+                            modeEnum = VENT_MD_IDLE;
                             break;
                     }   
                     g_rxVentParamsCache.m_modeRecv = modeEnum;
@@ -512,15 +529,17 @@ void ProtocolUpdateRxVentSwitchCache(const ProtocolPacket_t* packet)
 {
     for (uint8_t i = 0; i < packet->m_subIdCount; i++) {
         const ProtocolSubId_t* subId = &packet->m_subIds[i];
-        if (subId->m_isValid && subId->m_subId < PROTOCOL_VENT_SWITCH_SUBID_MAX) {
+        if (subId->m_isValid && subId->m_dataSize == 1U && subId->m_dataOffset + 1U <= packet->m_payloadSize && subId->m_subId < PROTOCOL_VENT_SWITCH_SUBID_MAX) {
             uint8_t value = packet->m_payload[subId->m_dataOffset];
             
             switch (subId->m_subId) {
                 case 0x00: 
+                    if (value > 1U) { break; }
+                    gProtocolCommandPending = true;
                     g_rxVentSwitchCache.m_command = value;
                     g_rxVentSwitchCache.m_command_scale = subId->m_scale;
                     if(g_rxVentSwitchCache.m_command == 0x00) {
-                        g_rxVentParamsCache.m_mode = VENT_MD_STANDBY;
+                        g_rxVentParamsCache.m_mode = VENT_MD_IDLE;
                     } else if(g_rxVentSwitchCache.m_command == 0x01) {
                         g_rxVentParamsCache.m_mode = g_rxVentParamsCache.m_modeRecv;
                     }
@@ -715,7 +734,7 @@ void ProtocolUpdateRxAlarmLimitsCache(const ProtocolPacket_t* packet)
 {
     for (uint8_t i = 0; i < packet->m_subIdCount; i++) {
         const ProtocolSubId_t* subId = &packet->m_subIds[i];
-        if (subId->m_isValid && subId->m_subId < PROTOCOL_ALARM_LIMITS_SUBID_MAX) {
+        if (subId->m_isValid && subId->m_dataOffset + subId->m_dataSize <= packet->m_payloadSize && subId->m_subId < PROTOCOL_ALARM_LIMITS_SUBID_MAX) {
             uint16_t value = 0;
             if (subId->m_dataSize == 1) {
                 value = packet->m_payload[subId->m_dataOffset];
@@ -782,6 +801,7 @@ void ProtocolUpdateRxAlarmLimitsCache(const ProtocolPacket_t* packet)
  * @brief 更新自检缓存
  * @param packet 接收到的数据包
  */
+#if 0 /* Legacy machine features retained for later migration. */
 void ProtocolUpdateRxSelfTestCache(const ProtocolPacket_t* packet)
 {
     for (uint8_t i = 0; i < packet->m_subIdCount; i++) {
@@ -1169,7 +1189,9 @@ void ProtocolUpdateRxOnlineUpgradeCache(const ProtocolPacket_t* packet)
  * @brief 从缓存发送监测参数
  * @param instance USART实例
  */
-void ProtocolSendMonitorParamsFromCache(UsartInstance_t instance)
+#endif
+#if 0 /* Legacy machine features retained for later migration. */
+void ProtocolSendMonitorParamsFromCache(uint8_t instance)
 {
     uint8_t TxData[256];
     SubIDCache_t subIds[PROTOCOL_MONITOR_PARAMS_SUBID_MAX];
@@ -1463,7 +1485,7 @@ void ProtocolSendMonitorParamsFromCache(UsartInstance_t instance)
  * @brief 从缓存发送监测参数
  * @param instance USART实例
  */
-void ProtocolSendResultMsgFromCache(UsartInstance_t instance)
+void ProtocolSendResultMsgFromCache(uint8_t instance)
 {
     uint8_t TxData[256];
     SubIDCache_t subIds[PROTOCOL_RESULT_MSG_SUBID_MAX];
@@ -1586,34 +1608,45 @@ void ProtocolSendResultMsgFromCache(UsartInstance_t instance)
 
 /* 其他发送预处理函数... */
 bool ProtocolHasValidSpecialFunc(void) { return false; }
-void ProtocolSendSpecialFuncFromCache(UsartInstance_t instance) { }
+void ProtocolSendSpecialFuncFromCache(uint8_t instance) { }
 bool ProtocolHasValidCalibData(void) { return false; }
-void ProtocolSendCalibDataFromCache(UsartInstance_t instance) { }
+void ProtocolSendCalibDataFromCache(uint8_t instance) { }
 bool ProtocolHasValidDiagData(void) { return false; }
-void ProtocolSendDiagDataFromCache(UsartInstance_t instance) { }
+void ProtocolSendDiagDataFromCache(uint8_t instance) { }
 bool ProtocolHasValidResultMsg(void) { return false; }
 bool ProtocolHasValidErrorRequest(void) { return false; }
-void ProtocolSendErrorRequestFromCache(UsartInstance_t instance) { }
+void ProtocolSendErrorRequestFromCache(uint8_t instance) { }
 
 /* ==================== 发送数据处理函数 ==================== */
-void ProtocolWaveDataProcess(UsartInstance_t instance, uint32_t taskCounter)
+#endif
+/** Saturate wire values and avoid undefined conversions from invalid sensor data. */
+static int32_t protocolWaveValue(float value, int32_t minimum, int32_t maximum) {
+    if (!isfinite(value)) { return 0; }
+    if (value < (float)minimum) { return minimum; }
+    if (value > (float)maximum) { return maximum; }
+    return (int32_t)value;
+}
+
+void ProtocolWaveDataProcess(uint8_t instance, uint32_t taskCounter)
 {
 #if PROTOCOL_WAVE_DATA_SEND_ENABLE
     uint8_t TxData[32];
     static uint8_t WaveData[16];
     uint8_t index=0;
     /* 定时采集波形数据 - 每2个周期(20ms) */
-    if(g_rxVentSwitchCache.m_command == 0) {
+    if(!breathSchedulerRunningGet()) {
         return;
     }
     if (taskCounter % 20 == 0) {
         // 采集波形数据并添加到FIFO
-        newWaveData.m_breathPhase = (uint8_t)(iVentMonitParamsGet(VENT_MNT_CALC_RESP_PHASE_NOW));  // 呼吸相位
-        newWaveData.m_pressure = (int16_t)(MdCtrlAlgoDataGet(MD_CTRLID_PAT_PRS_FILT_10HZ)*10.0f);       // 患者压力
-        newWaveData.m_flow = (int16_t)(MdCtrlAlgoDataGet(MD_CTRLID_PAT_FLOW_FILT_10HZ)*10.0f + 2000.0f);           // 患者流量
-        newWaveData.m_volume = (uint16_t)iVentMonitParamsGet(VENT_MNT_CALC_VT);              // 总潮气量
+        repRtosEnterCritical();
+        newWaveData.m_breathPhase = (phaseControllerStateGet() == PHASE_INSP ? 1U : 2U);  // 呼吸相位
+        newWaveData.m_pressure = (int16_t)protocolWaveValue(controlDataGet(PAT_REAL_PRS)*10.0f, INT16_MIN, INT16_MAX);       // 患者压力
+        newWaveData.m_flow = (int16_t)protocolWaveValue(controlDataGet(MDIFF_REAL_FLOW)*10.0f + 2000.0f, INT16_MIN, INT16_MAX);           // 患者流量
+        newWaveData.m_volume = (uint16_t)protocolWaveValue(monitorEngineGet(MONITOR_TIDA_VOL), 0, UINT16_MAX);              // 总潮气量
         newWaveData.m_timestamp = taskCounter;  // 使用任务计数器作为时间戳
 
+        repRtosExitCritical();
         WaveData[index++] = newWaveData.m_breathPhase;  // 呼吸相位
         
         WaveData[index++] = newWaveData.m_pressure & 0xff;           // 患者压力
@@ -1638,25 +1671,36 @@ void ProtocolWaveDataProcess(UsartInstance_t instance, uint32_t taskCounter)
 #endif
 }
 
-void ProtocolHeartbeatDataProcess(UsartInstance_t instance, uint32_t taskCounter)
+/** Copy heartbeat diagnostics from the single communication task. */
+void protocolHeartbeatStatsGet(stProtocolHeartbeatStats *stats) {
+    if (stats != NULL) { *stats = gHeartbeatStats; }
+}
+
+/** Count successful UART submissions, excluding generic echo acknowledgements. */
+void protocolHeartbeatTransmitted(void) {
+    ++gHeartbeatStats.transmitted;
+}
+
+/** Reply once per valid MCM heartbeat, retaining the pending reply on queue pressure. */
+void ProtocolHeartbeatDataProcess(uint8_t instance, uint32_t taskCounter)
 {
 #if PROTOCOL_HEARTBEAT_SEND_ENABLE
     (void)taskCounter;
 
-    if (g_isHeartbeatResponsePending) {
+    if (gHeartbeatStats.pending != 0U) {
         uint8_t TxData[16];
         uint16_t SendLen = ProtocolCreateDirectData(TxData,PROTOCOL_ADDR_VCM_TO_MCM,true,PROTOCOL_TX_MID_HEARTBEAT,NULL,0);
 
         if ((SendLen > 0) &&
-            (ProtocolSendData(instance, PROTOCOL_PRIORITY_NORMAL, TxData, SendLen) == PROTOCOL_OK)) {
-            g_isHeartbeatResponsePending = false;
+            (ProtocolSendData(instance, PROTOCOL_PRIORITY_HIGH, TxData, SendLen) == PROTOCOL_OK)) {
+            --gHeartbeatStats.pending;
         }
     }
 #endif // PROTOCOL_HEARTBEAT_SEND_ENABLE
 }
 
 
-//void ProtocolDetectDataPreProcess(UsartInstance_t instance, uint32_t taskCounter)
+//void ProtocolDetectDataPreProcess(uint8_t instance, uint32_t taskCounter)
 //{
 //#if PROTOCOL_MONITOR_PARAMS_SEND_ENABLE
 //    /* 定时发送监测参数 - (100ms) */
@@ -1782,7 +1826,8 @@ void ProtocolHeartbeatDataProcess(UsartInstance_t instance, uint32_t taskCounter
 //    }
 //#endif
 //}
-void ProtocolDetectDataPreProcess(UsartInstance_t instance, uint32_t taskCounter)
+#if 0 /* Legacy machine features retained for later migration. */
+void ProtocolDetectDataPreProcess(uint8_t instance, uint32_t taskCounter)
 {
     static uint8_t MntDataSendCnt = 0;
 #if PROTOCOL_MONITOR_PARAMS_SEND_ENABLE
@@ -1823,7 +1868,7 @@ void ProtocolDetectDataPreProcess(UsartInstance_t instance, uint32_t taskCounter
         }
         else if(MntDataSendCnt == 3)
         {
-			E_VENT_MODE_TYPE CurrentMode = (E_VENT_MODE_TYPE)VentCommParamRead(VENT_COMM_VENT_MODE) ;
+			eVentMode CurrentMode = (eVentMode)VentCommParamRead(VENT_COMM_VENT_MODE) ;
 			
 			if (VENT_MD_NCPAP_PC == CurrentMode || VENT_MD_NCPAP == CurrentMode)
 			{
@@ -1879,7 +1924,7 @@ void ProtocolDetectDataPreProcess(UsartInstance_t instance, uint32_t taskCounter
         }
         else if(MntDataSendCnt == 5)
         {
-            if ((E_VENT_MODE_TYPE)VentCommParamRead(VENT_COMM_VENT_MODE) == VENT_MD_HFO)
+            if ((eVentMode)VentCommParamRead(VENT_COMM_VENT_MODE) == VENT_MD_HFO)
             {
                 g_txMonitorParamsCache.m_fio2  = (uint8_t)(HiflowDataGet(HFO_CALCAT_FIO2_MEAN) * ProtocolGetScale(E_FIO2_SCALE));
             }
@@ -1916,7 +1961,7 @@ void ProtocolDetectDataPreProcess(UsartInstance_t instance, uint32_t taskCounter
 			g_txMonitorParamsCache.m_oxygenIndex        = (uint16_t)(iVentMonitParamsGet(VENT_MNT_CALC_SPO2_INDEX_VAL) * ProtocolGetScale(E_OXYGEN_INDEX_SCALE));
 			g_txMonitorParamsCache.m_meanPressO2Product = (uint16_t)(iVentMonitParamsGet(VENT_MNT_CALC_MAPXFIO2_VAL) * ProtocolGetScale(E_MEAN_PRESS_O2_PRODUCT_SCALE));
 			
-            if ((E_VENT_MODE_TYPE)VentCommParamRead(VENT_COMM_VENT_MODE) == VENT_MD_HFO)
+            if ((eVentMode)VentCommParamRead(VENT_COMM_VENT_MODE) == VENT_MD_HFO)
             {
                 float RoxVal = HiflowDataGet(HFO_CALCAT_ROX_INDEX);
                 g_txMonitorParamsCache.m_roxIndex       = (RoxVal >= (float)HFO_INVALID_CALC_RESULT) ? 0u :
@@ -1978,7 +2023,7 @@ float ProtocolPhysAlarmDataGet(uint8_t event)
         case AIRWAY_PRESSURE_LOW:
             return iVentMonitParamsGet(VENT_MNT_ALARM_PEAK_LOW);
         case FIO2_HIGH:
-			if (VENT_MD_HFO == (E_VENT_MODE_TYPE)VentCommParamRead(VENT_COMM_VENT_MODE))
+			if (VENT_MD_HFO == (eVentMode)VentCommParamRead(VENT_COMM_VENT_MODE))
 			{
 				return HiflowDataGet(HFO_ALARM_FIO2_HIGH) ;
 			}
@@ -1987,7 +2032,7 @@ float ProtocolPhysAlarmDataGet(uint8_t event)
 				return iVentMonitParamsGet(VENT_MNT_ALARM_FIO2_HIGH);
 			}
         case FIO2_LOW:
-			if (VENT_MD_HFO == (E_VENT_MODE_TYPE)VentCommParamRead(VENT_COMM_VENT_MODE))
+			if (VENT_MD_HFO == (eVentMode)VentCommParamRead(VENT_COMM_VENT_MODE))
 			{
 				return HiflowDataGet(HFO_ALARM_FIO2_LOW) ;
 			}
@@ -2026,7 +2071,7 @@ float ProtocolPhysAlarmDataGet(uint8_t event)
     return 0.0f;
 }
 
-void ProtocolPhysAlarmDataProcess(UsartInstance_t instance, uint32_t taskCounter)
+void ProtocolPhysAlarmDataProcess(uint8_t instance, uint32_t taskCounter)
 {
     uint8_t TxData[256];
     uint32_t alarmStatus;
@@ -2052,7 +2097,7 @@ void ProtocolPhysAlarmDataProcess(UsartInstance_t instance, uint32_t taskCounter
     }
 }
 
-void ProtocolTechAlarmDataProcess(UsartInstance_t instance, uint32_t taskCounter)
+void ProtocolTechAlarmDataProcess(uint8_t instance, uint32_t taskCounter)
 {
 #if PROTOCOL_TECHALARM_SEND_ENABLE == 1
     static uint32_t lastModuleValues[TECH_ALARM_MAX_MODULES] = {0};
@@ -2121,7 +2166,7 @@ void ProtocolTechAlarmDataProcess(UsartInstance_t instance, uint32_t taskCounter
 #endif
 }
 
-void ProtocolSelfTestDataProcess(UsartInstance_t instance, uint32_t taskCounter)
+void ProtocolSelfTestDataProcess(uint8_t instance, uint32_t taskCounter)
 {
 #ifdef PROTOCOL_SELFTEST_SEND_ENABLE
     static bool selfTestPowerOnSent = false;
@@ -2215,7 +2260,7 @@ void ProtocolSelfTestDataProcess(UsartInstance_t instance, uint32_t taskCounter)
 #endif
 }
 
-void ProtocolDiagnosesSendProcess(UsartInstance_t instance)
+void ProtocolDiagnosesSendProcess(uint8_t instance)
 {
     // 发送数据
     uint8_t TxData[256]; 
@@ -2310,7 +2355,7 @@ static uint8_t ProtocolDiagnosesScaleToI8(float value, float scale)
     return (int8_t)(value * scale + 0.5f);
 }
 
-void ProtocolDiagnosesDataProcess(UsartInstance_t instance, uint32_t taskCounter)
+void ProtocolDiagnosesDataProcess(uint8_t instance, uint32_t taskCounter)
 {
 #if PROTOCOL_DIAGNOSES_SEND_ENABLE == 1
     if(taskCounter%250 == 0 && g_rxDiagnosisCache.m_diagnosisSwitch == true) {
@@ -2379,7 +2424,7 @@ void ProtocolDiagnosesDataProcess(UsartInstance_t instance, uint32_t taskCounter
 #endif
 }
 
-void ProtocolCalibDataSend(UsartInstance_t instance)
+void ProtocolCalibDataSend(uint8_t instance)
 {
     // 发送数据
     uint8_t TxData[256]; 
@@ -2427,7 +2472,7 @@ void ProtocolCalibDataSend(UsartInstance_t instance)
 }
 
 
-void ProtocolCalibDataProcess(UsartInstance_t instance, uint32_t taskCounter)
+void ProtocolCalibDataProcess(uint8_t instance, uint32_t taskCounter)
 {
 #if PROTOCOL_CALIBDATA_SEND_ENABLE == 1
     MCalibFunMgrTxPacket_t *calibTxPacket;
@@ -2614,7 +2659,7 @@ void ProtocolCalibDataProcess(UsartInstance_t instance, uint32_t taskCounter)
 #endif
 }
 
-void ProtocolSpecialDataSend(UsartInstance_t instance)
+void ProtocolSpecialDataSend(uint8_t instance)
 {
     // 发送数据
     uint8_t TxData[256];
@@ -2659,7 +2704,7 @@ void ProtocolSpecialDataSend(UsartInstance_t instance)
     }
 }
 
-void ProtocolSpecialDataProcess(UsartInstance_t instance, uint32_t taskCounter)
+void ProtocolSpecialDataProcess(uint8_t instance, uint32_t taskCounter)
 {
     static TxSpecialFuncCache_t txSpecialMemory;
     uint8_t tmpStatus;
@@ -2778,7 +2823,7 @@ void ProtocolSpecialDataProcess(UsartInstance_t instance, uint32_t taskCounter)
     }
 }
 
-static void ProtocolVersionDataSend(UsartInstance_t instance)
+static void ProtocolVersionDataSend(uint8_t instance)
 {
     uint8_t TxData[256];
     SubIDCache_t subIds[PROTOCOL_VERSION_INFO_SUBID_MAX];
@@ -2821,7 +2866,7 @@ static void ProtocolVersionDataSend(UsartInstance_t instance)
     }
 }
 
-void ProtocolVersionDataProcess(UsartInstance_t instance, uint32_t taskCounter)
+void ProtocolVersionDataProcess(uint8_t instance, uint32_t taskCounter)
 {
 #if PROTOCOL_VERSION_SEND_ENABLE == 1
     if (g_rxDataQueryCache.m_valid[0x00] == false) {
@@ -2839,7 +2884,8 @@ void ProtocolVersionDataProcess(UsartInstance_t instance, uint32_t taskCounter)
 }
 
 
-void ProtocolDataPreProcess(UsartInstance_t instance)
+#endif
+void ProtocolDataPreProcess(uint8_t instance)
 {
     static uint32_t taskCounter = 0;
     taskCounter += PROTOCOL_TASK_DELAY_MS;
@@ -2852,32 +2898,30 @@ void ProtocolDataPreProcess(UsartInstance_t instance)
     ProtocolHeartbeatDataProcess(instance, taskCounter);
 
     /*定时处理监测参数*/
-    ProtocolDetectDataPreProcess(instance, taskCounter);
+    // ProtocolDetectDataPreProcess(instance, taskCounter); /* Pending machine port. */
 
     /*定时处理生理报警*/
-    ProtocolPhysAlarmDataProcess(instance, taskCounter);
+    // ProtocolPhysAlarmDataProcess(instance, taskCounter); /* Pending machine port. */
 
     /*定时处理技术报警*/
-    ProtocolTechAlarmDataProcess(instance, taskCounter);
+    // ProtocolTechAlarmDataProcess(instance, taskCounter); /* Pending machine port. */
 
     /*定时处理自检数据*/
-    ProtocolSelfTestDataProcess(instance, taskCounter);
+    // ProtocolSelfTestDataProcess(instance, taskCounter); /* Pending machine port. */
     
     /*定时处理诊断数据*/
-    ProtocolDiagnosesDataProcess(instance, taskCounter);
+    // ProtocolDiagnosesDataProcess(instance, taskCounter); /* Pending machine port. */
 
     /*定时处理校准数据*/
-    ProtocolCalibDataProcess(instance, taskCounter);
+    // ProtocolCalibDataProcess(instance, taskCounter); /* Pending machine port. */
 
     /*定时处理特殊工具数据*/
-    ProtocolSpecialDataProcess(instance, taskCounter);
+    // ProtocolSpecialDataProcess(instance, taskCounter); /* Pending machine port. */
 
     /*处理版本号信息*/
-    ProtocolVersionDataProcess(instance, taskCounter);
+    // ProtocolVersionDataProcess(instance, taskCounter); /* Pending machine port. */
 
-    if(taskCounter >= 60000) {
-        taskCounter = 0; // 每60秒重置计数器，防止溢出
-    }
+
 
    if(MCMConnectedCounter >= PROTOCOL_MCM_DISCONNECT_TIMEOUT_MS) {
        MCMConnectedCounter = PROTOCOL_MCM_DISCONNECT_TIMEOUT_MS; // 防止溢出
@@ -2886,7 +2930,7 @@ void ProtocolDataPreProcess(UsartInstance_t instance)
 
 bool ProtocolIsMCMConnected(void)
 {
-    return (MCMConnectedCounter < PROTOCOL_MCM_DISCONNECT_TIMEOUT_MS);
+    return isMCMOnline && (MCMConnectedCounter < PROTOCOL_MCM_DISCONNECT_TIMEOUT_MS);
 }
 
 /* ==================== 协议缓存访问函数 ==================== */
@@ -2897,6 +2941,7 @@ const RxVentParamsCache_t* ProtocolGetRxVentParamsCache(void)
 
 const RxVentSwitchCache_t* ProtocolGetRxVentSwitchCache(void)
 {
+#if 0 /* Legacy manual-breath completion detection. */
     E_RESP_PERIOD_TYPE CurrtRespPeriod = (E_RESP_PERIOD_TYPE)iVentMonitParamsGet(VENT_MNT_CTRL_RESP_PERIOD) ;
     E_EXP_PHASE_EXIT_TYPE LastExpPhaseExitType = (E_EXP_PHASE_EXIT_TYPE)iVentMonitParamsGet(VENT_MNT_CTRL_EXP_PHASE_EXIT) ;
 
@@ -2908,6 +2953,7 @@ const RxVentSwitchCache_t* ProtocolGetRxVentSwitchCache(void)
         }
     }
 	
+#endif
     return &g_rxVentSwitchCache;
 }
 
@@ -2944,6 +2990,138 @@ const RxDiagnosisCache_t* ProtocolGetRxDiagnosisCache(void)
 const RxCalibrationCache_t* ProtocolGetRxCalibDataCache(void)
 {
     return &g_rxCalibrationCache;
+}
+
+/** Apply cached host fields in VentTask before the control chain runs. */
+void protocolApplyReceivedSettings(void) {
+    static uint8_t gLastSource;
+    static stVentPatientSettings gLocalPatient;
+    uint8_t lSource = GetVentPatientSettings()->useHostSettings == 1U;
+    int8_t lStatus = BREATH_CONTROL_SUCCESS;
+    repRtosEnterCritical();
+    bool lChanged = (lSource && gProtocolSettingsDirty) || lSource != gLastSource;
+    if (lSource != gLastSource) {
+        if (lSource) { gLocalPatient = *GetVentPatientSettings(); }
+        else { *GetVentPatientSettings() = gLocalPatient; GetVentPatientSettings()->useHostSettings = 0U; }
+    }
+    if (lSource && lChanged) {
+        const RxVentParamsCache_t *lParams = &g_rxVentParamsCache;
+        const RxAlarmLimitsCache_t *lLimits = &g_rxAlarmLimitsCache;
+        stVentPacSettings *lPac = GetVentPacSettings();
+        stVentVacSettings *lVac = GetVentVacSettings();
+        stVentCpapPsvSettings *lPsv = GetVentCpapPsvSettings();
+        stVentPsvStSettings *lSt = GetVentPsvStSettings();
+        stVentLimitSettings *lAlarm = GetVentLimitSettings();
+        if (lParams->m_valid[0x06]) {
+            lPac->oxygen = (float)lParams->m_fio2 * 1.0f / ProtocolGetScale(lParams->m_fio2_scale);
+            lVac->oxygen = (float)lParams->m_fio2 * 1.0f / ProtocolGetScale(lParams->m_fio2_scale);
+            lPsv->oxygenPercent = (float)lParams->m_fio2 * 1.0f / ProtocolGetScale(lParams->m_fio2_scale);
+            lSt->oxygenPercent = (float)lParams->m_fio2 * 1.0f / ProtocolGetScale(lParams->m_fio2_scale);
+        }
+        if (lParams->m_valid[0x07]) {
+            lPac->DeltaPressure = (float)lParams->m_deltaPinsp * 1.0f / ProtocolGetScale(lParams->m_deltaPinsp_scale);
+        }
+        if (lParams->m_valid[0x08]) {
+            lPac->peep = (float)lParams->m_peep * 1.0f / ProtocolGetScale(lParams->m_peep_scale);
+            lVac->peep = (float)lParams->m_peep * 1.0f / ProtocolGetScale(lParams->m_peep_scale);
+            lPsv->peepCmh2o = (float)lParams->m_peep * 1.0f / ProtocolGetScale(lParams->m_peep_scale);
+            lSt->peepCmh2o = (float)lParams->m_peep * 1.0f / ProtocolGetScale(lParams->m_peep_scale);
+        }
+        if (lParams->m_valid[0x09]) {
+            lPsv->pressureSupportCmh2o = (float)lParams->m_deltaPsupp * 1.0f / ProtocolGetScale(lParams->m_deltaPsupp_scale);
+            lSt->pressureSupportCmh2o = (float)lParams->m_deltaPsupp * 1.0f / ProtocolGetScale(lParams->m_deltaPsupp_scale);
+        }
+        if (lParams->m_valid[0x0C]) {
+            lSt->backupInspiratoryPressureCmh2o = (float)lParams->m_deltaApneaP * 1.0f / ProtocolGetScale(lParams->m_deltaApneaP_scale);
+        }
+        if (lParams->m_valid[0x0E]) {
+            lVac->tidalVolume = (float)lParams->m_tidalVolume * 1.0f / ProtocolGetScale(lParams->m_tidalVolume_scale);
+        }
+        if (lParams->m_valid[0x11]) {
+            lPac->flowTriggerLpm = (float)lParams->m_trigFlow * 1.0f / ProtocolGetScale(lParams->m_trigFlow_scale);
+            lVac->flowTriggerLpm = (float)lParams->m_trigFlow * 1.0f / ProtocolGetScale(lParams->m_trigFlow_scale);
+            lPsv->flowTriggerLpm = (float)lParams->m_trigFlow * 1.0f / ProtocolGetScale(lParams->m_trigFlow_scale);
+            lSt->flowTriggerLpm = (float)lParams->m_trigFlow * 1.0f / ProtocolGetScale(lParams->m_trigFlow_scale);
+        }
+        if (lParams->m_valid[0x12]) {
+            lPac->pressureTriggerCmh2o = (float)lParams->m_trigPress * 1.0f / ProtocolGetScale(lParams->m_trigPress_scale);
+            lVac->pressureTriggerCmh2o = (float)lParams->m_trigPress * 1.0f / ProtocolGetScale(lParams->m_trigPress_scale);
+            lPsv->pressureTriggerCmh2o = (float)lParams->m_trigPress * 1.0f / ProtocolGetScale(lParams->m_trigPress_scale);
+            lSt->pressureTriggerCmh2o = (float)lParams->m_trigPress * 1.0f / ProtocolGetScale(lParams->m_trigPress_scale);
+        }
+        if (lParams->m_valid[0x13]) {
+            lPsv->cycleOffPercent = (float)lParams->m_exhTrigPercent * 1.0f / ProtocolGetScale(lParams->m_exhTrigPercent_scale);
+            lSt->cycleOffPercent = (float)lParams->m_exhTrigPercent * 1.0f / ProtocolGetScale(lParams->m_exhTrigPercent_scale);
+        }
+        if (lParams->m_valid[0x14]) {
+            lPac->Rate = (float)lParams->m_rate * 1.0f / ProtocolGetScale(lParams->m_rate_scale);
+            lVac->freq = (float)lParams->m_rate * 1.0f / ProtocolGetScale(lParams->m_rate_scale);
+        }
+        if (lParams->m_valid[0x16]) {
+            lSt->backupRespiratoryRateBpm = (float)lParams->m_apneaRate * 1.0f / ProtocolGetScale(lParams->m_apneaRate_scale);
+        }
+        if (lParams->m_valid[0x17]) {
+            lPac->inspiratoryTimeMs = (float)lParams->m_ti * 1000.0f / ProtocolGetScale(lParams->m_ti_scale);
+            lVac->inspTimeMs = (float)lParams->m_ti * 1000.0f / ProtocolGetScale(lParams->m_ti_scale);
+        }
+        if (lParams->m_valid[0x18]) {
+            lPsv->maxInspiratoryTimeMs = (float)lParams->m_tiMax * 1000.0f / ProtocolGetScale(lParams->m_tiMax_scale);
+            lSt->maxInspiratoryTimeMs = (float)lParams->m_tiMax * 1000.0f / ProtocolGetScale(lParams->m_tiMax_scale);
+        }
+        if (lParams->m_valid[0x19]) {
+            lSt->backupInspiratoryTimeMs = (float)lParams->m_apneaTi * 1000.0f / ProtocolGetScale(lParams->m_apneaTi_scale);
+        }
+        if (lParams->m_valid[0x1A]) {
+            lPac->riseTimeMs = (float)lParams->m_riseTime * 1000.0f / ProtocolGetScale(lParams->m_riseTime_scale);
+            lPsv->riseTimeMs = (float)lParams->m_riseTime * 1000.0f / ProtocolGetScale(lParams->m_riseTime_scale);
+            lSt->riseTimeMs = (float)lParams->m_riseTime * 1000.0f / ProtocolGetScale(lParams->m_riseTime_scale);
+            lSt->backupRiseTimeMs = (float)lParams->m_riseTime * 1000.0f / ProtocolGetScale(lParams->m_riseTime_scale);
+        }
+        if (lParams->m_valid[0x26]) {
+            lVac->inspPausePct = (float)lParams->m_inspPausePercent * 1.0f / ProtocolGetScale(lParams->m_inspPausePercent_scale);
+        }
+        if (lParams->m_valid[0x29]) {
+            lPsv->pressureLimitCmh2o = (float)lParams->m_peakPressure * 1.0f / ProtocolGetScale(lParams->m_peakPressure_scale);
+            lSt->pressureLimitCmh2o = (float)lParams->m_peakPressure * 1.0f / ProtocolGetScale(lParams->m_peakPressure_scale);
+        }
+        if (lParams->m_valid[0x24] || lParams->m_valid[0x25]) {
+            eVentTriggerType lTrigger = lParams->m_assistTrig == 0U ? VENT_TRIGGER_OFF :
+                (lParams->m_FlowTrigger == 1U ? VENT_TRIGGER_FLOW : VENT_TRIGGER_PRESSURE);
+            lPac->triggerType = lVac->triggerType = lPsv->triggerType = lSt->triggerType = lTrigger;
+        }
+        if (lParams->m_valid[2] && lParams->m_patientType < VENT_PATIENT_TYPE_COUNT) {
+            GetVentPatientSettings()->Type = (eVentPatientType)lParams->m_patientType;
+        }
+        if (lParams->m_valid[4]) { GetVentPatientSettings()->IdealBodyHeightCm = lParams->m_idealHeight / ProtocolGetScale(lParams->m_idealHeight_scale); }
+        if (lParams->m_valid[5]) { GetVentPatientSettings()->IdealBodyWeightKg = lParams->m_idealWeight / ProtocolGetScale(lParams->m_idealWeight_scale); }
+        if (lLimits->m_valid[0]) { lAlarm->pressureLow = (float)lLimits->m_pAirwayLow / ProtocolGetScale(lLimits->m_pAirwayLow_scale); }
+        if (lLimits->m_valid[1]) { lAlarm->pressureHigh = (float)lLimits->m_pAirwayHigh / ProtocolGetScale(lLimits->m_pAirwayHigh_scale); }
+        if (lLimits->m_valid[2]) { lAlarm->minuteVolumeHigh = (float)lLimits->m_mvHigh / ProtocolGetScale(lLimits->m_mvHigh_scale); }
+        if (lLimits->m_valid[3]) { lAlarm->minuteVolumeLow = (float)lLimits->m_mvLow / ProtocolGetScale(lLimits->m_mvLow_scale); }
+        if (lLimits->m_valid[4]) { lAlarm->tidalVolumeHigh = (float)lLimits->m_tveHigh / ProtocolGetScale(lLimits->m_tveHigh_scale); }
+        if (lLimits->m_valid[5]) { lAlarm->tidalVolumeLow = (float)lLimits->m_tveLow / ProtocolGetScale(lLimits->m_tveLow_scale); }
+        if (lLimits->m_valid[6]) { lAlarm->o2PercentHigh = (float)lLimits->m_fio2High / ProtocolGetScale(lLimits->m_fio2High_scale); }
+        if (lLimits->m_valid[7]) { lAlarm->o2PercentLow = (float)lLimits->m_fio2Low / ProtocolGetScale(lLimits->m_fio2Low_scale); }
+        if (lLimits->m_valid[8]) { lAlarm->frequencyHigh = (float)lLimits->m_frTotalHigh / ProtocolGetScale(lLimits->m_frTotalHigh_scale); }
+        if (lLimits->m_valid[9]) { lAlarm->frequencyLow = (float)lLimits->m_frTotalLow / ProtocolGetScale(lLimits->m_frTotalLow_scale); }
+        if (lLimits->m_valid[10]) { lAlarm->apneaTimeHigh = (float)lLimits->m_apneaTime / ProtocolGetScale(lLimits->m_apneaTime_scale); }
+        if (lLimits->m_valid[10]) {
+            lPsv->apneaAlarmTimeMs = (uint32_t)lAlarm->apneaTimeHigh * 1000U;
+            lSt->apneaTimeMs = lPsv->apneaAlarmTimeMs;
+        }
+    }
+    bool lCommand = gProtocolCommandPending;
+    uint8_t lRun = g_rxVentSwitchCache.m_command;
+    eVentMode lMode = lSource ? (g_rxVentParamsCache.m_valid[1] ? g_rxVentParamsCache.m_modeRecv : VENT_MD_IDLE) : breathSchedulerModeGet();
+    if (!lSource && lMode == VENT_MD_IDLE) { lMode = VENT_MD_PAC; }
+    gProtocolSettingsDirty = false;
+    gProtocolCommandPending = false;
+    gLastSource = lSource;
+    repRtosExitCritical();
+    if (lCommand && lRun == 0U) { lStatus = breathSchedulerStop(); }
+    else if (lCommand && lRun == 1U) { lStatus = breathSchedulerStart(lMode); }
+    else if (lChanged && breathSchedulerRunningGet()) { lStatus = breathSchedulerSettingsUpdate(lMode); }
+    if (lStatus != BREATH_CONTROL_SUCCESS) { LOG_W("protocol", "vent command/settings rejected: %d", (int)lStatus); }
 }
 
 /**************************End of file********************************/

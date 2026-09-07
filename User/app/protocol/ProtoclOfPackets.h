@@ -18,7 +18,7 @@
 #include <stdbool.h>
 #include "ProtoclOfTypeDef.h"
 #include "ProtoclOfConfig.h"
-#include "BspCommUsart.h"
+#include "uart.h"
 
 #ifdef __cplusplus
 extern "C" {

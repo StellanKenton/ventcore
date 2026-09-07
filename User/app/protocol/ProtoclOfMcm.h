@@ -21,7 +21,7 @@
 extern "C" {
 #endif
 #include "ProtoclOfProcess.h"
-#include "iVentDataBus.h"
+#include "settingdata.h"
 /* ====================================================== 项目相关定义 ====================================================== */
 // - Boot 起始地址：`0x08000000`
 // - Boot 空间大小：`0x0000C000`（Sector 0 ~ Sector 2，共 48 KB）
@@ -58,15 +58,29 @@ extern "C" {
 
 /* ==================== 数据发送开启定义 ==================== */
 #define PROTOCOL_WAVE_DATA_SEND_ENABLE         1        /* 通气波形数据发送开关 */
-#define PROTOCOL_MONITOR_PARAMS_SEND_ENABLE    1        /* 通气监测参数发送开关 */
+#define PROTOCOL_MONITOR_PARAMS_SEND_ENABLE    0        /* 通气监测参数发送开关 */
 #define PROTOCOL_HEARTBEAT_SEND_ENABLE         1        /* 心跳发送开关 */
-#define PROTOCOL_TECHALARM_SEND_ENABLE         1        /* 技术报警发送开关 */
-#define PROTOCOL_SELFTEST_SEND_ENABLE          1        /* 自检发送开关 */
-#define PROTOCOL_DIAGNOSES_SEND_ENABLE         1        /* 诊断数据发送开关 */
-#define PROTOCOL_CALIBDATA_SEND_ENABLE         1        /* 校准数据发送开关 */
-#define PROTOCOL_VERSION_SEND_ENABLE           1        /* 版本信息发送开关 */
+#define PROTOCOL_TECHALARM_SEND_ENABLE         0        /* 技术报警发送开关 */
+#define PROTOCOL_SELFTEST_SEND_ENABLE          0        /* 自检发送开关 */
+#define PROTOCOL_DIAGNOSES_SEND_ENABLE         0        /* 诊断数据发送开关 */
+#define PROTOCOL_CALIBDATA_SEND_ENABLE         0        /* 校准数据发送开关 */
+#define PROTOCOL_VERSION_SEND_ENABLE           0        /* 版本信息发送开关 */
 
 #define PROTOCOL_MCM_DISCONNECT_TIMEOUT_MS        5000   /* MCM断连超时时间，单位：毫秒 */
+/* VentTask only; cache publication and settings copies use RTOS critical sections. */
+void protocolApplyReceivedSettings(void);
+
+typedef struct stProtocolHeartbeatStats {
+    uint32_t received;
+    uint32_t transmitted; /* Complete reply frames accepted by the UART transport. */
+    uint32_t overflow;
+    uint16_t pending; /* Replies not yet accepted by the protocol TX queue. */
+} stProtocolHeartbeatStats;
+
+/* CommTask only: diagnostics and notification after UART accepts a heartbeat reply. */
+void protocolHeartbeatStatsGet(stProtocolHeartbeatStats *stats);
+void protocolHeartbeatTransmitted(void);
+
 /* ==================== 协议主ID定义 ==================== */
 /* 帧头地址定义 */
 #define PROTOCOL_ADDR_MCM_TO_VCM        0xFFFE    /* MCM -> VCM */
@@ -109,8 +123,8 @@ extern "C" {
 typedef struct {
     uint8_t m_ventType;             /* 0x00 - 通气类型 */
     uint8_t m_ventType_scale;       
-    E_VENT_MODE_TYPE m_mode;        /* 0x01 - 通气模式 */
-    E_VENT_MODE_TYPE m_modeRecv; 
+    eVentMode m_mode;        /* 0x01 - 通气模式 */
+    eVentMode m_modeRecv;
     uint8_t m_mode_scale;           
     uint8_t m_patientType;          /* 0x02 - 病人类型 */
     uint8_t m_patientType_scale;    
@@ -959,42 +973,42 @@ void ProtocolUpdateRxOnlineUpgradeCache(const ProtocolPacket_t* packet);
  * @brief 从缓存发送监测参数
  * @param instance USART实例
  */
-void ProtocolSendMonitorParamsFromCache(UsartInstance_t instance);
+void ProtocolSendMonitorParamsFromCache(uint8_t instance);
 /* ==================== 发送数据处理函数 ==================== */
 /**
  * @brief 预处理发送的协议数据
  * @param instance USART实例
  */
-void ProtocolDataPreProcess(UsartInstance_t instance);
+void ProtocolDataPreProcess(uint8_t instance);
 /**
  * @brief 处理发送的监测参数数据
  * @param instance USART实例
  */
-void ProtocolMonitorParamsProcess(UsartInstance_t instance);
+void ProtocolMonitorParamsProcess(uint8_t instance);
 /**
  * @brief 处理发送的波形数据
  * @param instance USART实例
  * @param taskCounter 任务计数器
  */
-void ProtocolWaveDataProcess(UsartInstance_t instance, uint32_t taskCounter);
+void ProtocolWaveDataProcess(uint8_t instance, uint32_t taskCounter);
 /**
  * @brief 处理发送的波形数据
  * @param instance USART实例
  * @param taskCounter 任务计数器
  */
-void ProtocolHeartbeatDataProcess(UsartInstance_t instance, uint32_t taskCounter);
+void ProtocolHeartbeatDataProcess(uint8_t instance, uint32_t taskCounter);
 /**
  * @brief 处理发送的自检数据
  * @param instance USART实例
  * @param taskCounter 任务计数器
  */
-void ProtocolDetectDataPreProcess(UsartInstance_t instance, uint32_t taskCounter);
+void ProtocolDetectDataPreProcess(uint8_t instance, uint32_t taskCounter);
 /**
  * @brief 处理发送的报警数据
  * @param instance USART实例
  * @param taskCounter 任务计数器
  */
-void ProtocolPhysAlarmDataProcess(UsartInstance_t instance, uint32_t taskCounter);
+void ProtocolPhysAlarmDataProcess(uint8_t instance, uint32_t taskCounter);
 
 
 bool ProtocolIsMCMConnected(void);
