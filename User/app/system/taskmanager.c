@@ -18,6 +18,7 @@
 #include "monitordata.h"
 #include "monitorengine.h"
 #include "phasecontroller.h"
+#include "physalarmmanager.h"
 #include "rtos.h"
 #include "sfm3119.h"
 #include "actuatorcontroller.h"
@@ -165,10 +166,14 @@ static void sysTask(void *argument)
 static void alarmTask(void *argument)
 {
     uint32_t lPreviousWakeMs = repRtosGetTickMs();
+    uint32_t lNowMs;
 
     (void)argument;
+    physAlarmManagerInit();
 
     for (;;) {
+        lNowMs = repRtosGetTickMs();
+        physAlarmManagerProcess(lNowMs);
         (void)repRtosTaskDelayUntilMs(&lPreviousWakeMs, ALARM_TASK_INTERVAL_MS);
     }
 }
