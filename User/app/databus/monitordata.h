@@ -42,6 +42,10 @@ typedef struct stMonitorWaveformData {
     uint8_t volumePauseActive;
     uint8_t volumePauseSettled;
     float leakFlowLpm;
+    float flowReferenceLpm;
+    float flowMeasurementLpm;
+    float flowEffort;
+    float flowBlowerFeedforward;
 } stMonitorWaveformData;
 
 /* Volatile storage allows debugger waveform tools to observe every update. */

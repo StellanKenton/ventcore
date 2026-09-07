@@ -12,7 +12,7 @@ import threading
 import time
 
 ROOT = Path(__file__).resolve().parents[2]
-FIELDS = "sequence time_ms air_x2 o2_x2 prox_x2 pinsp_x1 ppeep_x1 pexp_x1 ppat_x1 blower_x10 pref_x1 flowcomp_x1 pcorr_x1 effort_x1 ff_x1 vt_x10 vti_x10 vte_x10 target_x100 valve_x2 expiration_state pressure_state volume_pause pause_settled leak_lpm".split()
+FIELDS = "sequence time_ms air_x2 o2_x2 prox_x2 pinsp_x1 ppeep_x1 pexp_x1 ppat_x1 blower_x10 pref_x1 flowcomp_x1 pcorr_x1 effort_x1 ff_x1 vt_x10 vti_x10 vte_x10 target_x100 valve_x2 expiration_state pressure_state volume_pause pause_settled leak_lpm flow_ref_lpm flow_measurement_lpm flow_effort flow_blower_ff".split()
 
 
 def crossings(values, threshold=0.0):
@@ -132,11 +132,13 @@ class Rtt:
 
     def close(self):
         try:
-            self.command("vt stop", "stop status=")
+            if self.process.poll() is None:
+                self.command("vt stop", "stop status=")
         finally:
             # Stop the Device Tool process tree, including its J-Link child.
-            subprocess.run(["taskkill", "/PID", str(self.process.pid), "/T", "/F"],
-                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            if self.process.poll() is None:
+                subprocess.run(["taskkill", "/PID", str(self.process.pid), "/T", "/F"],
+                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             self.process.wait(timeout=5)
             self.reader.join(timeout=5)
             self.log.close()

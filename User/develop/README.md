@@ -29,8 +29,11 @@ target board.
   pressure-limited delivery tail; check these limits when volume remains low.
   `VT_VOLUME_FEEDBACK` reports the active plan sequence, user target, EMA VTI,
   correction and internal delivery target (volume fields in hundredths of mL).
+  Waveform fields `flow_ref_lpm`, `flow_measurement_lpm`, `flow_effort`, and
+  `flow_blower_ff` expose the VAC patient-side reference, feedback, PID output,
+  and calibrated feedforward at a scale of 100 for direct tracking checks.
   Feedback uses proximal VTI without subtracting downstream leak. EMA alpha is 0.5 for both VTI and its applied correction. The outer loop removes
-  the lag of already-applied corrections before updating with startup gain 1.2 then gain 1.0, a 0.5%
+  the lag of already-applied corrections before updating with startup gain 0.8 then gain 1.0, a 0.5%
   deadband, 25% step and +/-30% total bound.
   Steady metrics use the last 400 ms of a 1-second pause: flow standard deviation,
   peak-to-peak amplitude, mean target error and error RMS. Check `steady_settled`

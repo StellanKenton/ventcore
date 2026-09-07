@@ -16,8 +16,10 @@ volatile stMonitorWaveformData gMonitorWaveformData;
 
 void monitorDataUpdate(void) {
     stActuatorRequest lActuatorRequest;
+    stFlowControllerDiagnostic lFlowDiagnostic;
     stPressureControllerDiagnostic lPressureDiagnostic;
 
+    flowControllerDiagnosticGet(&lFlowDiagnostic);
     pressureControllerDiagnosticGet(&lPressureDiagnostic);
 
     gMonitorWaveformData.airFlowX2 = controlDataGet(INSP_FLOW_FILTERED) / 2.0F;
@@ -45,6 +47,10 @@ void monitorDataUpdate(void) {
         (gMonitorWaveformData.volumePauseActive != 0U) &&
         (flowControllerPauseSettledGet() != 0U));
     gMonitorWaveformData.leakFlowLpm = monitorEngineGet(MONITOR_LEAK_FLOW);
+    gMonitorWaveformData.flowReferenceLpm = lFlowDiagnostic.flowReferenceLpm;
+    gMonitorWaveformData.flowMeasurementLpm = lFlowDiagnostic.measuredFlowLpm;
+    gMonitorWaveformData.flowEffort = lFlowDiagnostic.effort;
+    gMonitorWaveformData.flowBlowerFeedforward = lFlowDiagnostic.blowerFeedforward;
     if (actuatorControllerLastRequestGet(&lActuatorRequest) == ACTUATOR_REQUEST_SUCCESS) {
         gMonitorWaveformData.blowerTargetX100 = lActuatorRequest.blowerTarget / 100.0f;
         gMonitorWaveformData.valveDutyX2 = lActuatorRequest.expiratoryValveDuty /2.0f;

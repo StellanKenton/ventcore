@@ -33,7 +33,7 @@ extern "C" {
 /* Initial outer-loop tuning, to be validated on the test lung. */
 #define BREATH_VOLUME_FILTER_ALPHA                  0.5F
 #define BREATH_VOLUME_CORRECTION_GAIN               1.0F
-#define BREATH_VOLUME_STARTUP_CORRECTION_GAIN       1.2F
+#define BREATH_VOLUME_STARTUP_CORRECTION_GAIN       0.8F
 #define BREATH_VOLUME_CORRECTION_STEP_RATIO         0.25F
 #define BREATH_VOLUME_CORRECTION_LIMIT_RATIO        0.30F
 #define BREATH_VOLUME_ERROR_DEADBAND_RATIO          0.005F

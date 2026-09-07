@@ -41,14 +41,16 @@ Monitor 按实际吸气计划的 sequence 切分泄漏累计窗口，必须观�
 
 VAC 容量外环沿用 `MONITOR_TIDA_VOL_INSP` 的近端 VTI 定义（含吸气暂停阶段，未扣患者侧泄漏）。Phase Controller 在加载下一次吸气计划前调用 `monitorEngineBreathComplete()`，结算上一完整周期并将 VTI 送入 Scheduler；Monitor 的 sequence 边界处理保留为补充入口，通过完成标志避免重复发布。`monitorEngineProcess()` 仍仅按顺序调用处理函数。只有同一配置代次、当前计划序号且未消费过的反馈可以参与下一计划，旧配置结果不会重新激活补偿。
 
-首次有效 VTI 直接初始化 `filteredVtiMl`，之后执行 `filteredVtiMl += 0.5 * (vtiMl - filteredVtiMl)`。同时按相同 alpha 平滑产生该 VTI 的计划补偿量 `filteredAppliedCorrectionMl`。外环误差为 `target - filteredVti - (currentCorrection - filteredAppliedCorrection)`，扣除已经施加但尚未反映在 VTI 均值中的补偿，避免重复追补历史欠量。超过用户目标 0.5% 的死区时，首次有效周期以增益 1.2、后续以增益 1.0 更新补偿，每周期步长不超过目标量 25%，累计补偿不超过 ±30%。首次有效反馈同时恢复压力上限快照，避免启动调零发生在初始计划加载后时，下一计划误清除首周期补偿。内部 `deliveryTargetMl = targetTidalVolumeMl + volumeCorrectionMl`，沿用有效供气时间、上升沿面积损失和启动损失公式计算流量；用户目标与暂停时长不变。宏位于 `breathscheduler.h`，当前台架验证范围见 `build/vti_rtt/`。
+首次有效 VTI 直接初始化 `filteredVtiMl`，之后执行 `filteredVtiMl += 0.5 * (vtiMl - filteredVtiMl)`。同时按相同 alpha 平滑产生该 VTI 的计划补偿量 `filteredAppliedCorrectionMl`。外环误差为 `target - filteredVti - (currentCorrection - filteredAppliedCorrection)`，扣除已经施加但尚未反映在 VTI 均值中的补偿，避免重复追补历史欠量。超过用户目标 0.5% 的死区时，首次有效周期以增益 0.8、后续以增益 1.0 更新补偿，每周期步长不超过目标量 25%，累计补偿不超过 ±30%。首次有效反馈同时恢复压力上限快照，避免启动调零发生在初始计划加载后时，下一计划误清除首周期补偿。内部 `deliveryTargetMl = targetTidalVolumeMl + volumeCorrectionMl`，沿用有效供气时间、上升沿面积损失和启动损失公式计算流量；用户目标与暂停时长不变。宏位于 `breathscheduler.h`，当前台架验证范围见 `build/vti_rtt/`。
 
 无有效完整周期、非有限/非正 VTI、未确认实际呼气、非正常时间切换、供气段压力/流量/风机上限或控制器失败时，外环不更新 EMA 和补偿。`BREATH_RESULT_VOLUME_LIMITED` 标记被限幅的周期；非有限采样清除结果中的 `BREATH_RESULT_VALID_VTI`。停机、重新启动、模式或 VAC 设置变化、重新调零会清理外环；压力上限改变时下一计划清理旧补偿。容量修正仅作用于下一周期供气段，暂停目标仍由患者侧泄漏估计决定。
 
 `vt status` 的 `VT_VOLUME_FEEDBACK` 行输出当前计划序号、用户目标、平滑 VTI、补偿量和内部供气目标；体积字段均为 mL 的百分之一。`test_vti_compensation.py` 验证 EMA、实际周期结算时序、重复/旧反馈、限幅、配置重置和固定 80 mL 损失的多周期收敛；软件模型通过不等于已验证实机肺容量或气路稳定性。
 
+VAC 供气流量闭环与 VTI 使用同一个患者侧近端流量 `MDIFF_REAL_FLOW`，不使用入口流量作为反馈。`vt status` 波形追加 `flow_ref_lpm`、`flow_measurement_lpm`、`flow_effort` 和 `flow_blower_ff`（均放大 100 倍），用于直接检查参考跟随、PID 输出和前馈。叠加前馈后的风机指令发生限幅时，控制器撤回同方向积分增量，避免执行器限幅造成的积分饱和。
+
 RTT 启动回归（500 mL、PEEP 5、Ti 2000 ms、15 次/分、无暂停）保存在 `build/vti_rtt/comparison.json` 及对应目录的原始日志/波形。原版本第 7 次结果才到 497 mL（约 30.4 s）；修正后两次独立启动从第 2 次起均在 475..525 mL 内（约 10.3 s）。首次进入 490..510 mL 的结果时间分别约 10.3 s 和 18.4 s，后续仍有约 488..518 mL 波动，不能解读为每次均满足 ±1%。时间从 run 命令到完整周期结果接收，包含初始呼气及呼气结束后发布的等待。测试结束均收到停止确认，未覆盖其他管路、PEEP 或暂停比例。
 
-VAC 供气段压力前馈使用 `Pff = PEEP + Vref/C + 0.00008595*Qref*Qref`。C 为 `clamp(用户目标VT/14, 30, 100)`，单位 mL/cmH₂O；Qref 为实际经过控制器限幅的当前参考流量，单位 L/min，系数按该单位使用，尚需台架确认。`PHASE_REF_VOLUME` 是现有分段流量上升曲线累计面积按整个供气窗口归一化后的用户目标容量轨迹（mL），吸气入口为零、供气结束为用户 VT，支持短于上升沿的供气窗口。它不使用 `deliveryTargetMl` 中的额外容量补偿。新模型替换供气段原有实测压力加线性/二次压降模型，保留 PID、绝对压力/转速上限和 VTI 限幅反馈；暂停段继续使用原有实测压力前馈与泄漏流量控制。
+VAC 供气段压力前馈使用 `Pff = PEEP + Vref*deliveryTarget/userTarget/30 + 0.1572*Qref + 0.004013*Qref*Qref`，压力和流量单位分别为 cmH₂O 与 L/min。30 mL/cmH₂O 是当前模拟肺 250/500/750 mL RTT 数据统一使用的台架顺应性；不能用潮气量反推顺应性，否则高 VT 会被错误解释为更软的肺。`PHASE_REF_VOLUME` 是现有分段流量上升曲线累计面积按整个供气窗口归一化后的用户目标容量轨迹（mL），吸气入口为零、供气结束为用户 VT，支持短于上升沿的供气窗口。控制器按 `deliveryTarget/userTarget` 将外环补偿同步映射到弹性压力前馈，避免只提高流量参考却在吸气末段缺少相应压力。模型保留低增益 PI、绝对压力/转速上限和 VTI 限幅反馈；暂停段继续使用原有实测压力前馈与泄漏流量控制。
 
 VAC 吸气暂停继续使用近端流量反馈，不锁定患者压力。入口采用 Kp=0.003、Kd=0.00005、Ki=0 制动供气尾段；至少经过 120 ms，且近端流量下降到泄漏目标上方 2 L/min 以内后，开启 Ki=0.02 的积分补偿。此时按患者压力一次性选择稳定段参数：低于 30 cmH₂O 保留 Kp=0.003、Kd=0.00005；达到或超过 30 cmH₂O 使用 Kp=0.0003、Kd=0，减少高压力工况的反馈振荡。本次暂停内不反复切换增益。暂停风机指令每 6 ms 最多变化 40 个指令单位，绝对压力对应转速上限优先于变化率限制，限幅时撤回同方向积分增量。患者侧漏气才计入近端流量目标，呼气阀侧流量不能直接当作患者侧漏气目标。验证重点是暂停稳定后 patflow 相对泄漏补偿目标的偏差与振幅，不以原始过零次数作为验收标准。

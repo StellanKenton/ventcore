@@ -15,12 +15,14 @@ def main():
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--seconds', type=float, default=44)
     parser.add_argument('--peep', type=int, default=5)
+    parser.add_argument('--volume', type=int, default=500)
     parser.add_argument('--pause', type=int, default=0)
     args = parser.parse_args()
-    if not 0 <= args.pause <= 99 or args.seconds < 12 or not 1 <= args.peep <= 25:
-        parser.error('Use pause 0..99, seconds >=12 and PEEP 1..25')
+    if (not 0 <= args.pause <= 99 or args.seconds < 12 or
+            not 1 <= args.peep <= 25 or not 50 <= args.volume <= 2000):
+        parser.error('Use pause 0..99, seconds >=12, PEEP 1..25 and volume 50..2000')
     args.output.mkdir(parents=True, exist_ok=True)
-    metadata = dict(peep=args.peep, pause=args.pause, target_ml=500,
+    metadata = dict(peep=args.peep, pause=args.pause, target_ml=args.volume,
                     seconds=args.seconds,
                     scheduler_header=(ROOT/'User/app/ventlogic/breathscheduler.h').read_text(encoding='utf-8'),
                     scheduler_sha256=hashlib.sha256((ROOT/'User/app/ventlogic/breathscheduler.c').read_bytes()).hexdigest(),
@@ -63,7 +65,7 @@ def main():
                     raise
         rtt.command('vt stop', 'stop status=')
         time.sleep(1)
-        rtt.command(f'vt volume {args.peep} 500 {args.pause}', 'volume peep=')
+        rtt.command(f'vt volume {args.peep} {args.volume} {args.pause}', 'volume peep=')
         status(discard=True)
         start = time.monotonic()
         rtt.command('vt run 1', 'run 1 status=')

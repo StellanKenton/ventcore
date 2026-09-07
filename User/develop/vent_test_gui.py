@@ -61,6 +61,10 @@ FIRMWARE_FIELD_NAMES = {
     "volume_pause": "volumePauseActive",
     "pause_settled": "volumePauseSettled",
     "leak_lpm": "leakFlowLpm",
+    "flow_ref_lpm": "flowReferenceLpm",
+    "flow_measurement_lpm": "flowMeasurementLpm",
+    "flow_effort": "flowEffort",
+    "flow_blower_ff": "flowBlowerFeedforward",
 }
 FLOAT_FIRMWARE_FIELDS = set(FIRMWARE_FIELD_NAMES) - {
     "target_x100",

@@ -83,27 +83,27 @@ static void testEma(void) {
     breathSchedulerVolumeFeedback(&lPlan, 1.0F, 1U); /* Same sequence is ignored. */
     lNext = next();
     near(lNext.filteredVtiMl, 400.0F);
-    near(lNext.volumeCorrectionMl, 120.0F);
-    near(lNext.deliveryTargetMl, 620.0F);
+    near(lNext.volumeCorrectionMl, 80.0F);
+    near(lNext.deliveryTargetMl, 580.0F);
     near(lNext.targetTidalVolumeMl, 500.0F);
-    near(lNext.inspiratoryFlowLpm, 650.0F * 60.0F / 958.55F);
+    near(lNext.inspiratoryFlowLpm, 610.0F * 60.0F / 958.55F);
     assert(lNext.riseTimeMs == 1000U && lNext.holdTimeMs == 1000U);
     breathSchedulerVolumeFeedback(&lPlan, 1.0F, 1U); /* Older plan is ignored. */
     breathSchedulerVolumeFeedback(&lNext, 600.0F, 1U);
     lPlan = next();
     near(lPlan.filteredVtiMl, 500.0F);
-    near(lPlan.volumeCorrectionMl, 60.0F);
+    near(lPlan.volumeCorrectionMl, 40.0F);
     breathSchedulerVolumeFeedback(&lPlan, NAN, 1U);
     lPlan = next();
     near(lPlan.filteredVtiMl, 500.0F);
-    near(lPlan.volumeCorrectionMl, 60.0F);
+    near(lPlan.volumeCorrectionMl, 40.0F);
     breathSchedulerVolumeFeedback(&lPlan, 100.0F, 0U);
     lPlan = next();
     near(lPlan.filteredVtiMl, 500.0F);
-    near(lPlan.volumeCorrectionMl, 60.0F);
+    near(lPlan.volumeCorrectionMl, 40.0F);
     breathSchedulerVolumeFeedback(&lPlan, 0.0F, 1U);
     lPlan = next();
-    near(lPlan.volumeCorrectionMl, 60.0F);
+    near(lPlan.volumeCorrectionMl, 40.0F);
 }
 
 /** Settings epochs, live limits, modes and restarts must discard old feedback. */
@@ -164,8 +164,8 @@ static void testConvergence(void) {
         lPlan = next();
         assert(fabsf(lPlan.volumeCorrectionMl - lPrevious) <= 125.01F);
         assert(fabsf(lPlan.volumeCorrectionMl) <= 150.01F);
-        if (lIndex == 0U) { near(lPlan.volumeCorrectionMl, 96.0F); }
-        if (lIndex == 1U) { near(lMeasured, 516.0F); }
+        if (lIndex == 0U) { near(lPlan.volumeCorrectionMl, 64.0F); }
+        if (lIndex == 1U) { near(lMeasured, 484.0F); }
         if (lIndex > 1U) { near(lMeasured, 500.0F); }
     }
     assert(fabsf(lMeasured - 500.0F) <= 5.1F);
@@ -248,7 +248,7 @@ static void testIntegration(void) {
     assert(lResult.sequence + 1U == lPlan.sequence);
     near(lResult.vtiMl, 400.0F);
     near(lPlan.filteredVtiMl, lResult.vtiMl);
-    near(lPlan.volumeCorrectionMl, 120.0F);
+    near(lPlan.volumeCorrectionMl, 80.0F);
     gInspiratoryFlow = 60.0F;
     lFiltered = lPlan.filteredVtiMl;
     lPlan = advance(lPlan.sequence);

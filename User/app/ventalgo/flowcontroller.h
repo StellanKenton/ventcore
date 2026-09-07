@@ -20,10 +20,10 @@ extern "C" {
 #endif
 
 #define FLOW_CONTROLLER_SAMPLE_PERIOD_S          0.006F
-#define FLOW_CONTROLLER_FLOW_KP                   0.02F
+#define FLOW_CONTROLLER_FLOW_KP                   0.005F
 #define FLOW_CONTROLLER_FLOW_KI                   0.005F
 #define FLOW_CONTROLLER_FLOW_KD                   0.00F
-#define FLOW_CONTROLLER_HOLD_KP                   0.015F
+#define FLOW_CONTROLLER_HOLD_KP                   0.003F
 #define FLOW_CONTROLLER_HOLD_KI                   0.02F
 #define FLOW_CONTROLLER_PAUSE_ENTRY_KP            0.003F
 #define FLOW_CONTROLLER_PAUSE_ENTRY_KD            0.00005F
@@ -37,16 +37,12 @@ extern "C" {
 #define FLOW_CONTROLLER_PAUSE_SPEED_STEP_MAX      40.0F
 #define FLOW_CONTROLLER_EFFORT_MIN              (-1.0F)
 #define FLOW_CONTROLLER_EFFORT_MAX                1.0F
-#define FLOW_CONTROLLER_FLOW_INPUT_SCALE          1.0F
 #define FLOW_CONTROLLER_FLOW_TARGET_MIN           0.0F
 #define FLOW_CONTROLLER_FLOW_TARGET_MAX         120.0F
 #define FLOW_CONTROLLER_FLOW_FF_LINEAR            0.1572F
 #define FLOW_CONTROLLER_FLOW_FF_QUADRATIC         0.004013F
 /* VAC model: mL, cmH2O, and L/min throughout. */
-#define FLOW_CONTROLLER_VAC_COMPLIANCE_MIN        30.0F
-#define FLOW_CONTROLLER_VAC_COMPLIANCE_MAX       100.0F
-#define FLOW_CONTROLLER_VAC_ELASTIC_PRESSURE      14.0F
-#define FLOW_CONTROLLER_VAC_CIRCUIT_COEFFICIENT    0.00008595F
+#define FLOW_CONTROLLER_VAC_COMPLIANCE            30.0F
 #define FLOW_CONTROLLER_FEEDFORWARD_PRESSURE_ALPHA 0.20F
 #define FLOW_CONTROLLER_HOLD_EFFORT_ALPHA          0.20F
 #define FLOW_CONTROLLER_BLOWER_SPEED_SCALE       800U
@@ -60,11 +56,21 @@ typedef enum {
     FLOW_CONTROLLER_INSP_PAUSE,
 } eFlowControllerState;
 
+typedef struct stFlowControllerDiagnostic {
+    float flowReferenceLpm;
+    float measuredFlowLpm;
+    float effort;
+    float blowerFeedforward;
+} stFlowControllerDiagnostic;
+
 /** Initialize the inspiratory flow controller. */
 void flowControllerInit(void);
 
 /** Read in VentTask after processing; valid only while volume pause is active. */
 uint8_t flowControllerPauseSettledGet(void);
+
+/** Copy the most recent flow-loop values for bench diagnostics. */
+void flowControllerDiagnosticGet(stFlowControllerDiagnostic *diagnostic);
 
 /** Produce one flow-control actuator request for the active breath plan. */
 int8_t flowControllerProcess(const stBreathPlan *plan, stActuatorRequest *request);
