@@ -239,7 +239,60 @@ static void peepAlarms(void) {
     }
 }
 
+/** Check CPAP timing boundaries, interruptions, phase changes and tick wrap. */
+static void cpapCheck(uint32_t nowMs, float insp, float patient, bool active) {
+    gData[INSP_REAL_PRS] = insp;
+    gData[PAT_REAL_PRS] = patient;
+    physAlarmManagerProcess(nowMs);
+    assert(physAlarmManagerStateGet(PHYS_ALARM_CPAP_TOO_HIGH) == active);
+}
+
+/** Exercise the enabled CPAP detector through the alarm manager. */
+static void cpapAlarms(void) {
+    reset();
+    physAlarmManagerInit();
+    gPhase = PHASE_INSP;
+    cpapCheck(0U, 21.0F, 19.0F, false);
+    cpapCheck(15000U, 21.0F, 19.0F, false);
+    cpapCheck(15010U, 19.0F, 21.0F, false);
+    cpapCheck(30010U, 19.0F, 21.0F, false);
+    cpapCheck(30020U, 21.0F, 21.0F, false);
+    cpapCheck(45019U, 21.0F, 21.0F, false);
+    cpapCheck(45020U, 20.0F, 21.0F, false);
+    cpapCheck(45030U, 21.0F, 21.0F, false);
+    gPhase = PHASE_EXP;
+    cpapCheck(60029U, 21.0F, 21.0F, false);
+    cpapCheck(60030U, 21.0F, 21.0F, true);
+    cpapCheck(60040U, 19.0F, 19.0F, true);
+    cpapCheck(63039U, 19.0F, 19.0F, true);
+    cpapCheck(63040U, 19.0F, 19.5F, true);
+    cpapCheck(63050U, 19.0F, 19.0F, true);
+    cpapCheck(66050U, 19.0F, 20.0F, true);
+    cpapCheck(66060U, 19.0F, 19.0F, true);
+    cpapCheck(69059U, 19.0F, 19.0F, true);
+    cpapCheck(69060U, 19.0F, 19.0F, false);
+
+    /* A different PEEP shifts both strict thresholds. */
+    gPlan.peepCmh2o = 10.0F;
+    cpapCheck(70000U, 25.0F, 26.0F, false);
+    cpapCheck(85000U, 25.0F, 26.0F, false);
+    cpapCheck(85010U, 26.0F, 26.0F, false);
+    cpapCheck(100010U, 26.0F, 26.0F, true);
+    gPhase = PHASE_IDLE;
+    cpapCheck(100020U, 26.0F, 26.0F, false);
+    gPhase = PHASE_INSP;
+    cpapCheck(100030U, 26.0F, 26.0F, false);
+    gPhase = PHASE_COMPEN;
+    cpapCheck(115030U, 26.0F, 26.0F, false);
+    gPhase = PHASE_INSP;
+    cpapCheck(UINT32_MAX - 10000U, 26.0F, 26.0F, false);
+    cpapCheck(4998U, 26.0F, 26.0F, false);
+    cpapCheck(4999U, 26.0F, 26.0F, true);
+    physAlarmManagerInit();
+}
+
 int main(void) {
+    cpapAlarms();
     stBreathResult lResult;
     stActuatorRequest lRequest;
     uint16_t lTarget;

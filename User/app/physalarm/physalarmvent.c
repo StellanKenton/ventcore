@@ -245,4 +245,184 @@ bool physAlarmVentPeepLowDetect(uint32_t nowMs) {
     return physAlarmVentPeepDetect(PHYS_ALARM_PEEP_LOW, nowMs);
 }
 
+/** Placeholder: Patient circuit blockage - H. */
+bool physAlarmVentPipelineBlockageDetect(uint32_t nowMs) {
+    (void)nowMs;
+    return false;
+}
+
+/** Placeholder: Inspiratory branch blockage - M. */
+bool physAlarmVentInspBranchBlockageDetect(uint32_t nowMs) {
+    (void)nowMs;
+    return false;
+}
+
+/** Time both circuit pressures across breaths, with separate recovery hysteresis. */
+bool physAlarmVentCpapTooHighDetect(uint32_t nowMs) {
+    stPhysAlarmVentRuntime *lRuntime = &gPhysAlarmVentRuntime[PHYS_ALARM_CPAP_TOO_HIGH];
+    stBreathPlan lPlan;
+    ePhaseControllerState lPhase;
+    float lInspPressure;
+    float lPatientPressure;
+    float lLimit;
+    uint32_t lDurationMs;
+    bool lAvailable;
+    bool lCondition;
+
+    /* Read the plan and both pressures from the same VentTask publication. */
+    repRtosEnterCritical();
+    lPhase = phaseControllerStateGet();
+    lAvailable = (phaseControllerActivePlanGet(&lPlan) == PHASE_CONTROL_SUCCESS);
+    lInspPressure = controlDataGet(INSP_REAL_PRS);
+    lPatientPressure = controlDataGet(PAT_REAL_PRS);
+    repRtosExitCritical();
+    if ((lPhase != PHASE_INSP) && (lPhase != PHASE_EXP)) {
+        (void)memset(lRuntime, 0, sizeof(*lRuntime));
+        return false;
+    }
+    if (!lAvailable) {
+        lRuntime->timing = false;
+        return lRuntime->active;
+    }
+    if (lRuntime->active) {
+        lLimit = lPlan.peepCmh2o + PHYS_ALARM_CPAP_RECOVERY_OFFSET_CMH2O;
+        lCondition = (lInspPressure < lLimit) && (lPatientPressure < lLimit);
+        lDurationMs = PHYS_ALARM_CPAP_RECOVERY_MS;
+    } else {
+        lLimit = lPlan.peepCmh2o + PHYS_ALARM_CPAP_HIGH_OFFSET_CMH2O;
+        lCondition = (lInspPressure > lLimit) && (lPatientPressure > lLimit);
+        lDurationMs = PHYS_ALARM_CPAP_CONFIRM_MS;
+    }
+    if (!lCondition) {
+        lRuntime->timing = false;
+    } else if (!lRuntime->timing) {
+        lRuntime->referenceMs = nowMs;
+        lRuntime->timing = true;
+    } else if ((nowMs - lRuntime->referenceMs) >= lDurationMs) {
+        lRuntime->active = !lRuntime->active;
+        lRuntime->timing = false;
+    }
+    return lRuntime->active;
+}
+
+/** Placeholder: Circuit leak - L. */
+bool physAlarmVentPipelineLeakDetect(uint32_t nowMs) {
+    (void)nowMs;
+    return false;
+}
+
+/** Placeholder: Patient circuit disconnection - H. */
+bool physAlarmVentPipelineDisconnectDetect(uint32_t nowMs) {
+    (void)nowMs;
+    return false;
+}
+
+/** Placeholder: Pressure limitation - L. */
+bool physAlarmVentPressureLimitDetect(uint32_t nowMs) {
+    (void)nowMs;
+    return false;
+}
+
+/** Placeholder: Volume limitation - L. */
+bool physAlarmVentVolumeLimitDetect(uint32_t nowMs) {
+    (void)nowMs;
+    return false;
+}
+
+/** Placeholder: Inspiratory pressure not reached - L. */
+bool physAlarmVentInspPressNotReachedDetect(uint32_t nowMs) {
+    (void)nowMs;
+    return false;
+}
+
+/** Placeholder: Tidal volume not reached - L. */
+bool physAlarmVentTidalVolNotReachedDetect(uint32_t nowMs) {
+    (void)nowMs;
+    return false;
+}
+
+/** Placeholder: Sigh cycle pressure limitation - L. */
+bool physAlarmVentSighCyclePressLimitDetect(uint32_t nowMs) {
+    (void)nowMs;
+    return false;
+}
+
+/** Placeholder: Insufficient oxygen supply - H. */
+bool physAlarmVentO2SupplyInsufficientDetect(uint32_t nowMs) {
+    (void)nowMs;
+    return false;
+}
+
+/** Placeholder: Inspiratory time too long - L. */
+bool physAlarmVentInspTimeTooLongDetect(uint32_t nowMs) {
+    (void)nowMs;
+    return false;
+}
+
+/** Placeholder: Inhaled gas temperature too high - H. */
+bool physAlarmVentInhaledGasTempHighDetect(uint32_t nowMs) {
+    (void)nowMs;
+    return false;
+}
+
+/** Placeholder: AMV target not reached - L. */
+bool physAlarmVentAmvTargetNotReachedDetect(uint32_t nowMs) {
+    (void)nowMs;
+    return false;
+}
+
+/** Placeholder: Oxygen therapy flow not reached - H. */
+bool physAlarmVentO2FlowNotReachedDetect(uint32_t nowMs) {
+    (void)nowMs;
+    return false;
+}
+
+/** Placeholder: Patient flow sensor fault - H. */
+bool physAlarmVentPatFlowSensorFaultDetect(uint32_t nowMs) {
+    (void)nowMs;
+    return false;
+}
+
+/** Placeholder: Patient pressure sensor fault - H. */
+bool physAlarmVentPatPressSensorFaultDetect(uint32_t nowMs) {
+    (void)nowMs;
+    return false;
+}
+
+/** Placeholder: Machine circuit disconnection - H. */
+bool physAlarmVentMechPipelineDisconnectDetect(uint32_t nowMs) {
+    (void)nowMs;
+    return false;
+}
+
+/** Placeholder: Expiratory branch blockage - M. */
+bool physAlarmVentExpBranchBlockageDetect(uint32_t nowMs) {
+    (void)nowMs;
+    return false;
+}
+
+/** Placeholder: Maximum inspiratory negative pressure - H. */
+bool physAlarmVentMaxInspNegPressureDetect(uint32_t nowMs) {
+    (void)nowMs;
+    return false;
+}
+
+/** Placeholder: Inspiratory pressure not released - H. */
+bool physAlarmVentInspPressureNotReleasedDetect(uint32_t nowMs) {
+    (void)nowMs;
+    return false;
+}
+
+/** Placeholder: Oxygen source failure - H. */
+bool physAlarmVentO2SourceFailureDetect(uint32_t nowMs) {
+    (void)nowMs;
+    return false;
+}
+
+/** Placeholder: Proximal pressure sampling tube disconnection - H. */
+bool physAlarmVentProximalPressTubeDisconnectDetect(uint32_t nowMs) {
+    (void)nowMs;
+    return false;
+}
+
 /*************************************** End of file ********************************/
