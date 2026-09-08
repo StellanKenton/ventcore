@@ -69,3 +69,5 @@ VAC 吸气暂停继续使用近端流量反馈，不锁定患者压力。入口�
 CommTask 独占 PA9/PA10 串口和协议队列，SysTask 恢复 20 ms 空任务。每个 CRC 有效的 MCM `0x7F` 心跳收到后返回一次 `FE FF 7F 01 00 + CRC`；保留原应答字节，不为心跳回复注册 ACK 超时重发。请求带 ACK 标记时，另保留通用原帧回显应答。回复进入高优先级队列，队列满时保留待应答计数。RTT 每 5 s 输出 `heartbeat rx/tx/pending/overflow/online`；tx 表示已交给串口发送，不能单独证明上位机收到。连续 5 s 无有效 MCM 帧时 online 为 0，新帧可恢复。
 
 2026-09-07 心跳实机自测：经 Device Tool 编译、烧录校验及 RTT 观察，清除了 main 入口残留硬件断点，并为 RTT 指定 ELF 中的控制块地址。`build/heartbeat_final_rtt.log` 连续报告 rx/tx 相等（最终 65/65），pending=0、overflow=0、online=1；MCM 心跳约每秒一次。tx 为设备串口提交计数，此记录不包含 MCM 界面确认。主机协议回归另验证 1110 次应答及背压、断连恢复。
+
+`MONITOR_HMI_PRS_MEAN` 在每次呼气结束、下一次吸气开始前结算，单位 cmH₂O；固定 6 ms 累加本次吸气（含暂停）和呼气的全部 `PAT_REAL_PRS`，除以样本数，不受流量方向或死区影响。结果与 `stBreathResult.meanPressureCmh2o` 同步发布，下一次结算前保持不变；停止、调零或无有效计划时清零。任一压力样本非有限或累计无效时不置 `BREATH_RESULT_VALID_MEAN_PRESSURE`，监测值置零，该次平均压不上传。CommTask 沿用逐呼吸上传与队列重试入口，通过 MCM 监测参数 `0x03` 发送有符号平均压 ×10；`test_monitor_leak.py` 和 `test_protocol.py` 覆盖整周期均值、结算时序、周期隔离、异常值与正负平均压报文编码。

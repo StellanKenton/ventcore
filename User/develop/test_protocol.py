@@ -61,6 +61,42 @@ int8_t breathSchedulerStop(void) { gRunning = 0; return 1; }
 ePhaseControllerState phaseControllerStateGet(void) { return PHASE_INSP; }
 float controlDataGet(ControlData_Index_EnumDef index) { return index == PAT_REAL_PRS ? 12.3f : -25.0f; }
 float monitorEngineGet(eMonitorDataType type) { return 456.0f; }
+static stBreathResult gBreathResult;
+int8_t monitorEngineBreathResultGet(stBreathResult *result) {
+    *result = gBreathResult;
+    return MONITOR_ENGINE_SUCCESS;
+}
+
+/** Verify completed mean pressure reaches the wire with signed scaling. */
+static void testMeanPressure(void) {
+    uint8_t lExpected[32];
+    gRunning = 1U;
+    ProtocolProcessInit(0);
+    for (uint32_t lIndex = 1U; lIndex <= 2U; lIndex++) {
+        gBreathResult = (stBreathResult){.sequence = lIndex,
+            .meanPressureCmh2o = lIndex == 1U ? 12.5F : -2.5F,
+            .validMask = BREATH_RESULT_VALID_COMPLETE | BREATH_RESULT_VALID_MEAN_PRESSURE};
+        SubIDCache_t lItem = {.m_id = 0x03U,
+            .m_value = (uint16_t)(int16_t)(gBreathResult.meanPressureCmh2o * 10.0F),
+            .m_size = E_PMEAN_SIZE, .m_scale = E_PMEAN_SCALE};
+        uint16_t lLength = ProtocolCreateSubIdData(lExpected, PROTOCOL_ADDR_VCM_TO_MCM,
+            false, PROTOCOL_TX_MID_MONITOR_PARAMS, (const uint8_t *)&lItem, 1U);
+        ProtocolDetectDataPreProcess(0, 50U);
+        ProtocolSchedulerProcess(0);
+        assert(gTxSize == lLength && memcmp(gTx, lExpected, lLength) == 0);
+        assert(ProtocolCheckCRC(gTx));
+        gTxSize = 0U;
+        ProtocolDetectDataPreProcess(0, 100U);
+        ProtocolSchedulerProcess(0);
+        assert(gTxSize == 0U);
+    }
+    gBreathResult.sequence++;
+    gBreathResult.validMask = BREATH_RESULT_VALID_COMPLETE;
+    ProtocolDetectDataPreProcess(0, 150U);
+    ProtocolSchedulerProcess(0);
+    assert(gTxSize == 0U);
+    gRunning = 0U;
+}
 
 /** Deliver bytes through the production UART-to-parser path. */
 static void feed(const uint8_t *data, uint16_t length) {
@@ -194,6 +230,7 @@ int main(void) {
     crc = Crc16Compute(bytes + 2, length - 4); bytes[length-2] = crc; bytes[length-1] = crc >> 8;
     feed(bytes, length); assert(ProtocolProcessRxData(0) == PROTOCOL_OK);
     ProtocolSchedulerProcess(0); assert(gTxSize == length && memcmp(bytes, gTx, length) == 0);
+    testMeanPressure();
     testHeartbeat();
     return 0;
 }
@@ -217,7 +254,7 @@ def main():
         includes = ["user/app/protocol", "user/bsp/uart", "user/app/databus", "user/app/ventlogic",
                     "user/app/ventalgo", "user/module/log", "user/module/rtos", "user/tools/ringbuffer",
                     "user/tools/controller"]
-        sources = ["user/app/protocol/ProtoclOfMcm.c", "user/app/protocol/ProtoclOfPackets.c",
+        sources = ["user/app/protocol/ProtoclOfMcm.c", "user/app/protocol/ProtoclOfTrasn.c", "user/app/protocol/ProtoclOfPackets.c",
                    "user/app/protocol/ProtoclOfProcess.c", "user/app/databus/settingdata.c",
                    "user/tools/ringbuffer/ringbuffer.c"]
         command = [compiler, "-std=c11", "-Wall", "-Wextra", "-Werror", "-Wno-unused-parameter",

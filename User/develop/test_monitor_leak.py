@@ -291,7 +291,39 @@ static void cpapAlarms(void) {
     physAlarmManagerInit();
 }
 
+/** Verify whole-cycle averaging, publication timing and invalid-cycle handling. */
+static void meanPressure(void) {
+    stBreathResult lResult;
+
+    reset();
+    sample(PHASE_INSP, 0.0F, 20.0F);
+    sample(PHASE_INSP, 0.0F, 20.0F);
+    sample(PHASE_EXP, 0.0F, 8.0F);
+    assert(monitorEngineGet(MONITOR_HMI_PRS_MEAN) == 0.0F);
+    monitorEngineBreathComplete(gNow);
+    assert(monitorEngineGet(MONITOR_HMI_PRS_MEAN) == 16.0F);
+    assert(monitorEngineBreathResultGet(&lResult) == MONITOR_ENGINE_SUCCESS);
+    assert(lResult.meanPressureCmh2o == 16.0F);
+    assert((lResult.validMask & BREATH_RESULT_VALID_MEAN_PRESSURE) != 0U);
+    monitorEngineBreathComplete(gNow);
+    gPlan.sequence++;
+    sample(PHASE_INSP, 0.0F, -2.0F);
+    assert(monitorEngineGet(MONITOR_HMI_PRS_MEAN) == 16.0F);
+    sample(PHASE_EXP, 0.0F, 0.0F);
+    gPlan.sequence++;
+    sample(PHASE_INSP, 0.0F, 100.0F);
+    assert(monitorEngineGet(MONITOR_HMI_PRS_MEAN) == -1.0F);
+    sample(PHASE_EXP, 0.0F, NAN);
+    monitorEngineBreathComplete(gNow);
+    assert(monitorEngineBreathResultGet(&lResult) == MONITOR_ENGINE_SUCCESS);
+    assert((lResult.validMask & BREATH_RESULT_VALID_MEAN_PRESSURE) == 0U);
+    assert(monitorEngineGet(MONITOR_HMI_PRS_MEAN) == 0.0F);
+    sample(PHASE_IDLE, 0.0F, 0.0F);
+    assert(monitorEngineBreathResultGet(&lResult) == MONITOR_ENGINE_ERROR_STATE);
+}
+
 int main(void) {
+    meanPressure();
     cpapAlarms();
     stBreathResult lResult;
     stActuatorRequest lRequest;

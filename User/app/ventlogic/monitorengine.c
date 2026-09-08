@@ -243,6 +243,18 @@ static eMonitorEngineState monitorEngineStateFromPhase(ePhaseControllerState pha
     }
 }
 
+/** Accumulate all PAT samples at the fixed 6 ms monitoring interval. */
+static void monitorEngineMeanPressureAccumulate(void) {
+    float lPressure = controlDataGet(PAT_REAL_PRS);
+
+    if (monitorEngineFinite(lPressure) == 0U) {
+        gMonitorEngine.meanPressureInvalid = 1U;
+        return;
+    }
+    gMonitorEngine.meanPressureSumCmh2o += lPressure;
+    gMonitorEngine.meanPressureSampleCount++;
+}
+
 /** Publish the breath that ended immediately before a new inspiration. */
 static void monitorEngineBreathResultPublish(uint32_t nowMs)
 {
@@ -265,6 +277,13 @@ static void monitorEngineBreathResultPublish(uint32_t nowMs)
     lResult.validMask = BREATH_RESULT_VALID_COMPLETE |
                         BREATH_RESULT_VALID_CYCLE_TIME |
                         BREATH_RESULT_VALID_INSPIRATORY_TIME;
+    if ((gMonitorEngine.meanPressureInvalid == 0U) &&
+        (gMonitorEngine.meanPressureSampleCount > 0U) &&
+        (monitorEngineFinite(gMonitorEngine.meanPressureSumCmh2o) != 0U)) {
+        lResult.meanPressureCmh2o = gMonitorEngine.meanPressureSumCmh2o /
+                                  (float)gMonitorEngine.meanPressureSampleCount;
+        lResult.validMask |= BREATH_RESULT_VALID_MEAN_PRESSURE;
+    }
     if ((monitorEngineFinite(lResult.vtiMl) != 0U) &&
         (gMonitorEngine.volumeInvalid == 0U)) {
         lResult.validMask |= BREATH_RESULT_VALID_VTI;
@@ -290,6 +309,7 @@ static void monitorEngineBreathResultPublish(uint32_t nowMs)
     }
     repRtosEnterCritical();
     gMonitorData[MONITOR_LAST_TIDA_VOL_INSP] = lResult.vtiMl;
+    gMonitorData[MONITOR_HMI_PRS_MEAN] = lResult.meanPressureCmh2o;
     gMonitorData[MONITOR_LAST_TIDA_VOL_EXP] = lResult.vteMl;
     gMonitorData[MONITOR_LAST_PPEAK] = lResult.ppeakCmh2o;
     gMonitorData[MONITOR_LAST_PLATEAU_PRS] = lResult.plateauPressureCmh2o;
@@ -352,6 +372,9 @@ static int8_t monitorEngineBreathStart(uint32_t nowMs)
     gMonitorEngine.peakInspiratoryFlowLpm = 0.0F;
     gMonitorEngine.plateauPressureSumCmh2o = 0.0F;
     gMonitorEngine.plateauPressureSampleCount = 0U;
+    gMonitorEngine.meanPressureSumCmh2o = 0.0F;
+    gMonitorEngine.meanPressureSampleCount = 0U;
+    gMonitorEngine.meanPressureInvalid = 0U;
     gMonitorEngine.peepMinimumCmh2o = FLT_MAX;
     gMonitorEngine.peepPreviousValid = 0U;
     gMonitorEngine.peepSampleCount = 0U;
@@ -524,6 +547,7 @@ static void monitorEngineBreathProcess(uint32_t nowMs)
             gMonitorEngine.cycleReason = phaseControllerCycleReasonGet();
         }
         monitorEngineLeakAccumulate(controlDataGet(MDIFF_REAL_FLOW));
+        monitorEngineMeanPressureAccumulate();
         if (lPhase == PHASE_EXP) {
             monitorEngineDynamicPeepAccumulate();
         }

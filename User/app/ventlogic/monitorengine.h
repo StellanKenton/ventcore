@@ -44,6 +44,7 @@ extern "C" {
 #define BREATH_RESULT_VALID_PEAK_INSP_FLOW       (1UL << 7)
 #define BREATH_RESULT_VALID_PLATEAU_PRESSURE     (1UL << 8)
 #define BREATH_RESULT_VOLUME_LIMITED            (1UL << 9)
+#define BREATH_RESULT_VALID_MEAN_PRESSURE       (1UL << 10)
 
 typedef enum {
     MONITOR_DATA_NONE = 0,
@@ -68,6 +69,8 @@ typedef enum {
     MONITOR_LAST_PEAK_INSP_FLOW,
     MONITOR_LAST_INSP_TIME_MS,
     MONITOR_LAST_CYCLE_TIME_MS,
+    /* Mean PAT pressure over the latest complete inspiration and expiration. */
+    MONITOR_HMI_PRS_MEAN,
     MONITOR_DATA_COUNT,
 } eMonitorDataType;
 
@@ -86,6 +89,7 @@ typedef struct stBreathResult {
     float vteMl;
     float ppeakCmh2o;
     float plateauPressureCmh2o;
+    float meanPressureCmh2o;
     float peepCmh2o;
     float peakInspiratoryFlowLpm;
     eBreathCycleReason cycleReason;
@@ -102,6 +106,9 @@ typedef struct stMonitorEngine {
     float peakInspiratoryFlowLpm;
     float plateauPressureSumCmh2o;
     uint32_t plateauPressureSampleCount;
+    float meanPressureSumCmh2o;
+    uint32_t meanPressureSampleCount;
+    uint8_t meanPressureInvalid;
     float peepSamplesCmh2o[MONITOR_DYN_PEEP_WINDOW_SIZE];
     float peepPreviousCmh2o;
     float peepPreviousFlowLpm;

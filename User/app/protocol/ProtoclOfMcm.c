@@ -1643,8 +1643,8 @@ static void protocolMonitorSubIdAppend(SubIDCache_t *subIds, uint8_t *count,
 void ProtocolSendMonitorParamsFromCache(uint8_t instance)
 {
 #if PROTOCOL_MONITOR_PARAMS_SEND_ENABLE
-    static uint8_t lTxData[64];
-    static SubIDCache_t lSubIds[13];
+    static uint8_t lTxData[80];
+    static SubIDCache_t lSubIds[14];
     uint64_t lIeValue = 0U;
     uint8_t lCount = 0U;
 
@@ -1652,6 +1652,8 @@ void ProtocolSendMonitorParamsFromCache(uint8_t instance)
         (uint16_t)g_txMonitorParamsCache.m_pPeak, E_PPEAK_SIZE, E_PPEAK_SCALE);
     protocolMonitorSubIdAppend(lSubIds, &lCount, 0x02U,
         (uint16_t)g_txMonitorParamsCache.m_pPlat, E_PPLAT_SIZE, E_PPLAT_SCALE);
+    protocolMonitorSubIdAppend(lSubIds, &lCount, 0x03U,
+        (uint16_t)g_txMonitorParamsCache.m_pMean, E_PMEAN_SIZE, E_PMEAN_SCALE);
     protocolMonitorSubIdAppend(lSubIds, &lCount, 0x04U,
         g_txMonitorParamsCache.m_peep, E_PEEP_SIZE, E_PEEP_SCALE);
     protocolMonitorSubIdAppend(lSubIds, &lCount, 0x05U,
@@ -1737,6 +1739,12 @@ void ProtocolDetectDataPreProcess(uint8_t instance, uint32_t taskCounter)
                 INT16_MIN, INT16_MAX);
             g_txMonitorParamsCache.m_valid[0x02U] = true;
         }
+        if ((lResult.validMask & BREATH_RESULT_VALID_MEAN_PRESSURE) != 0U) {
+            g_txMonitorParamsCache.m_pMean = (int16_t)protocolWaveValue(
+                lResult.meanPressureCmh2o * (float)ProtocolGetScale(E_PMEAN_SCALE),
+                INT16_MIN, INT16_MAX);
+            g_txMonitorParamsCache.m_valid[0x03U] = true;
+        }
         if ((lResult.validMask & BREATH_RESULT_VALID_PEEP) != 0U) {
             g_txMonitorParamsCache.m_peep = (uint16_t)protocolWaveValue(
                 monitorEngineGet(MONITOR_LAST_PEEP) *
@@ -1805,7 +1813,7 @@ void ProtocolDetectDataPreProcess(uint8_t instance, uint32_t taskCounter)
             }
         }
 
-        /* Unavailable monitor outputs remain unset: FiO2, Pmean, minute volumes,
+        /* Unavailable monitor outputs remain unset: FiO2, minute volumes,
          * leak percentage, expiratory peak flow, resistance, compliance, RCexp,
          * WOB, PEEPi/PEEPtotal, P0.1, NIF, PTP, TVE/IBW, oxygen source pressure
          * and derived oxygen/mechanics indices. */
