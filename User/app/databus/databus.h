@@ -17,13 +17,14 @@ void controlDataRawProcess(void);
 /* Update Butterworth and cascaded low-pass results. */
 void controlDataFilterProcess(void);
 
-/* Convert Butterworth-filtered ADC values to calibrated physical values. */
+/* Convert filtered pressure and proximal ADCs with zero/density/gas correction. */
 void controlDataCalibrationProcess(void);
 
-/* Set the proximal-flow zero offset in the current gas-corrected L/min units. */
+/* Add the difference from the cumulative offset as an ADC-domain zero correction.
+ * Call only with a measured zero-flow residual plus the current getter value. */
 void controlDataMdiffFlowZeroOffsetSet(float offsetLpm);
 
-/* Return the proximal-flow zero offset in the current gas-corrected L/min units. */
+/* Return the cumulative re-zero token in current gas-corrected L/min units. */
 float controlDataMdiffFlowZeroOffsetGet(void);
 
 #ifdef __cplusplus

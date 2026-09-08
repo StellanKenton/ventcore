@@ -32,6 +32,10 @@
 
 项目代码只能通过 `rtos.h` 使用任务、调度、tick 和临界区能力；FreeRTOS 原生 API 仅允许出现在 `portrtos.c`。日志统一使用 `LOG_I`、`LOG_W`、`LOG_E` 等宏，不能直接使用标准库输出函数。
 
+PAC 平台期在近端流量降至 10 L/min 以下、患者压力进入目标 ±2 cmH₂O 后，本次吸气锁存低增益稳压：外环 Kp=0.25，内环 Kp=0.001、Ki=0.02。剩余流量前馈清零并通过 `pidTrackOutput` 转入内环输出；衔接实际风机转速，相对上一指令最多修正 40，反馈为零、非有限或超出 800 时回退上一指令。该处理用于减少填充结束时继续降速及随后的反复修正，不锁死风机；压力闭环和平台超压泄压继续工作。内环积分在叠加前馈后的执行器饱和时撤回同方向增量。下一次吸气恢复原增益并清除锁存和积分；PSV/ST 不进入此分支。`develop/test_flow_pause.py` 验证切换、稳压方向、模式隔离与重置；`develop/test_pac_rtt.py` 通过 Device Tool 采集默认 PAC 的台架末段波形。
+
+2026-09-08 默认 PAC 无额外漏口模拟肺对比：PEEP 5、Delta-P 25 cmH₂O、Ti 1350 ms、20/min、氧浓度 21%、触发关闭。均排除前两次启动呼吸，使用参考下降前留出 12 ms 的末段 240 ms；按相同的随后十次呼吸比较，原版平均流量峰峰值 11.49 L/min，两次独立启动的最终固件分别为 5.622 和 5.168 L/min，降低 51.1% 和 55.0%。最终两组各分析 20 次呼吸，全组平均峰峰值分别为 4.930 和 4.561 L/min，最大单次为 9.08 和 7.50 L/min；末段压力范围分别为 29.33..30.69 和 29.15..30.57 cmH₂O。结果表明末段摆动减小，未完全消除；此窗口不包含此前填充结束的全部流量下降过程。数据为设备自身传感器测量，未覆盖其他顺应性、漏气或参数组合。原始数据位于 `build/pac_baseline/`、`build/pac_final_run1/`、`build/pac_final_run2/`，统一窗口统计为 `build/pac_comparison.json`；均经 Device Tool 编译/烧录/RTT 入口，测试结束已收到停止确认。
+
 当前 GD32F470 板载 HXTAL 为 8 MHz，系统使用 `240M_PLL_8M_HXTAL` 配置；该配置决定 RTOS tick 和 APB 外设（包括 VCM UART 230400）的实际时基。
 
 PEEP 报警以当前呼吸计划的 `peepCmh2o` 为 refpeep。在新吸气阶段，`PHYS_ALARM_PEEP_HIGH` 按上一周期 `MONITOR_DYN_PEEP > refpeep + 5` 触发，`PHYS_ALARM_PEEP_LOW` 按 `< refpeep - 3` 触发，每个吸气计划只判断一次。AlarmTask 每 10 ms 检查恢复：动态 PEEP 严格低于高限或严格高于低限持续至少 200 ms 后解除对应报警；等于阈值会中断恢复计时。恢复不使用实时患者压力。无上一完整周期时不触发，停止通气或进入零点补偿阶段时清除 PEEP 报警和计时。检测器仅由 AlarmTask 调用，通过 RTOS 临界区读取 VentTask 的计划、阶段和监测快照，不用于 ISR。
@@ -72,7 +76,7 @@ CommTask 独占 PA9/PA10 串口和协议队列，SysTask 恢复 20 ms 空任务�
 
 `MONITOR_HMI_PRS_MEAN` 在每次呼气结束、下一次吸气开始前结算，单位 cmH₂O；固定 6 ms 累加本次吸气（含暂停）和呼气的全部 `PAT_REAL_PRS`，除以样本数，不受流量方向或死区影响。结果与 `stBreathResult.meanPressureCmh2o` 同步发布，下一次结算前保持不变；停止、调零或无有效计划时清零。任一压力样本非有限或累计无效时不置 `BREATH_RESULT_VALID_MEAN_PRESSURE`，监测值置零，该次平均压不上传。CommTask 沿用逐呼吸上传与队列重试入口，通过 MCM 监测参数 `0x03` 发送有符号平均压 ×10；`test_monitor_leak.py` 和 `test_protocol.py` 覆盖整周期均值、结算时序、周期隔离、异常值与正负平均压报文编码。
 
-流量气体补偿：`PAT_REAL_FLOW`、`INSP_REAL_FLOW`、`O2_REAL_FLOW` 在校准处理阶段统一乘以 `BTPS_COEFFICIENT`。当 `GetVentPatientSettings()->Gas == VENT_GAS_BTPS` 时，系数暂按 `760/(760-47)*310.15/298.15` 计算，其他气体类型为 1。患者流量先扣除零点偏移再乘系数；零点偏移接口使用当前气体条件的 L/min，内部保存补偿前偏移，切换气体类型不改变传感器零点。
+流量气体补偿：`PAT_REAL_FLOW`、`INSP_REAL_FLOW`、`O2_REAL_FLOW` 在校准处理阶段统一乘以 `BTPS_COEFFICIENT`。当 `GetVentPatientSettings()->Gas == VENT_GAS_BTPS` 时，系数按 SFM3119 的 20°C、1013 hPa 干气参考，以 `1013/(1013-62.66)*310.15/293.15` 计算，其他气体类型为 1。患者流量先对滤波 ADC 做零漂和密度补偿、查表，再乘系数；零点偏移接口使用当前气体条件的 L/min，内部保存补偿前偏移，切换气体类型不改变传感器零点。
 
 2026-09-08 时间补偿测试肺自测：经 Device Tool 构建、烧录、RTT 采集，PEEP 5 cmH₂O、设定 Ti 2000 ms、频率 15/min、暂停 0%，300/500/800 mL 各记录 15 次完整呼吸，全部符合 ±(10 mL + 目标×5%)，且无容量限幅标志。末尾五次 VTI 分别为 295.39～303.82、496.89～503.01、783.48～805.41 mL，均值分别为 300.518、499.800、791.908 mL；三个设定均从首个完整呼吸进入验收范围。流量设定分别固定在 9/15/24 L/min。原始记录及验收见 `build/vac_time_300/`、`build/vac_time_500/`、`build/vac_time_800/`，汇总为 `build/vac_time_summary.json`。测量使用设备近端 VTI，未使用独立流量分析仪；结论仅覆盖上述测试肺工况。测试结束已停止通气。
 
@@ -91,3 +95,11 @@ PAC 压力控制不使用报警高限 `pressureHigh` 限制患者压力参考值
 `MONITOR_HMI_RES_INSP = 60 × (Ppeak - PEEP) / Qinsppeak`，`MONITOR_HMI_RES_EXP = 60 × (Pplat - PEEP) / Qexppeak`，流量使用近端 `PAT_REAL_FLOW`（L/min），呼气峰值取呼气阶段负流量最大绝对值；PEEP 沿用完成结果的呼气末患者压力。两项随完整呼吸结算并保持到下次发布，吸气和呼气公式均乘 60，将 L/min 换算为 L/s。非有限采样、缺少对应压力、零峰值或负/非有限计算结果时置零且不上传；停止、调零时清零。CommTask 从同一 `stBreathResult` 快照上传 MCM `0x16` / `0x17`，沿用无符号 16 位、scale=0 的协议定义（截断小数、限幅 0..65535）及队列重试。主机回归覆盖公式、峰值相位隔离、跨周期清零、无平台压、异常采样和报文编码。
 
 `MONITOR_HMI_C_DYNC = VTi / (Ppeak - PEEP)`，`MONITOR_HMI_C_STAT = VTe / (Pplat - PEEP)`，单位 mL/cmH₂O；使用同一完整呼吸的容量、压力和呼气末 PEEP，通过 `stBreathResult.complianceDynamic` / `complianceStatic` 同步发布并保持到下次结算。压差非正或非有限、容量为负、缺少对应有效压力/容量或周期采样异常时置零且不上传；停止、调零时清零。MCM 静态顺应性为 `0x18`，动态顺应性为 `0x19`，均使用无符号 16 位、数值 ×10、scale=1，沿用逐呼吸上传和队列重试；主机回归覆盖公式、无平台压、零/负压差、异常采样、快照保持、清零和报文缩放。
+
+近端流量校准参考为开放管路下 SFM3119 未乘 BTPS 的原始 SLM（20°C、1013 hPa），不是运行期患者侧实际体积流量。保留既有 14 Hz ADC 滤波；`PAT_REAL_FLOW` 查表前先减运行期 ADC 零漂，再围绕表内反插值的真实零流量 ADC 乘密度比 `1 + PAT_REAL_PRS / CALIBTRANS_AMBIENT_PRESSURE_CMH2O`。患者压力来自同轮 Butterworth 压力换算。密度比在差压域应用后再查原表，正负方向均使用自身曲线，不使用固定 VTe 比例。此模型假定 ADC 与差压线性、校准与运行温度/气体黏度近似相同、开放标定压力接近大气；环境压力暂按 1013 hPa，无气压或近端温度实测补偿。
+
+调零接口继续接收“当前累计值 + 实测残差”，通过反查同一校准表将残差换成 ADC 偏移；getter 是累计调零标记，不能作为恒定流量误差扣除。气体模式切换不改变 ADC 偏移。校准不可用或换算非有限时发布 NaN，供监测拒绝该周期。EEPROM 表及潮气量积分定义不变。`develop/test_flow_conversion.py` 使用真实换算/数据处理源码，覆盖非对称非线性表、双向零漂、重复调零、SFM3119/BTPS 基准、压力密度补偿及异常恢复。
+
+启动调零需要连续 1000 ms 满足原有入口流量、近端流量及患者压力门限（原为 60 ms）；任一门限中断即重新计时，3000 ms 超时保留旧零点。此窗口用于降低滤波后相关零点噪声对整周期容量的偏置，不根据 VTi/VTe 差值自动学习零点。`test_flow_zero_offset.py` 验证完整窗口前不更新以及超时保留。
+
+2026-09-08 潮气量换算台架回归：模拟肺 PAC，PEEP 5、Delta-P 25 cmH₂O、Ti 1350 ms、20/min、21% 氧、触发关闭。统一排除前两次启动呼吸并取随后 13 次：旧版平均 VTe−VTi 为 22.80 mL（3.34%）；最终 1000 ms 调零固件两次分别为 12.69 mL（1.78%）和 20.06 mL（2.84%），最大单次差值分别为 21.76、28.45 mL，未消除误差。原始日志/结果在 `build/volume_balance_old/`、`build/volume_balance_zero_long/`、`build/volume_balance_zero_repeat/`；统一统计、固件及源码 SHA-256 在 `build/volume_balance_comparison.json`。VAC 500 mL、PEEP 5、Ti 2000 ms、15/min、无暂停的末五次 VTI 为 495.93..503.00 mL，通过原 ±35 mL 目标验收，记录在 `build/volume_balance_vac/`。其中末次 VTi/VTe 为 500.02/533.09 mL，同时 PEEP 降到 3.48 cmH₂O，提示周期首尾储气变化仍影响两者比较；不能把容量目标通过解读为每次吸呼气相等。全部经 Device Tool 构建/烧录/RTT，最终收到停机确认；仅设备自身测量，无独立呼气参考仪器。

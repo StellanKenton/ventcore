@@ -10,6 +10,7 @@
 #include "calibtrans.h"
 
 #include <stddef.h>
+#include <math.h>
 
 #include "calibration.h"
 
@@ -201,12 +202,20 @@ int8_t calibtransPrsSpeed(float pressureValue, float *speedRps) {
 }
 
 int8_t calibtransAdultProxFlow(float adcValue, float *flowValue) {
+    return calibtransAdultProxFlowAtPressure(adcValue, 0.0F, flowValue);
+}
+
+/** At fixed mass flow and temperature, differential pressure varies as 1/density. */
+int8_t calibtransAdultProxFlowAtPressure(float adcValue, float pressureCmh2o, float *flowValue) {
     const stCalibrationProxFlow *lCalibration = calibrationGetProxFlow();
     const stCalibrationZero *lZero = calibrationGetZero();
     float lCalibrationZeroAd;
     float lCompensatedAd;
+    float lZeroFlowAd;
+    float lDensityRatio = 1.0F + pressureCmh2o / CALIBTRANS_AMBIENT_PRESSURE_CMH2O;
+    int8_t lStatus;
 
-    if (flowValue == NULL) {
+    if ((flowValue == NULL) || !isfinite(lDensityRatio) || (lDensityRatio <= 0.0F)) {
         return CALIBTRANS_ERROR_ARGUMENT;
     }
     if ((lCalibration == NULL) || (lZero == NULL)) {
@@ -215,11 +224,49 @@ int8_t calibtransAdultProxFlow(float adcValue, float *flowValue) {
     lCalibrationZeroAd = (lCalibration->adultFlowAd[15U] +
                           lCalibration->adultFlowAd[16U]) * 0.5f;
     lCompensatedAd = adcValue - (float)lZero->proxPressureAd + lCalibrationZeroAd;
+    if (pressureCmh2o != 0.0F) {
+        lStatus = calibtransInterpolate(lCalibration->adultFlow, lCalibration->adultFlowAd,
+            NULL, CALIBRATION_DIFF_FLOW_POINT_COUNT, CALIBRATION_DIFF_FLOW_POINT_COUNT,
+            1U, 0.0F, &lZeroFlowAd);
+        if (lStatus != CALIBTRANS_STATUS_OK) {
+            return lStatus;
+        }
+        /* Scale differential ADC around true zero, never the absolute ADC count. */
+        lCompensatedAd = lZeroFlowAd + (lCompensatedAd - lZeroFlowAd) * lDensityRatio;
+    }
     return calibtransInterpolate(lCalibration->adultFlowAd, lCalibration->adultFlow,
                                  NULL, CALIBRATION_DIFF_FLOW_POINT_COUNT,
                                  CALIBRATION_DIFF_FLOW_POINT_COUNT,
                                  1U,
                                  lCompensatedAd, flowValue);
+}
+
+/** Invert the same table so zero drift is removed before nonlinear conversion. */
+int8_t calibtransAdultProxFlowZeroShift(float flowValue, float *adcShift) {
+    const stCalibrationProxFlow *lCalibration = calibrationGetProxFlow();
+    float lZeroAd;
+    float lFlowAd;
+    int8_t lStatus;
+
+    if (adcShift == NULL) {
+        return CALIBTRANS_ERROR_ARGUMENT;
+    }
+    if (lCalibration == NULL) {
+        return CALIBTRANS_ERROR_NOT_READY;
+    }
+    lStatus = calibtransInterpolate(lCalibration->adultFlow, lCalibration->adultFlowAd,
+        NULL, CALIBRATION_DIFF_FLOW_POINT_COUNT, CALIBRATION_DIFF_FLOW_POINT_COUNT,
+        1U, 0.0F, &lZeroAd);
+    if (lStatus != CALIBTRANS_STATUS_OK) {
+        return lStatus;
+    }
+    lStatus = calibtransInterpolate(lCalibration->adultFlow, lCalibration->adultFlowAd,
+        NULL, CALIBRATION_DIFF_FLOW_POINT_COUNT, CALIBRATION_DIFF_FLOW_POINT_COUNT,
+        1U, flowValue, &lFlowAd);
+    if (lStatus == CALIBTRANS_STATUS_OK) {
+        *adcShift = lFlowAd - lZeroAd;
+    }
+    return lStatus;
 }
 
 int8_t calibtransNeoProxFlow(float adcValue, float *flowValue) {

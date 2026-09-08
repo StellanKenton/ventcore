@@ -25,6 +25,9 @@ static float gPressureFlowCompensation;
 static float gPressureRiseStartPressure;
 static uint32_t gPressureRiseElapsedMs;
 static uint32_t gPressurePlanSequence;
+static uint8_t gPressureHoldSettled;
+static uint8_t gPressureHoldTrackPending;
+static uint16_t gPressureBlowerTarget;
 
 /** Clamp a pressure-controller value to a configured range. */
 static float pressureControllerClamp(float value, float minimum, float maximum)
@@ -108,6 +111,9 @@ void pressureControllerInit(void)
     gPressureRiseStartPressure = 0.0F;
     gPressureRiseElapsedMs = 0U;
     gPressurePlanSequence = 0U;
+    gPressureHoldSettled = 0U;
+    gPressureHoldTrackPending = 0U;
+    gPressureBlowerTarget = 0U;
     pressureControllerDiagnosticClear();
 }
 
@@ -124,6 +130,12 @@ static void pressureControllerStateEnter(ePressureControllerState state)
     }
     gPressureControllerState = state;
     if (state == PRESSURE_CONTROLLER_INSP_RISE) {
+        gPressureHoldSettled = 0U;
+        gPressureHoldTrackPending = 0U;
+        (void)pidSetTunings(&gPressureInnerPid,
+                            PRESSURE_CONTROLLER_INNER_KP,
+                            PRESSURE_CONTROLLER_INNER_KI,
+                            PRESSURE_CONTROLLER_INNER_KD);
         (void)pidSetTunings(&gPressureOuterPid,
                             PRESSURE_CONTROLLER_OUTER_KP,
                             PRESSURE_CONTROLLER_OUTER_KI,
@@ -280,16 +292,27 @@ static int8_t pressureControllerClosedLoopProcess(const stBreathPlan *plan,
     float lBlowerFeedforward;
     float lEffort;
     float lInspTarget;
+    float lPreviousIntegral;
 
     if (pressureControllerOuterLoopProcess(plan, state, &lInspTarget) !=
         PID_STATUS_OK) {
         return ACTUATOR_REQUEST_ERROR_STATE;
     }
-    if (pressureControllerInnerLoopProcess(lInspTarget, &lEffort) != PID_STATUS_OK) {
-        return ACTUATOR_REQUEST_ERROR_STATE;
-    }
     if (calibtransPrsSpeed(lInspTarget, &lBlowerFeedforward) !=
         CALIBTRANS_STATUS_OK) {
+        return ACTUATOR_REQUEST_ERROR_STATE;
+    }
+    if (gPressureHoldTrackPending != 0U) {
+        if (pidTrackOutput(&gPressureInnerPid, lInspTarget,
+                           controlDataGet(INSP_REAL_PRS),
+                           ((float)gPressureBlowerTarget - lBlowerFeedforward) /
+                           (float)PRESSURE_CONTROLLER_BLOWER_SPEED_SCALE) != PID_STATUS_OK) {
+            return ACTUATOR_REQUEST_ERROR_STATE;
+        }
+        gPressureHoldTrackPending = 0U;
+    }
+    lPreviousIntegral = gPressureInnerPid.integral;
+    if (pressureControllerInnerLoopProcess(lInspTarget, &lEffort) != PID_STATUS_OK) {
         return ACTUATOR_REQUEST_ERROR_STATE;
     }
 
@@ -297,10 +320,16 @@ static int8_t pressureControllerClosedLoopProcess(const stBreathPlan *plan,
     gPressureDiagnostic.blowerFeedforward = lBlowerFeedforward;
     lEffort = (lEffort * PRESSURE_CONTROLLER_BLOWER_SPEED_SCALE) +
               lBlowerFeedforward;
+    if (((lEffort > (float)PRESSURE_CONTROLLER_BLOWER_SPEED_SCALE) &&
+         (gPressureInnerPid.integral > lPreviousIntegral)) ||
+        ((lEffort < 0.0F) && (gPressureInnerPid.integral < lPreviousIntegral))) {
+        gPressureInnerPid.integral = lPreviousIntegral;
+    }
     lEffort = pressureControllerClamp(lEffort,
                                       0.0F,
                                       (float)PRESSURE_CONTROLLER_BLOWER_SPEED_SCALE);
     request->blowerTarget = (uint16_t)lEffort;
+    gPressureBlowerTarget = request->blowerTarget;
     request->expiratoryValveDuty = PRESSURE_CONTROLLER_EXP_VALVE_CLOSED_DUTY;
     request->validMask = ACTUATOR_REQUEST_VALID_BREATH_OUTPUTS;
     return ACTUATOR_REQUEST_SUCCESS;
@@ -310,10 +339,41 @@ static int8_t pressureControllerClosedLoopProcess(const stBreathPlan *plan,
 static int8_t pressureControllerHoldProcess(const stBreathPlan *plan,
                                             stActuatorRequest *request)
 {
+    float lBlowerSpeed;
     int8_t lStatus;
 
     (void)phaseControlSet(PHASE_REF_PRESSURE,
                           plan->inspiratoryPressureCmh2o);
+    /* Latch lower bandwidth in the PAC filling tail; reset on the next rise. */
+    if ((plan->mode == VENT_MD_PAC) && (gPressureHoldSettled == 0U) &&
+        (controlDataGet(PAT_REAL_FLOW) <= PRESSURE_CONTROLLER_SETTLED_FLOW_MAX) &&
+        (controlDataGet(PAT_REAL_PRS) >= plan->inspiratoryPressureCmh2o -
+         PRESSURE_CONTROLLER_SETTLED_PRESSURE_BAND) &&
+        (controlDataGet(PAT_REAL_PRS) <= plan->inspiratoryPressureCmh2o +
+         PRESSURE_CONTROLLER_SETTLED_PRESSURE_BAND)) {
+        (void)pidSetTunings(&gPressureOuterPid,
+                            PRESSURE_CONTROLLER_SETTLED_OUTER_KP,
+                            PRESSURE_CONTROLLER_OUTER_KI,
+                            PRESSURE_CONTROLLER_OUTER_KD);
+        (void)pidSetTunings(&gPressureInnerPid,
+                            PRESSURE_CONTROLLER_SETTLED_INNER_KP,
+                            PRESSURE_CONTROLLER_SETTLED_INNER_KI,
+                            PRESSURE_CONTROLLER_INNER_KD);
+        gPressureHoldSettled = 1U;
+        gPressureHoldTrackPending = 1U;
+        /* Transfer the remaining flow feedforward into the tracked PI output. */
+        gPressureFlowCompensation = 0.0F;
+        /* Track actual speed to arrest delayed deceleration, with bounded correction.
+         * Missing or invalid feedback falls back to the last valid command. */
+        lBlowerSpeed = controlDataGet(RAW_BLOWER_SPEED);
+        if ((lBlowerSpeed > 0.0F) &&
+            (lBlowerSpeed <= (float)PRESSURE_CONTROLLER_BLOWER_SPEED_SCALE)) {
+            gPressureBlowerTarget = (uint16_t)pressureControllerClamp(
+                lBlowerSpeed,
+                (float)gPressureBlowerTarget - PRESSURE_CONTROLLER_SETTLED_TRACK_MAX_STEP,
+                (float)gPressureBlowerTarget + PRESSURE_CONTROLLER_SETTLED_TRACK_MAX_STEP);
+        }
+    }
     lStatus = pressureControllerClosedLoopProcess(plan,
                                                   PRESSURE_CONTROLLER_INSP_HOLD,
                                                   request);

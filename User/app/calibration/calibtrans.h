@@ -20,6 +20,8 @@ extern "C" {
 #define CALIBTRANS_ERROR_ARGUMENT        (-1)
 #define CALIBTRANS_ERROR_NOT_READY       (-2)
 #define CALIBTRANS_ERROR_TABLE           (-3)
+/* Open-circuit calibration ambient assumption: 1013 hPa, expressed in cmH2O. */
+#define CALIBTRANS_AMBIENT_PRESSURE_CMH2O (1013.0F / 0.980665F)
 
 /**
  * @brief Convert an inspiratory pressure ADC value to pressure.
@@ -60,6 +62,12 @@ int8_t calibtransPrsSpeed(float pressureValue, float *speedRps);
  * @return CALIBTRANS_STATUS_OK on success, otherwise a negative error code.
  */
 int8_t calibtransAdultProxFlow(float adcValue, float *flowValue);
+
+/** Normalize differential pressure to the open-circuit density before lookup. */
+int8_t calibtransAdultProxFlowAtPressure(float adcValue, float pressureCmh2o, float *flowValue);
+
+/** Convert a residual uncorrected flow to the corresponding ADC zero shift. */
+int8_t calibtransAdultProxFlowZeroShift(float flowValue, float *adcShift);
 
 /**
  * @brief Convert a neonatal proximal-flow ADC value to flow, extrapolating past table endpoints.

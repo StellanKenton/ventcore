@@ -22,7 +22,8 @@ extern "C" {
 #define PHASE_CONTROL_ERROR_PARAM         (-1)
 #define PHASE_CONTROL_ERROR_STATE         (-2)
 #define PHASE_PRESSURE_FALL_TIME_MS        168U
-#define PHASE_COMPENSATION_TIME_MS          60U
+/* Average beyond the correlated 14 Hz filter noise before fixing the flow zero. */
+#define PHASE_COMPENSATION_TIME_MS        600U
 #define PHASE_COMPENSATION_TIMEOUT_MS     2000U
 #define PHASE_COMPENSATION_INSP_FLOW_MAX     0.1F
 #define PHASE_COMPENSATION_PAT_FLOW_MAX     10.0F

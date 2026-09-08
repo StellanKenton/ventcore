@@ -5,6 +5,7 @@
 #include "databus.h"
 
 #include <stddef.h>
+#include <math.h>
 
 #include "adc.h"
 #include "blower_vcm.h"
@@ -25,6 +26,7 @@ static stLpf1 gInspFlowTriggerFilter;
 static uint8_t gcontrolDataFiltersInitialized = 0U;
 static uint8_t gPatientPressurePredictionInitialized = 0U;
 static float gMdiffFlowZeroOffsetLpm = 0.0F;
+static float gMdiffZeroShiftAd = 0.0F;
 
 /** Average two 3 ms samples and run two cascaded low-pass filters. */
 static float controlDataLpf2Run(stLpf1 filters[2U], float sample1, float sample2) {
@@ -126,13 +128,26 @@ void controlDataFilterProcess(void) {
     controlDataSet(O2_FLOW_FILTERED, lFiltered);
 }
 
+/** Apply ADC zero and density correction to the existing filtered sensor pair. */
+static void controlDataPatientFlowProcess(float lBtpsCoefficient) {
+    float lConverted;
+
+    if ((calibtransAdultProxFlowAtPressure(controlDataGet(MDIFF_PRS_BWF) - gMdiffZeroShiftAd,
+            controlDataGet(PAT_REAL_PRS), &lConverted) == CALIBTRANS_STATUS_OK) &&
+        isfinite(lConverted)) {
+        controlDataSet(PAT_REAL_FLOW, lConverted * lBtpsCoefficient);
+    } else {
+        controlDataSet(PAT_REAL_FLOW, NAN);
+    }
+}
+
 void controlDataCalibrationProcess(void) {
     float lConverted;
     float lBtpsCoefficient = 1.0F;
 
-    /* Fixed ambient assumptions: 760 mmHg, 25 C; saturated body gas at 37 C. */
+    /* SFM3119 and its referenced proximal table use dry SLM at 20 C, 1013 hPa. */
     if (GetVentPatientSettings()->Gas == VENT_GAS_BTPS) {
-        lBtpsCoefficient = (760.0F / (760.0F - 47.0F)) * (310.15F / 298.15F);
+        lBtpsCoefficient = (1013.0F / (1013.0F - 62.66F)) * (310.15F / 293.15F);
     }
     controlDataSet(BTPS_COEFFICIENT, lBtpsCoefficient);
     controlDataSet(INSP_REAL_FLOW, controlDataGet(INSP_FLOW_FILTERED) * lBtpsCoefficient);
@@ -140,9 +155,6 @@ void controlDataCalibrationProcess(void) {
 
     if (calibtransInspPrs(controlDataGet(INSP_PRS_BWF), &lConverted) == CALIBTRANS_STATUS_OK) {
         controlDataSet(INSP_REAL_PRS, lConverted);
-    }
-    if (calibtransAdultProxFlow(controlDataGet(MDIFF_PRS_BWF), &lConverted) == CALIBTRANS_STATUS_OK) {
-        controlDataSet(PAT_REAL_FLOW, (lConverted - gMdiffFlowZeroOffsetLpm) * lBtpsCoefficient);
     }
     if (calibtransPeepPrs(controlDataGet(PEEP_PRS_BWF), &lConverted) == CALIBTRANS_STATUS_OK) {
         float lPreviousPatientPressure = controlDataGet(PAT_REAL_PRS);
@@ -161,17 +173,27 @@ void controlDataCalibrationProcess(void) {
     if (calibtransExpPrs(controlDataGet(EXP_PRS_BWF), &lConverted) == CALIBTRANS_STATUS_OK) {
         controlDataSet(EXP_REAL_PRS, lConverted);
     }
+    controlDataPatientFlowProcess(lBtpsCoefficient);
 }
 
 /** Apply a new zero offset to the current and subsequent proximal-flow data. */
 void controlDataMdiffFlowZeroOffsetSet(float offsetLpm) {
-    float lCurrentFlow = controlDataGet(PAT_REAL_FLOW);
     float lBtpsCoefficient = controlDataGet(BTPS_COEFFICIENT);
+    float lShiftAd;
+    float lResidualFlow;
 
-    controlDataSet(PAT_REAL_FLOW,
-                   lCurrentFlow + gMdiffFlowZeroOffsetLpm * lBtpsCoefficient - offsetLpm);
-    /* Store the offset before gas correction so changing Gas preserves the zero. */
+    if (!isfinite(offsetLpm) || !isfinite(lBtpsCoefficient) || (lBtpsCoefficient <= 0.0F)) {
+        return;
+    }
+    lResidualFlow = offsetLpm / lBtpsCoefficient - gMdiffFlowZeroOffsetLpm;
+    if ((calibtransAdultProxFlowZeroShift(lResidualFlow, &lShiftAd) != CALIBTRANS_STATUS_OK) ||
+        !isfinite(lShiftAd)) {
+        return;
+    }
+    /* The public cumulative L/min offset is a re-zero token, not a flow subtraction. */
+    gMdiffZeroShiftAd += lShiftAd;
     gMdiffFlowZeroOffsetLpm = offsetLpm / lBtpsCoefficient;
+    controlDataPatientFlowProcess(lBtpsCoefficient);
 }
 
 /** Return the proximal-flow zero offset currently in use. */

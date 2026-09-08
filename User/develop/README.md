@@ -7,6 +7,25 @@ target board.
 
 ## Files
 
+- `test_flow_conversion.py`: host regression using production calibration and data
+  processing with asymmetric nonlinear flow tables. Checks table knots, ADC zero
+  drift in both directions, repeated zeroing, SFM3119-to-BTPS conversion,
+  pressure-density correction at table knots and through the real filters,
+  and unavailable-table recovery.
+
+- `test_pac_rtt.py`: default PAC terminal-flow bench regression. With a confirmed
+  test lung connected, use Device Tool build/flash (or reset an already flashed
+  build), then `py -3 user/develop/test_pac_rtt.py --output build/pac_repeat`.
+  Uses PEEP 5, Delta-P 25 and trigger off; Ti 1350 ms, rate 20/min and oxygen 21%
+  are the reset defaults. Records 68 seconds, stops on completion/error and saves
+  RTT, 6 ms CSV, source/firmware hashes and per-breath metrics. An empty `stop`
+  file in the output directory aborts collection. The comparison window is the
+  last 240 ms ending 12 ms before the pressure-reference fall, excluding two
+  startup breaths. Requires at least ten analyzed breaths and terminal pressure
+  28..32 cmH2O (a bench check, not a clinical limit). Flow peak-to-peak and standard
+  deviation are reported for comparison, without declaring oscillation eliminated.
+  The raw CSV also preserves the earlier filling transient.
+
 - `test_protocol.py`: host regression using the production MCM parser, caches and settings binding with a simulated UART. Run `py -3 user/develop/test_protocol.py`; covers MCM alarm limits with local/host settings, scaling, partial updates and CRC rejection, physiological alarm wire bits, recovery and unchanged-state suppression, fragmented frames, malformed packets, CRC, ACK, source switching, ventilation commands and waveform encoding, plus 1110 heartbeat responses with continuous traffic, bursts, UART busy/queue backpressure, timeout and reconnect. It does not flash or operate the board.
 
 - `test_vti_rtt.py`: startup convergence recording through Device Tool RTT on a test
@@ -109,6 +128,10 @@ Command behavior:
 - `reset`: resets the target through J-Link and lets it run.
 - `rtt`: stops existing J-Link RTT/GDB server processes, starts this tool's RTT
   server, then prints RTT output from the target.
+  The interactive entry resolves `_SEGGER_RTT` from the ELF beside the configured
+  flash image and supplies it during the Telnet handshake. Build and flash matching
+  firmware first; `DEVICE_TOOL_RTT_ADDRESS` overrides the address when the board
+  runs a different image. Without an ELF/toolchain it falls back to J-Link scanning.
 
 ## PEEP / Delta-P Test GUI
 

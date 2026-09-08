@@ -246,12 +246,35 @@ def stdin_reader(output: "queue.Queue[bytes]", stop: threading.Event) -> None:
         output.put(data)
 
 
+def rtt_control_block_address(profile: Dict[str, Any]) -> Optional[int]:
+    """Resolve the built firmware's RTT block before the Telnet handshake deadline."""
+    override = os.environ.get("DEVICE_TOOL_RTT_ADDRESS")
+    if override:
+        return int(override, 0)
+    elf = (REPO_ROOT / profile["flash_image"]).with_suffix(".elf")
+    compiler_dir = profile.get("build", {}).get("compiler_bin_dir", "")
+    nm = Path(compiler_dir) / ("arm-none-eabi-nm.exe" if os.name == "nt" else "arm-none-eabi-nm")
+    if not elf.is_file() or not nm.is_file():
+        return None
+    try:
+        result = subprocess.run([str(nm), str(elf)], capture_output=True, text=True,
+                                check=True, timeout=5)
+        for line in result.stdout.splitlines():
+            fields = line.split()
+            if len(fields) == 3 and fields[2] == "_SEGGER_RTT":
+                return int(fields[0], 16)
+    except (OSError, subprocess.SubprocessError, ValueError):
+        pass
+    return None
+
+
 def interactive_rtt(computer: Optional[str]) -> int:
     _, profile = select_profile(computer)
     jlink = profile["jlink"]
     ports = jlink["ports"]
     gdb_server = device_tool.require_executable(str(jlink["gdb_server"]), "J-Link GDB server")
     rtt_port = int(ports["rtt"])
+    rtt_address = rtt_control_block_address(profile)
     capture_seconds = float(os.environ.get("DEVICE_TOOL_RTT_SECONDS", "0") or "0")
     capture_deadline = time.monotonic() + capture_seconds if capture_seconds > 0 else None
 
@@ -305,6 +328,8 @@ def interactive_rtt(computer: Optional[str]) -> int:
             print(server_output, file=sys.stderr)
             return 1
 
+        if rtt_address is not None:
+            sock.sendall(f"$$SEGGER_TELNET_ConfigStr=SetRTTAddr;0x{rtt_address:X}$$".encode("ascii"))
         print(
             f"RTT connected on 127.0.0.1:{rtt_port}. Type input here; press Ctrl+C to stop.",
             flush=True,
