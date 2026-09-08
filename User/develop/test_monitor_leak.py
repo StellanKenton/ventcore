@@ -57,7 +57,7 @@ void breathSchedulerVolumeFeedback(const stBreathPlan *plan, float vtiMl, uint8_
 /** Advance one nominal 6 ms measurement, independently of estimated flow. */
 static void sample(ePhaseControllerState phase, float flow, float pressure) {
     gPhase = phase;
-    gData[MDIFF_REAL_FLOW] = flow;
+    gData[PAT_REAL_FLOW] = flow;
     gData[PAT_REAL_PRS] = pressure;
     gNow += 6U;
     monitorEngineProcess(gNow);
@@ -337,14 +337,14 @@ int main(void) {
     assert(lResult.sequence == 1U);
     /* Real estimator output is shared by pause control and plateau detection. */
     gPause = 1U;
-    gData[INSP_FLOW_FILTERED] = 80.0F;
+    gData[INSP_REAL_FLOW] = 80.0F;
     for (lIndex = 0U; lIndex < 100U; lIndex++) {
         sample(PHASE_INSP, 10.0F, 25.0F);
         assert(flowControllerProcess(&gPlan, &lRequest) == ACTUATOR_REQUEST_SUCCESS);
     }
     assert(monitorEngineGet(MONITOR_PLATEAU_PRS) == 25.0F);
     lTarget = lRequest.blowerTarget;
-    gData[INSP_FLOW_FILTERED] = 0.0F;
+    gData[INSP_REAL_FLOW] = 0.0F;
     assert(flowControllerProcess(&gPlan, &lRequest) == ACTUATOR_REQUEST_SUCCESS);
     assert(lTarget == lRequest.blowerTarget);
 

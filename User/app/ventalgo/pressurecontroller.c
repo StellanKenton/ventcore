@@ -176,7 +176,7 @@ static int8_t pressureControllerOuterLoopProcess(const stBreathPlan *plan,
                                                  plan->limitSettings->pressureLow,
                                                  lPressureLimit);
     lPatientPressure = controlDataGet(PAT_REAL_PRS);
-    lFlow = controlDataGet(INSP_FLOW_FILTERED) * PRESSURE_CONTROLLER_FLOW_INPUT_SCALE;
+    lFlow = controlDataGet(INSP_REAL_FLOW) * PRESSURE_CONTROLLER_FLOW_INPUT_SCALE;
     lFlow = pressureControllerClamp(lFlow, 0.0F, PRESSURE_CONTROLLER_FLOW_INPUT_MAX);
     lFlowCompensation = (PRESSURE_CONTROLLER_FLOW_FF_LINEAR * lFlow) +
                         (PRESSURE_CONTROLLER_FLOW_FF_QUADRATIC * lFlow * lFlow);

@@ -73,7 +73,7 @@ void cycleEngineProcess(uint32_t nowMs)
         }
         return;
     }
-    lFlow = controlDataGet(MDIFF_REAL_FLOW);
+    lFlow = controlDataGet(PAT_REAL_FLOW);
     if (cycleEngineFlowValid(lFlow) == 0U) {
         gCycleEngine.confirmSamples = 0U;
         return;

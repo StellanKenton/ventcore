@@ -68,8 +68,8 @@ static void testVacFeedforward(void) {
     float lExpected;
 
     gRefs[PHASE_REF_FLOW] = 30.0F;
-    gData[INSP_FLOW_FILTERED] = 30.0F;
-    gData[MDIFF_REAL_FLOW] = 30.0F;
+    gData[INSP_REAL_FLOW] = 30.0F;
+    gData[PAT_REAL_FLOW] = 30.0F;
     gData[PAT_REAL_PRS] = 40.0F;
     for (lIndex = 0U; lIndex < 5U; lIndex++) {
         flowControllerInit();
@@ -119,18 +119,18 @@ int main(void) {
     flowControllerInit();
     assert(flowControllerPauseSettledGet() == 0U);
     gRefs[PHASE_REF_FLOW] = 30.0F;
-    gData[INSP_FLOW_FILTERED] = 30.0F;
-    gData[MDIFF_REAL_FLOW] = 30.0F;
-    gData[MDIFF_REAL_FLOW] = 30.0F;
+    gData[INSP_REAL_FLOW] = 30.0F;
+    gData[PAT_REAL_FLOW] = 30.0F;
+    gData[PAT_REAL_FLOW] = 30.0F;
     gData[PAT_REAL_PRS] = 28.0F;
     lTarget = testStep(&lPlan);
-    gData[INSP_FLOW_FILTERED] = 0.0F;
+    gData[INSP_REAL_FLOW] = 0.0F;
     assert(testStep(&lPlan) == lTarget);
-    gData[MDIFF_REAL_FLOW] = 20.0F;
+    gData[PAT_REAL_FLOW] = 20.0F;
     assert(testStep(&lPlan) > lTarget);
     flowControllerInit();
-    gData[INSP_FLOW_FILTERED] = 30.0F;
-    gData[MDIFF_REAL_FLOW] = 30.0F;
+    gData[INSP_REAL_FLOW] = 30.0F;
+    gData[PAT_REAL_FLOW] = 30.0F;
     lTarget = testStep(&lPlan);
     gPause = 1U;
     gLeak = 0.0F;
@@ -146,8 +146,8 @@ int main(void) {
     assert(abs((int)lTarget - (int)lPrevious) <= 1);
     assert(flowControllerPauseSettledGet() == 0U);
     gData[PAT_REAL_PRS] = 20.0F;
-    gData[MDIFF_REAL_FLOW] = 0.0F;
-    gData[INSP_FLOW_FILTERED] = 0.0F;
+    gData[PAT_REAL_FLOW] = 0.0F;
+    gData[INSP_REAL_FLOW] = 0.0F;
     for (lIndex = 0U; lIndex < 400U; lIndex++) {
         lPrevious = lTarget;
         lTarget = testStep(&lPlan);
@@ -161,22 +161,22 @@ int main(void) {
     for (lIndex = 0U; lIndex < 400U; lIndex++) { lTarget = testStep(&lPlan); }
     lZeroFlowTarget = lTarget;
     /* Real reverse flow must raise output, including sustained integral correction. */
-    gData[MDIFF_REAL_FLOW] = -2.0F;
+    gData[PAT_REAL_FLOW] = -2.0F;
     for (lIndex = 0U; lIndex < 50U; lIndex++) { lTarget = testStep(&lPlan); }
     assert(lTarget > lZeroFlowTarget);
-    gData[MDIFF_REAL_FLOW] = 2.0F;
+    gData[PAT_REAL_FLOW] = 2.0F;
     for (lIndex = 0U; lIndex < 100U; lIndex++) { lTarget = testStep(&lPlan); }
     assert(lTarget < lZeroFlowTarget);
     /* Supply flow is not patient flow and must not become a pause flow target. */
-    gData[MDIFF_REAL_FLOW] = 0.0F;
+    gData[PAT_REAL_FLOW] = 0.0F;
     for (lIndex = 0U; lIndex < 10U; lIndex++) { lTarget = testStep(&lPlan); }
     lPrevious = lTarget;
-    gData[INSP_FLOW_FILTERED] = 10.0F;
+    gData[INSP_REAL_FLOW] = 10.0F;
     for (lIndex = 0U; lIndex < 10U; lIndex++) { lTarget = testStep(&lPlan); }
     assert(abs((int)lTarget - (int)lPrevious) <= 1);
     /* Downstream leakage can still be tracked as proximal through-flow. */
     gLeak = 2.0F;
-    gData[MDIFF_REAL_FLOW] = 2.0F;
+    gData[PAT_REAL_FLOW] = 2.0F;
     for (lIndex = 0U; lIndex < 10U; lIndex++) { lTarget = testStep(&lPlan); }
     lPrevious = lTarget;
     for (lIndex = 0U; lIndex < 40U; lIndex++) { lTarget = testStep(&lPlan); }
@@ -199,7 +199,7 @@ int main(void) {
     lLimits.pressureHigh = 60.0F;
     gPhase = PHASE_INSP;
     gPause = 0U;
-    gData[INSP_FLOW_FILTERED] = 30.0F;
+    gData[INSP_REAL_FLOW] = 30.0F;
     gData[PAT_REAL_PRS] = 15.0F;
     assert(testStep(&lPlan) < 300U);
     /* High-pressure pause must also track leakage without chasing supply flow. */
@@ -208,14 +208,14 @@ int main(void) {
     gData[PAT_REAL_PRS] = 45.0F;
     (void)testStep(&lPlan);
     gPause = 1U;
-    gData[MDIFF_REAL_FLOW] = gLeak;
+    gData[PAT_REAL_FLOW] = gLeak;
     for (lIndex = 0U; lIndex < 100U; lIndex++) { lTarget = testStep(&lPlan); }
     assert(flowControllerPauseSettledGet() != 0U);
     lZeroFlowTarget = lTarget;
-    gData[MDIFF_REAL_FLOW] = 0.0F;
+    gData[PAT_REAL_FLOW] = 0.0F;
     for (lIndex = 0U; lIndex < 50U; lIndex++) { lTarget = testStep(&lPlan); }
     assert(lTarget > lZeroFlowTarget);
-    gData[MDIFF_REAL_FLOW] = gLeak;
+    gData[PAT_REAL_FLOW] = gLeak;
     for (lIndex = 0U; lIndex < 10U; lIndex++) { lTarget = testStep(&lPlan); }
     lPrevious = lTarget;
     for (lIndex = 0U; lIndex < 50U; lIndex++) { lTarget = testStep(&lPlan); }

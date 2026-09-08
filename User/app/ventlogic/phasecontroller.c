@@ -81,8 +81,8 @@ static void phaseControllerCompensationStart(uint32_t nowMs)
 /** Collect zero-flow samples and apply their mean as proximal-flow offset. */
 static int8_t phaseControllerCompensationProcess(uint32_t nowMs)
 {
-    float lInspFlow = controlDataGet(INSP_FLOW_FILTERED);
-    float lPatientFlow = controlDataGet(MDIFF_REAL_FLOW);
+    float lInspFlow = controlDataGet(INSP_REAL_FLOW);
+    float lPatientFlow = controlDataGet(PAT_REAL_FLOW);
     float lPatientPressure = controlDataGet(PAT_REAL_PRS);
 
     if ((lInspFlow > -PHASE_COMPENSATION_INSP_FLOW_MAX) &&

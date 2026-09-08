@@ -128,14 +128,14 @@ void controlDataFilterProcess(void) {
 void controlDataCalibrationProcess(void) {
     float lConverted;
 
+    /* SFM3119 flow is already in L/min; no additional conversion is needed. */
+    controlDataSet(INSP_REAL_FLOW, controlDataGet(INSP_FLOW_FILTERED));
+
     if (calibtransInspPrs(controlDataGet(INSP_PRS_BWF), &lConverted) == CALIBTRANS_STATUS_OK) {
         controlDataSet(INSP_REAL_PRS, lConverted);
     }
     if (calibtransAdultProxFlow(controlDataGet(MDIFF_PRS_BWF), &lConverted) == CALIBTRANS_STATUS_OK) {
-        controlDataSet(MDIFF_REAL_FLOW, lConverted - gMdiffFlowZeroOffsetLpm);
-    }
-    if (calibtransAdultProxFlow(controlDataGet(RAW_MDIFF_AD), &lConverted) == CALIBTRANS_STATUS_OK) {
-        controlDataSet(MDIFF_RAW_FLOW, lConverted);
+        controlDataSet(PAT_REAL_FLOW, lConverted - gMdiffFlowZeroOffsetLpm);
     }
     if (calibtransPeepPrs(controlDataGet(PEEP_PRS_BWF), &lConverted) == CALIBTRANS_STATUS_OK) {
         float lPreviousPatientPressure = controlDataGet(PAT_REAL_PRS);
@@ -158,9 +158,9 @@ void controlDataCalibrationProcess(void) {
 
 /** Apply a new zero offset to the current and subsequent proximal-flow data. */
 void controlDataMdiffFlowZeroOffsetSet(float offsetLpm) {
-    float lCurrentFlow = controlDataGet(MDIFF_REAL_FLOW);
+    float lCurrentFlow = controlDataGet(PAT_REAL_FLOW);
 
-    controlDataSet(MDIFF_REAL_FLOW,
+    controlDataSet(PAT_REAL_FLOW,
                    lCurrentFlow + gMdiffFlowZeroOffsetLpm - offsetLpm);
     gMdiffFlowZeroOffsetLpm = offsetLpm;
 }

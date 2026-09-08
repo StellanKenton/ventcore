@@ -44,11 +44,11 @@ typedef enum {
     PEEP_REAL_PRS,
     EXP_REAL_PRS,
     PAT_REAL_PRS,
-    MDIFF_REAL_FLOW,
-    MDIFF_RAW_FLOW,
+    PAT_REAL_FLOW,
+    INSP_REAL_FLOW, 
+    O2_REAL_FLOW,
 
     PREDICT_PAT_PRS,
-    
     CONTROL_DATA_COUNT
 } ControlData_Index_EnumDef;
 

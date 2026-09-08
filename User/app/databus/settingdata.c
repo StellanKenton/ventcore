@@ -21,7 +21,7 @@ stVentLimitSettings gVentLimitSettings = {
 stVentPatientSettings gVentPatientSettings = {
     .useHostSettings = 0U,
     .Type = VENT_PATIENT_ADULT,
-    .Gas = VENT_GAS_ATP,
+    .Gas = VENT_GAS_BTPS,
     .IdealBodyWeightKg = 70U,
     .IdealBodyHeightCm = 170U,
 };

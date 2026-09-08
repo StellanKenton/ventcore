@@ -1841,7 +1841,7 @@ void ProtocolWaveDataProcess(uint8_t instance, uint32_t taskCounter)
         repRtosEnterCritical();
         newWaveData.m_breathPhase = (phaseControllerStateGet() == PHASE_INSP ? 1U : 2U);  // 呼吸相位
         newWaveData.m_pressure = (int16_t)protocolWaveValue(controlDataGet(PAT_REAL_PRS)*10.0f, INT16_MIN, INT16_MAX);       // 患者压力
-        newWaveData.m_flow = (int16_t)protocolWaveValue(controlDataGet(MDIFF_REAL_FLOW)*10.0f + 2000.0f, INT16_MIN, INT16_MAX);           // 患者流量
+        newWaveData.m_flow = (int16_t)protocolWaveValue(controlDataGet(PAT_REAL_FLOW)*10.0f + 2000.0f, INT16_MIN, INT16_MAX);           // 患者流量
         newWaveData.m_volume = (uint16_t)protocolWaveValue(monitorEngineGet(MONITOR_TIDA_VOL), 0, UINT16_MAX);              // 总潮气量
         newWaveData.m_timestamp = taskCounter;  // 使用任务计数器作为时间戳
 

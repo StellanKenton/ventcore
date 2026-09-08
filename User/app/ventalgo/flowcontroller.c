@@ -133,7 +133,7 @@ static int8_t flowControllerClosedLoopProcess(const stBreathPlan *plan,
     float lIntegralBefore = gFlowPid.integral;
 
     /* VAC reference and VTI are both patient-side quantities. */
-    lMeasuredFlow = controlDataGet(MDIFF_REAL_FLOW);
+    lMeasuredFlow = controlDataGet(PAT_REAL_FLOW);
     lPatientPressure = controlDataGet(PAT_REAL_PRS);
     if (!(lPatientPressure >= -FLT_MAX && lPatientPressure <= FLT_MAX) ||
         !(lMeasuredFlow >= -FLT_MAX && lMeasuredFlow <= FLT_MAX) ||

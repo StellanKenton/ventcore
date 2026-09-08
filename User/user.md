@@ -52,7 +52,7 @@ VAC 容量外环沿用 `MONITOR_TIDA_VOL_INSP` 的近端 VTI 定义（含吸气�
 
 `vt status` 的 `VT_VOLUME_FEEDBACK` 行输出当前计划序号、用户目标、平滑 VTI、补偿量和内部供气目标；体积字段均为 mL 的百分之一。`test_vti_compensation.py` 验证 EMA、实际周期结算时序、重复/旧反馈、限幅、配置重置和固定 80 mL 损失的多周期收敛；软件模型通过不等于已验证实机肺容量或气路稳定性。
 
-VAC 供气流量闭环与 VTI 使用同一个患者侧近端流量 `MDIFF_REAL_FLOW`，不使用入口流量作为反馈。`vt status` 波形追加 `flow_ref_lpm`、`flow_measurement_lpm`、`flow_effort` 和 `flow_blower_ff`（均放大 100 倍），用于直接检查参考跟随、PID 输出和前馈。叠加前馈后的风机指令发生限幅时，控制器撤回同方向积分增量，避免执行器限幅造成的积分饱和。
+VAC 供气流量闭环与 VTI 使用同一个患者侧近端流量 `PAT_REAL_FLOW`，不使用入口流量作为反馈。`vt status` 波形追加 `flow_ref_lpm`、`flow_measurement_lpm`、`flow_effort` 和 `flow_blower_ff`（均放大 100 倍），用于直接检查参考跟随、PID 输出和前馈。叠加前馈后的风机指令发生限幅时，控制器撤回同方向积分增量，避免执行器限幅造成的积分饱和。
 
 RTT 启动回归（500 mL、PEEP 5、Ti 2000 ms、15 次/分、无暂停）保存在 `build/vti_rtt/comparison.json` 及对应目录的原始日志/波形。原版本第 7 次结果才到 497 mL（约 30.4 s）；修正后两次独立启动从第 2 次起均在 475..525 mL 内（约 10.3 s）。首次进入 490..510 mL 的结果时间分别约 10.3 s 和 18.4 s，后续仍有约 488..518 mL 波动，不能解读为每次均满足 ±1%。时间从 run 命令到完整周期结果接收，包含初始呼气及呼气结束后发布的等待。测试结束均收到停止确认，未覆盖其他管路、PEEP 或暂停比例。
 

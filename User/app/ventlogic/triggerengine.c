@@ -94,7 +94,7 @@ void triggerEngineProcess(uint32_t nowMs)
     }
 
     lPatientPressure = controlDataGet(PAT_REAL_PRS);
-    lProximalFlow = controlDataGet(MDIFF_REAL_FLOW);
+    lProximalFlow = controlDataGet(PAT_REAL_FLOW);
     if (!triggerEngineFinite(lPatientPressure) ||
         !triggerEngineFinite(lProximalFlow)) {
         triggerEngineIdleEnter(lPhase);

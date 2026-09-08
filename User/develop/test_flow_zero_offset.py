@@ -56,9 +56,9 @@ int main(void) {
     assert(gOffsetSetCount == 0U);
     assert(gOffset == 1.5F);
 
-    gData[INSP_FLOW_FILTERED] = 0.0F;
+    gData[INSP_REAL_FLOW] = 0.0F;
     /* The attached board currently exhibits about 4.4 L/min of zero drift. */
-    gData[MDIFF_REAL_FLOW] = 4.4F;
+    gData[PAT_REAL_FLOW] = 4.4F;
     gData[PAT_REAL_PRS] = 0.0F;
     for (lNowMs = 6U; lNowMs <= 66U; lNowMs += 6U) {
         phaseControllerProcess(lNowMs);
@@ -70,7 +70,7 @@ int main(void) {
     gRunSequence++;
     phaseControllerProcess(100U);
     assert(phaseControllerStateGet() == PHASE_COMPEN);
-    gData[INSP_FLOW_FILTERED] = 1.0F;
+    gData[INSP_REAL_FLOW] = 1.0F;
     for (lNowMs = 106U; lNowMs <= 2110U; lNowMs += 6U) {
         phaseControllerProcess(lNowMs);
     }

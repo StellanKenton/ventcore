@@ -199,7 +199,7 @@ static void step(void) {
     breathSchedulerProcess();
     phaseControllerProcess(gNow);
     lPhase = phaseControllerStateGet();
-    gData[MDIFF_REAL_FLOW] = (lPhase == PHASE_INSP) ? gInspiratoryFlow :
+    gData[PAT_REAL_FLOW] = (lPhase == PHASE_INSP) ? gInspiratoryFlow :
                            (lPhase == PHASE_EXP) ? -20.0F : gQuietFlow;
     gData[PAT_REAL_PRS] = (lPhase == PHASE_INSP) ? 25.0F :
                          (lPhase == PHASE_EXP) ? 5.0F : 0.0F;
@@ -234,8 +234,8 @@ static void testIntegration(void) {
     GetVentVacSettings()->inspPausePct = 0.0F;
     GetVentVacSettings()->freq = 60.0F;
     gQuietFlow = 1.5F; /* Real startup zero correction after initial plan load. */
-    gData[INSP_FLOW_FILTERED] = 0.0F;
-    gData[MDIFF_REAL_FLOW] = 0.0F;
+    gData[INSP_REAL_FLOW] = 0.0F;
+    gData[PAT_REAL_FLOW] = 0.0F;
     gData[PAT_REAL_PRS] = 0.0F;
     lPlan = advance(0U);
     near(lPlan.filteredVtiMl, 0.0F);
@@ -264,7 +264,7 @@ static void testIntegration(void) {
     assert((lResult.validMask & BREATH_RESULT_VOLUME_LIMITED) != 0U);
     near(lPlan.filteredVtiMl, lFiltered);
     near(lPlan.volumeCorrectionMl, lCorrection);
-    gData[MDIFF_REAL_FLOW] = NAN;
+    gData[PAT_REAL_FLOW] = NAN;
     monitorEngineProcess(gNow);
     lPlan = advance(lPlan.sequence);
     assert(monitorEngineBreathResultGet(&lResult) == MONITOR_ENGINE_SUCCESS);
@@ -282,8 +282,8 @@ static void testShortVolumeReference(void) {
     reset();
     GetVentVacSettings()->inspTimeMs = 1000U;
     GetVentVacSettings()->inspPausePct = 99.0F;
-    gData[MDIFF_REAL_FLOW] = 0.0F;
-    gData[INSP_FLOW_FILTERED] = 0.0F;
+    gData[PAT_REAL_FLOW] = 0.0F;
+    gData[INSP_REAL_FLOW] = 0.0F;
     gData[PAT_REAL_PRS] = 0.0F;
     (void)advance(0U);
     near(phaseControlGet(PHASE_REF_VOLUME), 0.0F);

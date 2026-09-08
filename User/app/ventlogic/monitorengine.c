@@ -153,7 +153,7 @@ static void monitorEnginePlateauPressureProcess(uint32_t nowMs)
         return;
     }
 
-    lFlow = controlDataGet(MDIFF_REAL_FLOW) -
+    lFlow = controlDataGet(PAT_REAL_FLOW) -
             monitorEngineGet(MONITOR_LEAK_FLOW);
     lPressure = controlDataGet(PAT_REAL_PRS);
     if ((monitorEngineFinite(lFlow) == 0U) ||
@@ -174,7 +174,7 @@ static void monitorEnginePlateauPressureProcess(uint32_t nowMs)
 /** Retain the latest valid expiration pressures and the expiration minimum. */
 static void monitorEngineDynamicPeepAccumulate(void) {
     float lPressure = controlDataGet(PAT_REAL_PRS);
-    float lFlow = controlDataGet(MDIFF_REAL_FLOW);
+    float lFlow = controlDataGet(PAT_REAL_FLOW);
     float lSlope;
     float lFlowSlope;
 
@@ -436,7 +436,7 @@ static void monitorEngineTidalVolumeProcess(uint32_t nowMs)
 {
     eMonitorEngineState lNextState =
         monitorEngineStateFromPhase(phaseControllerStateGet());
-    float lFlow = controlDataGet(MDIFF_REAL_FLOW);
+    float lFlow = controlDataGet(PAT_REAL_FLOW);
     float lPressure;
 
     if ((gMonitorEngine.breathActive == 0U) || (gMonitorEngine.breathCompleted != 0U)) {
@@ -533,7 +533,7 @@ static void monitorEngineBreathProcess(uint32_t nowMs)
     }
     gMonitorEngine.inspirationObserved = (uint8_t)(lPhase == PHASE_INSP);
     if ((gMonitorEngine.breathActive != 0U) && (gMonitorEngine.breathCompleted == 0U)) {
-        if ((monitorEngineFinite(controlDataGet(MDIFF_REAL_FLOW)) == 0U) ||
+        if ((monitorEngineFinite(controlDataGet(PAT_REAL_FLOW)) == 0U) ||
             (monitorEngineFinite(controlDataGet(PAT_REAL_PRS)) == 0U)) {
             gMonitorEngine.volumeInvalid = 1U;
         }
@@ -546,7 +546,7 @@ static void monitorEngineBreathProcess(uint32_t nowMs)
             gMonitorEngine.inspiratoryTimeMs = nowMs - gMonitorEngine.breathStartedMs;
             gMonitorEngine.cycleReason = phaseControllerCycleReasonGet();
         }
-        monitorEngineLeakAccumulate(controlDataGet(MDIFF_REAL_FLOW));
+        monitorEngineLeakAccumulate(controlDataGet(PAT_REAL_FLOW));
         monitorEngineMeanPressureAccumulate();
         if (lPhase == PHASE_EXP) {
             monitorEngineDynamicPeepAccumulate();
