@@ -19,6 +19,7 @@ HARNESS = r'''
 #include "phasecontroller.h"
 #include "monitorengine.h"
 #include "controldata.h"
+#include "physalarmmanager.h"
 #include "rtos.h"
 #include "log.h"
 static uint8_t gRx[2048], gTx[256];
@@ -28,6 +29,42 @@ static eVentMode gMode = VENT_MD_IDLE;
 static unsigned gUpdates;
 static bool gUartBusy;
 static uint32_t gHeartbeatTx;
+static bool gAlarmStates[PHYS_ALARM_COUNT];
+bool physAlarmManagerStateGet(ePhysAlarmType type) { return gAlarmStates[type]; }
+
+/** Verify alarm wire bits, unchanged-state suppression and recovery reporting. */
+static void testPhysAlarms(void) {
+    const ePhysAlarmType lTypes[] = {PHYS_ALARM_AIRWAY_PRESSURE_HIGH,
+        PHYS_ALARM_AIRWAY_PRESSURE_LOW, PHYS_ALARM_EXHALED_VOLUME_HIGH,
+        PHYS_ALARM_EXHALED_VOLUME_LOW, PHYS_ALARM_PEEP_HIGH, PHYS_ALARM_CPAP_TOO_HIGH};
+    const uint32_t lMasks[] = {1U, 2U, 16U, 32U, 0U, 0U};
+    uint8_t lExpected[32];
+    ProtocolProcessInit(0);
+    for (unsigned lIndex = 0U; lIndex < sizeof(lTypes) / sizeof(lTypes[0]); lIndex++) {
+        gAlarmStates[lTypes[lIndex]] = true;
+        for (unsigned lClear = 0U; lClear < 2U; lClear++) {
+            uint32_t lMask = lClear ? 0U : lMasks[lIndex];
+            if (lClear) { gAlarmStates[lTypes[lIndex]] = false; }
+            uint16_t lLength = ProtocolCreateDirectData(lExpected, PROTOCOL_ADDR_VCM_TO_MCM,
+                false, PROTOCOL_TX_MID_PHYS_ALARM, (const uint8_t *)&lMask, sizeof(lMask));
+            gTxSize = 0U;
+            ProtocolPhysAlarmDataProcess(0, 1990U);
+            ProtocolSchedulerProcess(0);
+            assert(gTxSize == 0U);
+            ProtocolPhysAlarmDataProcess(0, 2000U);
+            ProtocolSchedulerProcess(0);
+            if (lMasks[lIndex]) {
+                assert(gTxSize == lLength && memcmp(gTx, lExpected, lLength) == 0);
+                assert(ProtocolCheckCRC(gTx));
+            } else { assert(gTxSize == 0U); }
+            gTxSize = 0U;
+            ProtocolPhysAlarmDataProcess(0, 4000U);
+            ProtocolSchedulerProcess(0);
+            assert(gTxSize == 0U);
+        }
+    }
+}
+
 void repRtosEnterCritical(void) {}
 void repRtosExitCritical(void) {}
 void logWrite(eLogLevel level, const char *tag, const char *format, ...) {}
@@ -175,7 +212,7 @@ int main(void) {
     assert(ProtocolProcessInit(0) == PROTOCOL_OK);
     assert(!ProtocolIsMCMConnected());
     float fixedVt = GetVentVacSettings()->tidalVolume;
-    float fixedHigh = GetVentLimitSettings()->pressureHigh;
+    uint16_t fixedTveLow = GetVentLimitSettings()->tidalVolumeLow;
     uint16_t length = frame(bytes, 0xAF, 0x0E, 650, 2, 0);
     feed(bytes, 4); assert(ProtocolProcessRxData(0) == PROTOCOL_INVALID_PACKET);
     assert(!ProtocolGetRxVentParamsCache()->m_valid[14]);
@@ -187,11 +224,47 @@ int main(void) {
     assert(!gRunning);
     send(0xAC, 1, 550, 2, 1);
     assert(ProtocolGetRxAlarmLimitsCache()->m_pAirwayHigh == 550);
-    assert(GetVentLimitSettings()->pressureHigh == fixedHigh);
+    assert(GetVentLimitSettings()->pressureHigh == 55.0f);
+    assert(GetVentLimitSettings()->tidalVolumeLow == fixedTveLow);
+    /* Alarm limits apply with local ventilation settings and retain absent fields. */
+    send(0xAC, 0, 125, 2, 1);
+    send(0xAC, 2, 123, 2, 1);
+    send(0xAC, 3, 25, 2, 1);
+    send(0xAC, 4, 800, 2, 0);
+    send(0xAC, 5, 250, 2, 0);
+    send(0xAC, 6, 90, 1, 0);
+    send(0xAC, 7, 20, 1, 0);
+    send(0xAC, 8, 40, 1, 0);
+    send(0xAC, 9, 8, 1, 0);
+    send(0xAC, 10, 15, 1, 0);
+    assert(GetVentLimitSettings()->pressureLow == 12.5f);
+    assert(fabsf(GetVentLimitSettings()->minuteVolumeHigh - 12.3f) < 0.001f);
+    assert(GetVentLimitSettings()->minuteVolumeLow == 2.5f);
+    assert(GetVentLimitSettings()->tidalVolumeHigh == 800U);
+    assert(GetVentLimitSettings()->tidalVolumeLow == 250U);
+    assert(GetVentLimitSettings()->o2PercentHigh == 90U);
+    assert(GetVentLimitSettings()->o2PercentLow == 20U);
+    assert(GetVentLimitSettings()->frequencyHigh == 40U);
+    assert(GetVentLimitSettings()->frequencyLow == 8U);
+    assert(GetVentLimitSettings()->apneaTimeHigh == 15U);
+    assert(GetVentCpapPsvSettings()->apneaAlarmTimeMs == 15000U);
+    assert(GetVentPsvStSettings()->apneaTimeMs == 15000U);
+    assert(GetVentLimitSettings()->pressureHigh == 55.0f);
+    /* Corrupt alarm frames must leave cached and applied limits intact. */
+    length = frame(bytes, 0xAC, 1, 600, 2, 1); bytes[length - 1] ^= 1U;
+    feed(bytes, length); assert(ProtocolProcessRxData(0) == PROTOCOL_CRC_ERROR);
+    protocolApplyReceivedSettings();
+    assert(GetVentLimitSettings()->pressureHigh == 55.0f);
+    assert(ProtocolGetRxAlarmLimitsCache()->m_pAirwayHigh == 550U);
+    ProtocolProcessInit(0); /* Clear the rejected frame from transport. */
     GetVentPatientSettings()->useHostSettings = 1;
     protocolApplyReceivedSettings();
     assert(GetVentVacSettings()->tidalVolume == 650);
     assert(GetVentLimitSettings()->pressureHigh == 55.0f);
+    assert(GetVentLimitSettings()->tidalVolumeHigh == 800U);
+    assert(GetVentPsvStSettings()->apneaTimeMs == 15000U);
+    send(0xAC, 1, 600, 2, 1);
+    assert(GetVentLimitSettings()->pressureHigh == 60.0f);
     send(0xAF, 0x17, 125, 2, 2); assert(GetVentVacSettings()->inspTimeMs == 1250);
     send(0xAF, 0x12, (uint16_t)-20, 2, 1); assert(GetVentVacSettings()->pressureTriggerCmh2o == -2.0f);
     send(0xAE, 0, 1, 1, 0); assert(gRunning && gMode == VENT_MD_VAC);
@@ -206,7 +279,7 @@ int main(void) {
     gTxSize = 0; ProtocolWaveDataProcess(0, 40); ProtocolSchedulerProcess(0); assert(gTxSize == 0);
     send(0xAE, 0, 2, 1, 0); assert(!gRunning && ProtocolGetRxVentSwitchCache()->m_command == 0);
     GetVentPatientSettings()->useHostSettings = 0; protocolApplyReceivedSettings();
-    assert(GetVentVacSettings()->tidalVolume == fixedVt && GetVentLimitSettings()->pressureHigh == fixedHigh);
+    assert(GetVentVacSettings()->tidalVolume == fixedVt && GetVentLimitSettings()->pressureHigh == 60.0f);
     send(0xAE, 0, 1, 1, 0); assert(gRunning && gMode == VENT_MD_VAC);
     unsigned updates = gUpdates;
     send(0xAF, 0x0E, 700, 2, 0); assert(gUpdates == updates && GetVentVacSettings()->tidalVolume == fixedVt);
@@ -230,6 +303,7 @@ int main(void) {
     crc = Crc16Compute(bytes + 2, length - 4); bytes[length-2] = crc; bytes[length-1] = crc >> 8;
     feed(bytes, length); assert(ProtocolProcessRxData(0) == PROTOCOL_OK);
     ProtocolSchedulerProcess(0); assert(gTxSize == length && memcmp(bytes, gTx, length) == 0);
+    testPhysAlarms();
     testMeanPressure();
     testHeartbeat();
     return 0;
@@ -253,7 +327,7 @@ def main():
         executable = Path(directory) / "protocol_test.exe"
         includes = ["user/app/protocol", "user/bsp/uart", "user/app/databus", "user/app/ventlogic",
                     "user/app/ventalgo", "user/module/log", "user/module/rtos", "user/tools/ringbuffer",
-                    "user/tools/controller"]
+                    "user/tools/controller", "user/app/physalarm"]
         sources = ["user/app/protocol/ProtoclOfMcm.c", "user/app/protocol/ProtoclOfTrasn.c", "user/app/protocol/ProtoclOfPackets.c",
                    "user/app/protocol/ProtoclOfProcess.c", "user/app/databus/settingdata.c",
                    "user/tools/ringbuffer/ringbuffer.c"]
@@ -264,7 +338,7 @@ def main():
         environment["PATH"] = str(Path(compiler).parent) + os.pathsep + environment["PATH"]
         subprocess.run(command, check=True, env=environment)
         subprocess.run([str(executable)], check=True, env=environment)
-    print("PASS: fragmented RX, CRC rejection, parameter/alarm caches, scaling, source switching, start/stop, waveform, ACK, 1110 heartbeat replies, bursts, TX backpressure and reconnect")
+    print("PASS: MCM alarm limits in local/host settings, partial updates and CRC rejection, physiological alarm wire bits/recovery/suppression, fragmented RX, CRC rejection, parameter/alarm caches, scaling, source switching, start/stop, waveform, ACK, 1110 heartbeat replies, bursts, TX backpressure and reconnect")
 
 if __name__ == "__main__":
     main()

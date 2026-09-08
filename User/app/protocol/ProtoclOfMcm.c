@@ -15,6 +15,7 @@
 #include "controldata.h"
 #include "monitorengine.h"
 #include "phasecontroller.h"
+#include "physalarmmanager.h"
 #include "rtos.h"
 #include "log.h"
 #include <math.h>
@@ -138,7 +139,7 @@ void ProtocolProcessRxPacket(const ProtocolPacket_t* packet)
         case PROTOCOL_RX_MID_ALARM_LIMITS:
             /* 处理报警限 - 更新到报警限缓存 */
             ProtocolUpdateRxAlarmLimitsCache(packet);
-            protocolReceivedSettingsMark();
+            protocolReceivedAlarmLimitsMark();
             break;
             
         case PROTOCOL_RX_MID_SELF_TEST:
@@ -2214,60 +2215,22 @@ void ProtocolDetectDataPreProcess(uint8_t instance, uint32_t taskCounter)
 #endif
 }
 
-float ProtocolPhysAlarmDataGet(uint8_t event)
-{
-    switch(event) {
+#endif
+
+/* Map implemented alarm states to the existing wire event IDs. */
+float ProtocolPhysAlarmDataGet(uint8_t event) {
+    switch (event) {
         case AIRWAY_PRESSURE_HIGH:
-            return iVentMonitParamsGet(VENT_MNT_ALARM_PEAK_HIGH);
+            return physAlarmManagerStateGet(PHYS_ALARM_AIRWAY_PRESSURE_HIGH);
         case AIRWAY_PRESSURE_LOW:
-            return iVentMonitParamsGet(VENT_MNT_ALARM_PEAK_LOW);
-        case FIO2_HIGH:
-			if (VENT_MD_HFO == (eVentMode)VentCommParamRead(VENT_COMM_VENT_MODE))
-			{
-				return HiflowDataGet(HFO_ALARM_FIO2_HIGH) ;
-			}
-			else
-			{
-				return iVentMonitParamsGet(VENT_MNT_ALARM_FIO2_HIGH);
-			}
-        case FIO2_LOW:
-			if (VENT_MD_HFO == (eVentMode)VentCommParamRead(VENT_COMM_VENT_MODE))
-			{
-				return HiflowDataGet(HFO_ALARM_FIO2_LOW) ;
-			}
-			else
-			{
-				return iVentMonitParamsGet(VENT_MNT_ALARM_FIO2_LOW);
-			}
+            return physAlarmManagerStateGet(PHYS_ALARM_AIRWAY_PRESSURE_LOW);
         case EXPIRATORY_TIDAL_VOLUME_HIGH:
-            return iVentMonitParamsGet(VENT_MNT_ALARM_VTE_HIGH);
+            return physAlarmManagerStateGet(PHYS_ALARM_EXHALED_VOLUME_HIGH);
         case EXPIRATORY_TIDAL_VOLUME_LOW:
-            return iVentMonitParamsGet(VENT_MNT_ALARM_VTE_LOW);
-        case EXPIRATORY_MINUTE_VENTILATION_HIGH:
-            return iVentMonitParamsGet(VENT_MNT_ALARM_MV_HIGH);
-        case EXPIRATORY_MINUTE_VENTILATION_LOW:
-            return iVentMonitParamsGet(VENT_MNT_ALARM_MV_LOW);
-        case RESPIRATORY_RATE_HIGH:
-            return iVentMonitParamsGet(VENT_MNT_ALARM_FREQ_HIGH);
-        case RESPIRATORY_RATE_LOW:
-            return iVentMonitParamsGet(VENT_MNT_ALARM_FREQ_LOW);
-        case APNEA_ALARM:
-            return iVentMonitParamsGet(VENT_MNT_ALARM_APNEA_STATE);
-        case APNEA_VENTILATION_ALARM:
-            return iVentMonitParamsGet(VENT_MNT_ALARM_APNEA_VENT);
-        case APNEA_VENTILATION_END:
-            //return iVentMonitParamsGet(VENT_MNT_ALARM_APNEA_VENT_END);
-            return 0.0f;
-        case PHYSALARM_RESERVE1:
-            return 0.0f;
-        case PHYSALARM_RESERVE2:
-            return 0.0f;
-        case INVERSE_VENTILATION_ALARM:
-            return iVentMonitParamsGet(VENT_MNT_ALARM_IR_VENT);
+            return physAlarmManagerStateGet(PHYS_ALARM_EXHALED_VOLUME_LOW);
         default:
-            break;
+            return 0.0f;
     }
-    return 0.0f;
 }
 
 void ProtocolPhysAlarmDataProcess(uint8_t instance, uint32_t taskCounter)
@@ -2278,9 +2241,9 @@ void ProtocolPhysAlarmDataProcess(uint8_t instance, uint32_t taskCounter)
     if(taskCounter%2000 == 0) {
         alarmStatus = 0;
         /* 定时发送生理报警参数 */
-        for(uint8_t i = 0; i < VENTILATOR_EVENT_MAX; i++) {
-            if (ProtocolPhysAlarmDataGet(i) && i < 32) {
-                alarmStatus |= (1 << i);
+        for(uint8_t i = 0; i < VENTILATOR_EVENT_MAX && i < 32U; i++) {
+            if (ProtocolPhysAlarmDataGet(i)) {
+                alarmStatus |= (1UL << i);
             }
         }
         
@@ -2296,6 +2259,7 @@ void ProtocolPhysAlarmDataProcess(uint8_t instance, uint32_t taskCounter)
     }
 }
 
+#if 0 /* Legacy machine features retained for later migration. */
 void ProtocolTechAlarmDataProcess(uint8_t instance, uint32_t taskCounter)
 {
 #if PROTOCOL_TECHALARM_SEND_ENABLE == 1
@@ -3100,7 +3064,7 @@ void ProtocolDataPreProcess(uint8_t instance)
     ProtocolDetectDataPreProcess(instance, taskCounter);
 
     /*定时处理生理报警*/
-    // ProtocolPhysAlarmDataProcess(instance, taskCounter); /* Pending machine port. */
+    ProtocolPhysAlarmDataProcess(instance, taskCounter);
 
     /*定时处理技术报警*/
     // ProtocolTechAlarmDataProcess(instance, taskCounter); /* Pending machine port. */

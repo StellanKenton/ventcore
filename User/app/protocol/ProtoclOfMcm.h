@@ -71,6 +71,8 @@ extern "C" {
 void protocolApplyReceivedSettings(void);
 /* Receive path only; notify the settings transfer module of cached updates. */
 void protocolReceivedSettingsMark(void);
+/** Mark MCM alarm limits for transfer regardless of the settings source. */
+void protocolReceivedAlarmLimitsMark(void);
 void protocolReceivedCommandMark(void);
 
 typedef struct stProtocolHeartbeatStats {

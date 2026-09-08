@@ -7,7 +7,7 @@ target board.
 
 ## Files
 
-- `test_protocol.py`: host regression using the production MCM parser, caches and settings binding with a simulated UART. Run `py -3 user/develop/test_protocol.py`; covers fragmented frames, malformed packets, CRC, ACK, source switching, ventilation commands and waveform encoding, plus 1110 heartbeat responses with continuous traffic, bursts, UART busy/queue backpressure, timeout and reconnect. It does not flash or operate the board.
+- `test_protocol.py`: host regression using the production MCM parser, caches and settings binding with a simulated UART. Run `py -3 user/develop/test_protocol.py`; covers MCM alarm limits with local/host settings, scaling, partial updates and CRC rejection, physiological alarm wire bits, recovery and unchanged-state suppression, fragmented frames, malformed packets, CRC, ACK, source switching, ventilation commands and waveform encoding, plus 1110 heartbeat responses with continuous traffic, bursts, UART busy/queue backpressure, timeout and reconnect. It does not flash or operate the board.
 
 - `test_vti_rtt.py`: startup convergence recording through Device Tool RTT on a test
   lung. `py -3 user/develop/test_vti_rtt.py --output build/vti_rtt/run --seconds 44
@@ -58,7 +58,7 @@ target board.
   Also covers dynamic PEEP pressure/flow validity, five-point windows, PEEP alarm
   registration, inspiration-only triggering, strict thresholds and 200 ms recovery.
 - `device_tool_config.json`: per-computer tool paths and target settings.
-- `test_flow_pause.py`: native host regression for VAC pause entry and zero-flow
+- `test_flow_pause.py`: also verifies PAC pressure targets ignore alarm-high changes while PSV/ST retain pressure caps. Native host regression for VAC pause entry and zero-flow
   control, plus VAC feedforward formula, compliance boundaries and pressure limits;
   uses the production controller and PID with sensor stubs. Run
   `py -3 user/develop/test_flow_pause.py`; native GCC/Clang is required (`CC`

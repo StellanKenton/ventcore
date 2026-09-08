@@ -62,7 +62,7 @@ VAC 吸气暂停继续使用近端流量反馈，不锁定患者压力。入口�
 
 `PHYS_ALARM_CPAP_TOO_HIGH` 已启用：以当前呼吸计划 `peepCmh2o` 为基准，`INSP_REAL_PRS` 与 `PAT_REAL_PRS` 同时严格大于 PEEP + 15 cmH₂O 持续 15 s 触发；报警后两路同时严格小于 PEEP + 14.5 cmH₂O 持续 3 s 恢复。等于阈值或任一路不满足条件会中断对应计时，吸呼气切换不清计时。停机、零点补偿阶段清除状态；计划不可用时中断计时并保留报警状态。由 AlarmTask 在临界区获取计划及两路压力快照。`develop/test_monitor_leak.py` 包含阈值、计时边界、中断、阶段切换及 tick 回绕回归。
 
-`stVentPatientSettings.useHostSettings` 默认 0，使用本机固定设置；1 使用独立的 MCM 设置副本。两种情况下均接收并缓存参数和报警限，通气命令 1 启动、0 停止。已绑定 PAC/VAC/CPAP-PSV/PSV-ST 的现有字段，其他模式仅缓存，由 Scheduler 拒绝启动。时间按 scale 解码为秒后转为毫秒。波形沿用压力 ×10、流量 ×10+2000、容量 mL 和毫秒时间戳；相位 1 吸气、2 呼气。CommTask 优先级 5、周期 10 ms、栈 1024 words，低于通气和传感器任务。
+`stVentPatientSettings.useHostSettings` 默认 0，使用本机固定设置；1 使用独立的 MCM 设置副本。两种情况下均接收并缓存参数；MCM 报警限（0xAC）不受此开关限制，在 VentTask 中按 scale 解码并写入当前报警设置，未下发的字段保留原值，切换参数源时重新应用已缓存的报警限。压力和呼出潮气量检测器直接读取这些设置；窒息时间同步至 PSV/PSV-ST 设置。通气命令 1 启动、0 停止。已绑定 PAC/VAC/CPAP-PSV/PSV-ST 的现有字段，其他模式仅缓存，由 Scheduler 拒绝启动。时间按 scale 解码为秒后转为毫秒。波形沿用压力 ×10、流量 ×10+2000、容量 mL 和毫秒时间戳；相位 1 吸气、2 呼气。CommTask 优先级 5、周期 10 ms、栈 1024 words，低于通气和传感器任务。
 
 本机参数模式保留 Scheduler 当前选择的通气模式；上电尚未选模式时，MCM 启动命令默认使用 PAC。上位机参数模式需先收到模式字段才能启动。触发选择按 `m_assistTrig=0` 关闭、`m_FlowTrigger=1` 流量触发／0 压力触发绑定。115200 波特率及上述物理单位、相位值需在上位机实机联调时核对。`develop/test_protocol.py` 使用真实协议源码和模拟串口验证分包、CRC、缓存、参数源切换、启停、ACK 和波形编码。
 
@@ -81,3 +81,5 @@ CommTask 独占 PA9/PA10 串口和协议队列，SysTask 恢复 20 ms 空任务�
 同一修复固件上，200/400/600 mL 各测 30 次完整 VAC 呼吸，全部符合 ±(10 mL + 目标×5%)，全程范围分别为 190.10～212.05、375.82～410.14、570.81～612.65 mL；末尾五次均值为 200.940、403.012、600.824 mL。流量分别固定为 24/48/72 L/min，计划供气时间范围为 500～546/500～525/500～526 ms，沿用 ±20 ms 逐呼吸时间步长。波形中的监测 Ti 含切换后的正向尾流，不能当作 Scheduler 计划时间。原始记录在 `build/vac_short_200_v2/`、`build/vac_short_400_v2/`、`build/vac_short_600_v2_run/`，汇总为 `build/vac_short_summary.json`。600 mL 期间 CRC、帧尾、UART、DMA、RX 溢出计数均为零；TX busy 计数非零，不能表述为从未发生发送竞争。所有容量值来自设备近端 VTI，结论仅覆盖当前测试肺工况。
 
 同固件补测 500 mL、Ti 2000 ms、15/min：10 次完整呼吸全部通过，范围 495.83～524.54 mL，末尾五次均值 500.994 mL，记录在 `build/vac_long_500_v2/`。
+
+PAC 压力控制不使用报警高限 `pressureHigh` 限制患者压力参考值或吸气压力目标；仍保留控制器固有的 100 cmH₂O 目标上限。高压报警检测继续使用 MCM 下发的报警高限。CPAP-PSV/PSV-ST 和 VAC 保持原有限压逻辑。`develop/test_flow_pause.py` 覆盖 PAC 报警高限变化不影响目标及 PSV/ST 限压回归。

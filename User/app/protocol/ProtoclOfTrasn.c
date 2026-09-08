@@ -15,11 +15,17 @@
 #include "rtos.h"
 
 static bool gProtocolSettingsDirty;
+static bool gProtocolAlarmLimitsDirty;
 static bool gProtocolCommandPending;
 
-/** Mark received ventilation parameters or alarm limits for transfer. */
+/** Mark received ventilation parameters for transfer. */
 void protocolReceivedSettingsMark(void) {
     gProtocolSettingsDirty = true;
+}
+
+/** Apply received alarm limits independently of the ventilation settings source. */
+void protocolReceivedAlarmLimitsMark(void) {
+    gProtocolAlarmLimitsDirty = true;
 }
 
 /** Mark a received ventilation command for execution in VentTask. */
@@ -35,7 +41,8 @@ void protocolApplyReceivedSettings(void) {
     int8_t lStatus = BREATH_CONTROL_SUCCESS;
 
     repRtosEnterCritical();
-    bool lChanged = (lSource && gProtocolSettingsDirty) || lSource != gLastSource;
+    bool lChanged = (lSource && gProtocolSettingsDirty) ||
+                    gProtocolAlarmLimitsDirty || lSource != gLastSource;
     if (lSource != gLastSource) {
         if (lSource) {
             gLocalPatient = *GetVentPatientSettings();
@@ -46,12 +53,10 @@ void protocolApplyReceivedSettings(void) {
     }
     if (lSource && lChanged) {
         const RxVentParamsCache_t *lParams = ProtocolGetRxVentParamsCache();
-        const RxAlarmLimitsCache_t *lLimits = ProtocolGetRxAlarmLimitsCache();
         stVentPacSettings *lPac = GetVentPacSettings();
         stVentVacSettings *lVac = GetVentVacSettings();
         stVentCpapPsvSettings *lPsv = GetVentCpapPsvSettings();
         stVentPsvStSettings *lSt = GetVentPsvStSettings();
-        stVentLimitSettings *lAlarm = GetVentLimitSettings();
 
         if (lParams->m_valid[0x06]) {
             lPac->oxygen = (float)lParams->m_fio2 / ProtocolGetScale(lParams->m_fio2_scale);
@@ -142,6 +147,15 @@ void protocolApplyReceivedSettings(void) {
         if (lParams->m_valid[5]) {
             GetVentPatientSettings()->IdealBodyWeightKg = lParams->m_idealWeight / ProtocolGetScale(lParams->m_idealWeight_scale);
         }
+    }
+
+    /* Alarm limits are supplied by MCM even with local ventilation settings. */
+    if (lChanged) {
+        const RxAlarmLimitsCache_t *lLimits = ProtocolGetRxAlarmLimitsCache();
+        stVentLimitSettings *lAlarm = GetVentLimitSettings();
+        stVentCpapPsvSettings *lPsv = GetVentCpapPsvSettings();
+        stVentPsvStSettings *lSt = GetVentPsvStSettings();
+
         if (lLimits->m_valid[0]) {
             lAlarm->pressureLow = (float)lLimits->m_pAirwayLow / ProtocolGetScale(lLimits->m_pAirwayLow_scale);
         }
@@ -187,6 +201,7 @@ void protocolApplyReceivedSettings(void) {
         lMode = VENT_MD_PAC;
     }
     gProtocolSettingsDirty = false;
+    gProtocolAlarmLimitsDirty = false;
     gProtocolCommandPending = false;
     gLastSource = lSource;
     repRtosExitCritical();

@@ -167,7 +167,10 @@ static int8_t pressureControllerOuterLoopProcess(const stBreathPlan *plan,
         return PID_ERROR_PARAM;
     }
 
-    lPressureLimit = plan->limitSettings->pressureHigh;
+    /* PAC alarm thresholds do not cap the pressure-control target. */
+    lPressureLimit = plan->mode == VENT_MD_PAC ?
+                     PRESSURE_CONTROLLER_INSP_TARGET_MAX :
+                     plan->limitSettings->pressureHigh;
     if (((plan->mode == VENT_MD_CPAP_PSV) || (plan->mode == VENT_MD_PSV_ST)) &&
         (plan->pressureLimitCmh2o < lPressureLimit)) {
         lPressureLimit = plan->pressureLimitCmh2o;
