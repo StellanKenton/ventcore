@@ -13,6 +13,7 @@
 #include "controldata.h"
 #include "iir1.h"
 #include "sfm3119.h"
+#include "settingdata.h"
 
 static ButterworthFilterObj gButterworthFilters[VENT_DATA_CHANNEL_COUNT];
 /* Second-order Butterworth low-pass coefficients for Fs = 166.667 Hz and Fc = 14 Hz. */
@@ -127,15 +128,21 @@ void controlDataFilterProcess(void) {
 
 void controlDataCalibrationProcess(void) {
     float lConverted;
+    float lBtpsCoefficient = 1.0F;
 
-    /* SFM3119 flow is already in L/min; no additional conversion is needed. */
-    controlDataSet(INSP_REAL_FLOW, controlDataGet(INSP_FLOW_FILTERED));
+    /* Fixed ambient assumptions: 760 mmHg, 25 C; saturated body gas at 37 C. */
+    if (GetVentPatientSettings()->Gas == VENT_GAS_BTPS) {
+        lBtpsCoefficient = (760.0F / (760.0F - 47.0F)) * (310.15F / 298.15F);
+    }
+    controlDataSet(BTPS_COEFFICIENT, lBtpsCoefficient);
+    controlDataSet(INSP_REAL_FLOW, controlDataGet(INSP_FLOW_FILTERED) * lBtpsCoefficient);
+    controlDataSet(O2_REAL_FLOW, controlDataGet(O2_FLOW_FILTERED) * lBtpsCoefficient);
 
     if (calibtransInspPrs(controlDataGet(INSP_PRS_BWF), &lConverted) == CALIBTRANS_STATUS_OK) {
         controlDataSet(INSP_REAL_PRS, lConverted);
     }
     if (calibtransAdultProxFlow(controlDataGet(MDIFF_PRS_BWF), &lConverted) == CALIBTRANS_STATUS_OK) {
-        controlDataSet(PAT_REAL_FLOW, lConverted - gMdiffFlowZeroOffsetLpm);
+        controlDataSet(PAT_REAL_FLOW, (lConverted - gMdiffFlowZeroOffsetLpm) * lBtpsCoefficient);
     }
     if (calibtransPeepPrs(controlDataGet(PEEP_PRS_BWF), &lConverted) == CALIBTRANS_STATUS_OK) {
         float lPreviousPatientPressure = controlDataGet(PAT_REAL_PRS);
@@ -159,13 +166,15 @@ void controlDataCalibrationProcess(void) {
 /** Apply a new zero offset to the current and subsequent proximal-flow data. */
 void controlDataMdiffFlowZeroOffsetSet(float offsetLpm) {
     float lCurrentFlow = controlDataGet(PAT_REAL_FLOW);
+    float lBtpsCoefficient = controlDataGet(BTPS_COEFFICIENT);
 
     controlDataSet(PAT_REAL_FLOW,
-                   lCurrentFlow + gMdiffFlowZeroOffsetLpm - offsetLpm);
-    gMdiffFlowZeroOffsetLpm = offsetLpm;
+                   lCurrentFlow + gMdiffFlowZeroOffsetLpm * lBtpsCoefficient - offsetLpm);
+    /* Store the offset before gas correction so changing Gas preserves the zero. */
+    gMdiffFlowZeroOffsetLpm = offsetLpm / lBtpsCoefficient;
 }
 
 /** Return the proximal-flow zero offset currently in use. */
 float controlDataMdiffFlowZeroOffsetGet(void) {
-    return gMdiffFlowZeroOffsetLpm;
+    return gMdiffFlowZeroOffsetLpm * controlDataGet(BTPS_COEFFICIENT);
 }

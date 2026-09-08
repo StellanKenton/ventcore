@@ -4,7 +4,7 @@
 ***********************************************************************************/
 #include "controldata.h"
 
-static volatile float gControlData[CONTROL_DATA_COUNT];
+static volatile float gControlData[CONTROL_DATA_COUNT] = {[BTPS_COEFFICIENT] = 1.0F};
 
 float controlDataGet(ControlData_Index_EnumDef index)
 {

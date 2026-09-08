@@ -71,3 +71,5 @@ CommTask 独占 PA9/PA10 串口和协议队列，SysTask 恢复 20 ms 空任务�
 2026-09-07 心跳实机自测：经 Device Tool 编译、烧录校验及 RTT 观察，清除了 main 入口残留硬件断点，并为 RTT 指定 ELF 中的控制块地址。`build/heartbeat_final_rtt.log` 连续报告 rx/tx 相等（最终 65/65），pending=0、overflow=0、online=1；MCM 心跳约每秒一次。tx 为设备串口提交计数，此记录不包含 MCM 界面确认。主机协议回归另验证 1110 次应答及背压、断连恢复。
 
 `MONITOR_HMI_PRS_MEAN` 在每次呼气结束、下一次吸气开始前结算，单位 cmH₂O；固定 6 ms 累加本次吸气（含暂停）和呼气的全部 `PAT_REAL_PRS`，除以样本数，不受流量方向或死区影响。结果与 `stBreathResult.meanPressureCmh2o` 同步发布，下一次结算前保持不变；停止、调零或无有效计划时清零。任一压力样本非有限或累计无效时不置 `BREATH_RESULT_VALID_MEAN_PRESSURE`，监测值置零，该次平均压不上传。CommTask 沿用逐呼吸上传与队列重试入口，通过 MCM 监测参数 `0x03` 发送有符号平均压 ×10；`test_monitor_leak.py` 和 `test_protocol.py` 覆盖整周期均值、结算时序、周期隔离、异常值与正负平均压报文编码。
+
+流量气体补偿：`PAT_REAL_FLOW`、`INSP_REAL_FLOW`、`O2_REAL_FLOW` 在校准处理阶段统一乘以 `BTPS_COEFFICIENT`。当 `GetVentPatientSettings()->Gas == VENT_GAS_BTPS` 时，系数暂按 `760/(760-47)*310.15/298.15` 计算，其他气体类型为 1。患者流量先扣除零点偏移再乘系数；零点偏移接口使用当前气体条件的 L/min，内部保存补偿前偏移，切换气体类型不改变传感器零点。

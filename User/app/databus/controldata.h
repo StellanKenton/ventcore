@@ -45,10 +45,11 @@ typedef enum {
     EXP_REAL_PRS,
     PAT_REAL_PRS,
     PAT_REAL_FLOW,
-    INSP_REAL_FLOW, 
+    INSP_REAL_FLOW,
     O2_REAL_FLOW,
 
     PREDICT_PAT_PRS,
+    BTPS_COEFFICIENT, /* Applied flow multiplier; 1.0 outside BTPS mode. */
     CONTROL_DATA_COUNT
 } ControlData_Index_EnumDef;
 

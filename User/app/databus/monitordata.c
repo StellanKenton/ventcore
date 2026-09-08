@@ -23,7 +23,7 @@ void monitorDataUpdate(void) {
     pressureControllerDiagnosticGet(&lPressureDiagnostic);
 
     gMonitorWaveformData.airFlowX2 = controlDataGet(INSP_REAL_FLOW) / 2.0F;
-    gMonitorWaveformData.oxygenFlowX2 = controlDataGet(O2_FLOW_FILTERED) / 2.0F;
+    gMonitorWaveformData.oxygenFlowX2 = controlDataGet(O2_REAL_FLOW) / 2.0F;
     gMonitorWaveformData.proximalFlowX2 = controlDataGet(PAT_REAL_FLOW) / 2.0F;
     gMonitorWaveformData.inspPressureX1 = controlDataGet(INSP_REAL_PRS);
     gMonitorWaveformData.peepPressureX1 = controlDataGet(PEEP_REAL_PRS);
