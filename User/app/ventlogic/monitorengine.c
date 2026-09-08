@@ -308,15 +308,15 @@ static void monitorEngineBreathResultPublish(uint32_t nowMs)
         lResult.validMask |= BREATH_RESULT_VOLUME_LIMITED;
     }
     repRtosEnterCritical();
-    gMonitorData[MONITOR_LAST_TIDA_VOL_INSP] = lResult.vtiMl;
+    gMonitorData[MONITOR_HMI_TIDA_VOL_INSP] = lResult.vtiMl;
     gMonitorData[MONITOR_HMI_PRS_MEAN] = lResult.meanPressureCmh2o;
-    gMonitorData[MONITOR_LAST_TIDA_VOL_EXP] = lResult.vteMl;
-    gMonitorData[MONITOR_LAST_PPEAK] = lResult.ppeakCmh2o;
-    gMonitorData[MONITOR_LAST_PLATEAU_PRS] = lResult.plateauPressureCmh2o;
-    gMonitorData[MONITOR_LAST_PEEP] = lResult.peepCmh2o;
-    gMonitorData[MONITOR_LAST_PEAK_INSP_FLOW] = lResult.peakInspiratoryFlowLpm;
-    gMonitorData[MONITOR_LAST_INSP_TIME_MS] = (float)lResult.inspiratoryTimeMs;
-    gMonitorData[MONITOR_LAST_CYCLE_TIME_MS] = (float)lResult.cycleTimeMs;
+    gMonitorData[MONITOR_HMI_TIDA_VOL_EXP] = lResult.vteMl;
+    gMonitorData[MONITOR_HMI_PPEAK] = lResult.ppeakCmh2o;
+    gMonitorData[MONITOR_HMI_PLATEAU_PRS] = lResult.plateauPressureCmh2o;
+    gMonitorData[MONITOR_HMI_PEEP] = lResult.peepCmh2o;
+    gMonitorData[MONITOR_HMI_PEAK_INSP_FLOW] = lResult.peakInspiratoryFlowLpm;
+    gMonitorData[MONITOR_HMI_INSP_TIME_MS] = (float)lResult.inspiratoryTimeMs;
+    gMonitorData[MONITOR_HMI_CYCLE_TIME_MS] = (float)lResult.cycleTimeMs;
     gMonitorLatestBreathResult = lResult;
     gMonitorBreathResultAvailable = 1U;
     repRtosExitCritical();

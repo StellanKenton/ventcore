@@ -1723,19 +1723,19 @@ void ProtocolDetectDataPreProcess(uint8_t instance, uint32_t taskCounter)
         lLastSequence = lResult.sequence;
         memset(g_txMonitorParamsCache.m_valid, 0,
                sizeof(g_txMonitorParamsCache.m_valid));
-        lCycleTimeMs = monitorEngineGet(MONITOR_LAST_CYCLE_TIME_MS);
-        lInspiratoryTimeMs = monitorEngineGet(MONITOR_LAST_INSP_TIME_MS);
+        lCycleTimeMs = monitorEngineGet(MONITOR_HMI_CYCLE_TIME_MS);
+        lInspiratoryTimeMs = monitorEngineGet(MONITOR_HMI_INSP_TIME_MS);
 
         if ((lResult.validMask & BREATH_RESULT_VALID_PPEAK) != 0U) {
             g_txMonitorParamsCache.m_pPeak = (int16_t)protocolWaveValue(
-                monitorEngineGet(MONITOR_LAST_PPEAK) *
+                monitorEngineGet(MONITOR_HMI_PPEAK) *
                     (float)ProtocolGetScale(E_PPEAK_SCALE),
                 INT16_MIN, INT16_MAX);
             g_txMonitorParamsCache.m_valid[0x01U] = true;
         }
         if ((lResult.validMask & BREATH_RESULT_VALID_PLATEAU_PRESSURE) != 0U) {
             g_txMonitorParamsCache.m_pPlat = (int16_t)protocolWaveValue(
-                monitorEngineGet(MONITOR_LAST_PLATEAU_PRS) *
+                monitorEngineGet(MONITOR_HMI_PLATEAU_PRS) *
                     (float)ProtocolGetScale(E_PPLAT_SCALE),
                 INT16_MIN, INT16_MAX);
             g_txMonitorParamsCache.m_valid[0x02U] = true;
@@ -1748,21 +1748,21 @@ void ProtocolDetectDataPreProcess(uint8_t instance, uint32_t taskCounter)
         }
         if ((lResult.validMask & BREATH_RESULT_VALID_PEEP) != 0U) {
             g_txMonitorParamsCache.m_peep = (uint16_t)protocolWaveValue(
-                monitorEngineGet(MONITOR_LAST_PEEP) *
+                monitorEngineGet(MONITOR_HMI_PEEP) *
                     (float)ProtocolGetScale(E_PEEP_SCALE),
                 0, UINT16_MAX);
             g_txMonitorParamsCache.m_valid[0x04U] = true;
         }
         if ((lResult.validMask & BREATH_RESULT_VALID_VTI) != 0U) {
             g_txMonitorParamsCache.m_tvi = (uint16_t)protocolWaveValue(
-                monitorEngineGet(MONITOR_LAST_TIDA_VOL_INSP) *
+                monitorEngineGet(MONITOR_HMI_TIDA_VOL_INSP) *
                     (float)ProtocolGetScale(E_TVI_SCALE),
                 0, UINT16_MAX);
             g_txMonitorParamsCache.m_valid[0x05U] = true;
         }
         if ((lResult.validMask & BREATH_RESULT_VALID_VTE) != 0U) {
             g_txMonitorParamsCache.m_tve = (uint16_t)protocolWaveValue(
-                monitorEngineGet(MONITOR_LAST_TIDA_VOL_EXP) *
+                monitorEngineGet(MONITOR_HMI_TIDA_VOL_EXP) *
                     (float)ProtocolGetScale(E_TVE_SCALE),
                 0, UINT16_MAX);
             g_txMonitorParamsCache.m_valid[0x06U] = true;
@@ -1773,7 +1773,7 @@ void ProtocolDetectDataPreProcess(uint8_t instance, uint32_t taskCounter)
         }
         if ((lResult.validMask & BREATH_RESULT_VALID_PEAK_INSP_FLOW) != 0U) {
             g_txMonitorParamsCache.m_inspFlow = (uint16_t)protocolWaveValue(
-                monitorEngineGet(MONITOR_LAST_PEAK_INSP_FLOW) *
+                monitorEngineGet(MONITOR_HMI_PEAK_INSP_FLOW) *
                     (float)ProtocolGetScale(E_INSPFLOW_SCALE),
                 0, UINT16_MAX);
             g_txMonitorParamsCache.m_valid[0x0EU] = true;

@@ -61,14 +61,14 @@ typedef enum {
     /* Completed expiration: latest five valid points, otherwise its minimum. */
     MONITOR_DYN_PEEP,
     /* Stable numeric snapshot of the latest completed breath. */
-    MONITOR_LAST_TIDA_VOL_INSP,
-    MONITOR_LAST_TIDA_VOL_EXP,
-    MONITOR_LAST_PPEAK,
-    MONITOR_LAST_PLATEAU_PRS,
-    MONITOR_LAST_PEEP,
-    MONITOR_LAST_PEAK_INSP_FLOW,
-    MONITOR_LAST_INSP_TIME_MS,
-    MONITOR_LAST_CYCLE_TIME_MS,
+    MONITOR_HMI_TIDA_VOL_INSP,
+    MONITOR_HMI_TIDA_VOL_EXP,
+    MONITOR_HMI_PPEAK,
+    MONITOR_HMI_PLATEAU_PRS,
+    MONITOR_HMI_PEEP,
+    MONITOR_HMI_PEAK_INSP_FLOW,
+    MONITOR_HMI_INSP_TIME_MS,
+    MONITOR_HMI_CYCLE_TIME_MS,
     /* Mean PAT pressure over the latest complete inspiration and expiration. */
     MONITOR_HMI_PRS_MEAN,
     MONITOR_DATA_COUNT,
