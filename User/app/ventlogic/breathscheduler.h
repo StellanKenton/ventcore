@@ -37,6 +37,12 @@ extern "C" {
 #define BREATH_VOLUME_CORRECTION_STEP_RATIO         0.25F
 #define BREATH_VOLUME_CORRECTION_LIMIT_RATIO        0.30F
 #define BREATH_VOLUME_ERROR_DEADBAND_RATIO          0.005F
+/* Set to 1 to restore the legacy flow compensation path. */
+#ifndef BREATH_VOLUME_FLOW_COMPENSATION_ENABLE
+#define BREATH_VOLUME_FLOW_COMPENSATION_ENABLE      0
+#endif
+#define BREATH_VOLUME_TIME_STEP_MS                  20.0F
+#define BREATH_VOLUME_TIME_LIMIT_RATIO              0.30F
 
 typedef enum {
     BREATH_TYPE_NONE = 0,

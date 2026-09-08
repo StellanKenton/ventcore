@@ -13,6 +13,7 @@ HARNESS = r'''
 ***********************************************************************************/
 #include <assert.h>
 #include <math.h>
+#include <stdlib.h>
 #include "breathscheduler.h"
 #include "phasecontroller.h"
 #include "monitorengine.h"
@@ -146,7 +147,11 @@ static void testReset(void) {
     GetVentVacSettings()->inspPausePct = 33.0F;
     breathSchedulerProcess();
     lPlan = next();
+    #if BREATH_VOLUME_FLOW_COMPENSATION_ENABLE
     near(lPlan.inspiratoryFlowLpm, 530.0F * 60.0F / (670.67F - 41.45F));
+#else
+    near(lPlan.inspiratoryFlowLpm, 500.0F * 60.0F / 670.67F);
+#endif
 }
 
 /** Exercise a simple repeatable volume loss, bounds and the no-chasing deadband. */
@@ -248,7 +253,11 @@ static void testIntegration(void) {
     assert(lResult.sequence + 1U == lPlan.sequence);
     near(lResult.vtiMl, 400.0F);
     near(lPlan.filteredVtiMl, lResult.vtiMl);
+#if BREATH_VOLUME_FLOW_COMPENSATION_ENABLE
     near(lPlan.volumeCorrectionMl, 80.0F);
+#else
+    near(lPlan.volumeCorrectionMl, 500.0F * 20.0F / 600.0F);
+#endif
     gInspiratoryFlow = 60.0F;
     lFiltered = lPlan.filteredVtiMl;
     lPlan = advance(lPlan.sequence);
@@ -297,12 +306,83 @@ static void testShortVolumeReference(void) {
     near(phaseControlGet(PHASE_REF_VOLUME), 0.0F);
 }
 
+
+/** Exercise fixed flow, both adaptation directions and all requested targets. */
+static void testTimeCompensation(void) {
+    const float lTargets[] = {300.0F, 500.0F, 800.0F};
+    for (unsigned int lTarget = 0U; lTarget < 3U; lTarget++) {
+        for (int lDirection = -1; lDirection <= 1; lDirection += 2) {
+            reset();
+            GetVentVacSettings()->tidalVolume = lTargets[lTarget];
+            breathSchedulerProcess();
+            stBreathPlan lPlan = next();
+            float lFlow = lPlan.inspiratoryFlowLpm;
+            float lMeasured = 0.0F;
+            for (unsigned int lIndex = 0U; lIndex < 50U; lIndex++) {
+                uint32_t lPrevious = lPlan.riseTimeMs;
+                /* Independent constant-flow plant with a signed 100 ms area error. */
+                lMeasured = lFlow * ((float)lPlan.riseTimeMs - lDirection * 100.0F) / 60.0F;
+                breathSchedulerVolumeFeedback(&lPlan, lMeasured, 1U);
+                lPlan = next();
+                near(lPlan.inspiratoryFlowLpm, lFlow);
+                assert(abs((int)lPlan.riseTimeMs - (int)lPrevious) <= 20);
+                assert(lPlan.holdTimeMs == 1000U);
+                assert(lPlan.maximumInspiratoryTimeMs == lPlan.riseTimeMs + lPlan.holdTimeMs);
+                assert(lPlan.maximumInspiratoryTimeMs + lPlan.expiratoryTimeMs == 4000U);
+                assert(lPlan.expiratoryTimeMs >= lPlan.minimumExpiratoryTimeMs);
+                assert(lPlan.riseTimeMs >= 700U && lPlan.riseTimeMs <= 1300U);
+            }
+            assert(fabsf(lMeasured - lTargets[lTarget]) <= lTargets[lTarget] * 0.005F + 1.0F);
+            float lCorrection = lPlan.volumeCorrectionMl;
+            breathSchedulerVolumeFeedback(&lPlan, NAN, 1U);
+            lPlan = next();
+            near(lPlan.volumeCorrectionMl, lCorrection);
+            breathSchedulerVolumeFeedback(&lPlan, 1.0F, 0U);
+            lPlan = next();
+            near(lPlan.volumeCorrectionMl, lCorrection);
+            GetVentVacSettings()->peep += 1.0F;
+            breathSchedulerProcess();
+            lPlan = next();
+            near(lPlan.volumeCorrectionMl, 0.0F);
+            for (unsigned int lIndex = 0U; lIndex < 100U; lIndex++) {
+                breathSchedulerVolumeFeedback(&lPlan, 1.0F, 1U);
+                lPlan = next();
+            }
+            assert(lPlan.riseTimeMs == 1300U);
+        }
+    }
+    /* No positive adaptation may consume the mandatory expiration reserve. */
+    reset();
+    GetVentVacSettings()->freq = 60.0F;
+    GetVentVacSettings()->inspTimeMs = 800U;
+    GetVentVacSettings()->inspPausePct = 0.0F;
+    breathSchedulerProcess();
+    stBreathPlan lPlan = next();
+    for (unsigned int lIndex = 0U; lIndex < 30U; lIndex++) {
+        breathSchedulerVolumeFeedback(&lPlan, 1.0F, 1U);
+        lPlan = next();
+        assert(lPlan.expiratoryTimeMs >= BREATH_PEEP_LOCK_TIME_MS);
+        assert(lPlan.maximumInspiratoryTimeMs + lPlan.expiratoryTimeMs == 1000U);
+    }
+    assert(lPlan.maximumInspiratoryTimeMs == 808U);
+}
+
 int main(void) {
+    (void)testTimeCompensation;
+#if BREATH_VOLUME_FLOW_COMPENSATION_ENABLE
     testEma();
     testReset();
     testConvergence();
     testIntegration();
     testShortVolumeReference();
+#else
+    (void)testEma; (void)testReset; (void)testConvergence;
+    (void)testIntegration; (void)testShortVolumeReference;
+    testTimeCompensation();
+    testReset();
+    testIntegration();
+    testShortVolumeReference();
+#endif
     return 0;
 }
 /**************************End of file********************************/
@@ -333,8 +413,10 @@ def main():
                    *[str(ROOT / path) for path in sources], "-o", str(executable)]
         environment = os.environ.copy()
         environment["PATH"] = str(Path(compiler).parent) + os.pathsep + environment["PATH"]
-        subprocess.run(command, check=True, env=environment)
-        subprocess.run([str(executable)], check=True, env=environment)
+        for legacy in (0, 1):
+            subprocess.run(command + [f"-DBREATH_VOLUME_FLOW_COMPENSATION_ENABLE={legacy}"], check=True, env=environment)
+            subprocess.run([str(executable)], check=True, env=environment)
+            print(f"PASS: {'legacy flow' if legacy else 'time'} compensation")
     print("PASS: EMA, next-breath timing, once-only feedback, conversion, bounds, convergence, faults, reset")
 
 

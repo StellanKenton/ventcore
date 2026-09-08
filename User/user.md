@@ -14,7 +14,7 @@
 | `app/ventlogic/` | Scheduler 为 PAC/VAC/PSV/PSV-ST 生成逐次 `stBreathPlan`，Phase Controller 执行计划，Trigger Engine 检测患者触发，Cycle Engine 完成 PSV 流量切换，Apnea Engine 调度 PSV-ST 备份呼吸，Monitor Engine 发布逐次 `stBreathResult`，Actuator Controller 统一仲裁并写入 BSP |
 | `app/physalarm/` | AlarmTask 调度生理报警检测器并发布状态；PEEP 高低报警在新吸气阶段按上一周期动态 PEEP 判断，恢复条件持续 200 ms 后解除 |
 | `bsp/adc/adc.*` | 使用 ADC1 规则组扫描、连续转换和 DMA1 循环模式持续采集 14 路板级模拟量 |
-| `bsp/blower_vcm/blower_vcm.*` | 使用 UART4（板级 VCM UART5，PC12/PD2）和 DMA0 异步发送双控制帧、循环接收反馈；控制变化时立即发送并每 100 ms 保活重发，提供连接超时与通信统计 |
+| `bsp/blower_vcm/blower_vcm.*` | 使用 UART4（板级 VCM UART5，PC12/PD2）和 DMA0 异步发送双控制帧、循环接收反馈；控制变化时立即发送并每 10 ms 保活重发，提供连接超时与通信统计 |
 | `bsp/bspdebug.*` | 注册 `bsp` RTT 调试命令；支持 ADC、阀门、风机控制，以及 `bsp blower stats` 通信诊断 |
 | `bsp/dvalve/dvalve.*` | 以枚举选择氧气阀、泄压阀或呼气阀，提供统一的 20 kHz、0～100% PWM 占空比控制接口 |
 | `bsp/eeprom/m24512r.*` | 使用 PD10/PD11 软件 I2C 访问 M24512-R，提供跨页写入和任意字节读取；上电校准加载流程仅调用读取接口，不改写 EEPROM |
@@ -27,7 +27,7 @@
 | `tools/ringbuffer/` | 日志输出使用的轻量级字节环形缓冲区 |
 | `develop/` | VS Code Device Tool 的 CMake 构建、烧录、复位与 RTT 工具；`test_flow_pause.py` 验证暂停控制，`test_monitor_leak.py` 验证泄漏估计，`test_vti_compensation.py` 验证逐呼吸补偿，`test_vti_rtt.py` 通过 Device Tool RTT 记录启动收敛 |
 
-`vt volume <peep> <ml> [pause_pct]` 通过 RTT 设置 VAC 参数；暂停百分比为 0..99，省略时保留当前值，上电默认 0。`vt volume 15 500 0` 设置无暂停，供气覆盖完整吸气时间，目标流量按有效供气时间计算，`vt run 1` 启动；`vt status` 波形的 `volume_pause` 标记暂停阶段，`pause_settled` 标记已切入稳定段 PI，`leak_lpm` 记录患者侧泄漏估计。`develop/test_vac_matrix.py` 经 Device Tool RTT 入口完成模拟肺九组测试，保存原始日志、波形及逐呼吸振幅、泄漏目标误差统计；过零次数仅作辅助诊断。
+`vt volume <peep> <ml> [pause_pct [ti_ms rate]]` 通过 RTT 设置 VAC 参数；暂停百分比为 0..99，省略时保留当前值，上电默认 0；可在暂停值后成对指定吸气毫秒数及每分钟频率，命令校验后应用，拒绝挤占最短呼气时间的组合。`vt trigger` 按当前 PAC/VAC/PSV/PSV-ST 模式修改触发，VAC 不再落入 PAC 分支。`vt volume 15 500 0` 设置无暂停，供气覆盖完整吸气时间，目标流量按有效供气时间计算，`vt run 1` 启动；`vt status` 波形的 `volume_pause` 标记暂停阶段，`pause_settled` 标记已切入稳定段 PI，`leak_lpm` 记录患者侧泄漏估计。`develop/test_vac_matrix.py` 经 Device Tool RTT 入口完成模拟肺九组测试，保存原始日志、波形及逐呼吸振幅、泄漏目标误差统计；过零次数仅作辅助诊断。
 | `FreeRTOSConfig.h` | FreeRTOS 工程配置 |
 
 项目代码只能通过 `rtos.h` 使用任务、调度、tick 和临界区能力；FreeRTOS 原生 API 仅允许出现在 `portrtos.c`。日志统一使用 `LOG_I`、`LOG_W`、`LOG_E` 等宏，不能直接使用标准库输出函数。
@@ -46,11 +46,11 @@ Monitor 按实际吸气计划的 sequence 切分泄漏累计窗口，必须观�
 
 VAC 容量外环沿用 `MONITOR_TIDA_VOL_INSP` 的近端 VTI 定义（含吸气暂停阶段，未扣患者侧泄漏）。Phase Controller 在加载下一次吸气计划前调用 `monitorEngineBreathComplete()`，结算上一完整周期并将 VTI 送入 Scheduler；Monitor 的 sequence 边界处理保留为补充入口，通过完成标志避免重复发布。`monitorEngineProcess()` 仍仅按顺序调用处理函数。只有同一配置代次、当前计划序号且未消费过的反馈可以参与下一计划，旧配置结果不会重新激活补偿。
 
-首次有效 VTI 直接初始化 `filteredVtiMl`，之后执行 `filteredVtiMl += 0.5 * (vtiMl - filteredVtiMl)`。同时按相同 alpha 平滑产生该 VTI 的计划补偿量 `filteredAppliedCorrectionMl`。外环误差为 `target - filteredVti - (currentCorrection - filteredAppliedCorrection)`，扣除已经施加但尚未反映在 VTI 均值中的补偿，避免重复追补历史欠量。超过用户目标 0.5% 的死区时，首次有效周期以增益 0.8、后续以增益 1.0 更新补偿，每周期步长不超过目标量 25%，累计补偿不超过 ±30%。首次有效反馈同时恢复压力上限快照，避免启动调零发生在初始计划加载后时，下一计划误清除首周期补偿。内部 `deliveryTargetMl = targetTidalVolumeMl + volumeCorrectionMl`，沿用有效供气时间、上升沿面积损失和启动损失公式计算流量；用户目标与暂停时长不变。宏位于 `breathscheduler.h`，当前台架验证范围见 `build/vti_rtt/`。
+首次有效 VTI 直接初始化 `filteredVtiMl`，之后执行 `filteredVtiMl += 0.5 * (vtiMl - filteredVtiMl)`；已施加的等效容量补偿使用相同 EMA，误差扣除尚未反映在均值中的补偿，避免重复追补。死区为目标的 0.5%，首次增益 0.8，后续 1.0。`breathscheduler.h` 中 `BREATH_VOLUME_FLOW_COMPENSATION_ENABLE=0` 默认关闭初始损失流量补偿和逐呼吸流量补偿；设为 1 恢复旧路径（容量步长 ±25%、累计 ±30%）。新路径固定流量为用户目标除以原始供气时长，按容量误差换算供气时间调整，每呼吸最多 ±20 ms，累计不超过原始供气时长 ±30%。增加供气时间时等量扣减呼气时间，保留至少 192 ms 呼气；暂停时长不变，正常定时周期保持不变。毫秒取整后的实际补偿回写外环以防积分饱和。`volumeCorrectionMl` 表示时间调整的等效容量，`deliveryTargetMl` 仍用于压力前馈。所有调整只作用于下一呼吸，首次有效反馈恢复压力上限快照，避免启动调零误清除首周期补偿。
 
 无有效完整周期、非有限/非正 VTI、未确认实际呼气、非正常时间切换、供气段压力/流量/风机上限或控制器失败时，外环不更新 EMA 和补偿。`BREATH_RESULT_VOLUME_LIMITED` 标记被限幅的周期；非有限采样清除结果中的 `BREATH_RESULT_VALID_VTI`。停机、重新启动、模式或 VAC 设置变化、重新调零会清理外环；压力上限改变时下一计划清理旧补偿。容量修正仅作用于下一周期供气段，暂停目标仍由患者侧泄漏估计决定。
 
-`vt status` 的 `VT_VOLUME_FEEDBACK` 行输出当前计划序号、用户目标、平滑 VTI、补偿量和内部供气目标；体积字段均为 mL 的百分之一。`test_vti_compensation.py` 验证 EMA、实际周期结算时序、重复/旧反馈、限幅、配置重置和固定 80 mL 损失的多周期收敛；软件模型通过不等于已验证实机肺容量或气路稳定性。
+`vt status` 的 `VT_VOLUME_FEEDBACK` 行输出当前计划序号、用户目标、平滑 VTI、补偿量和内部供气目标；体积字段均为 mL 的百分之一。`test_vti_compensation.py` 分别编译新时间路径和旧流量路径，验证 EMA、实际周期结算时序、异常反馈、限幅、配置重置，并验证 300/500/800 mL 固定流量模型的双向时间补偿；`test_vti_rtt.py` 支持 `--ti-ms` 和 `--rate`，明确关闭触发并核对 VAC 命令回执及结果模式，保存原始波形与验收 JSON，要求末尾连续五次有效且未限幅的完整呼吸满足 ±(10 mL + 目标×5%)；软件模型通过不等于已验证实机肺容量或气路稳定性。
 
 VAC 供气流量闭环与 VTI 使用同一个患者侧近端流量 `PAT_REAL_FLOW`，不使用入口流量作为反馈。`vt status` 波形追加 `flow_ref_lpm`、`flow_measurement_lpm`、`flow_effort` 和 `flow_blower_ff`（均放大 100 倍），用于直接检查参考跟随、PID 输出和前馈。叠加前馈后的风机指令发生限幅时，控制器撤回同方向积分增量，避免执行器限幅造成的积分饱和。
 
@@ -73,3 +73,11 @@ CommTask 独占 PA9/PA10 串口和协议队列，SysTask 恢复 20 ms 空任务�
 `MONITOR_HMI_PRS_MEAN` 在每次呼气结束、下一次吸气开始前结算，单位 cmH₂O；固定 6 ms 累加本次吸气（含暂停）和呼气的全部 `PAT_REAL_PRS`，除以样本数，不受流量方向或死区影响。结果与 `stBreathResult.meanPressureCmh2o` 同步发布，下一次结算前保持不变；停止、调零或无有效计划时清零。任一压力样本非有限或累计无效时不置 `BREATH_RESULT_VALID_MEAN_PRESSURE`，监测值置零，该次平均压不上传。CommTask 沿用逐呼吸上传与队列重试入口，通过 MCM 监测参数 `0x03` 发送有符号平均压 ×10；`test_monitor_leak.py` 和 `test_protocol.py` 覆盖整周期均值、结算时序、周期隔离、异常值与正负平均压报文编码。
 
 流量气体补偿：`PAT_REAL_FLOW`、`INSP_REAL_FLOW`、`O2_REAL_FLOW` 在校准处理阶段统一乘以 `BTPS_COEFFICIENT`。当 `GetVentPatientSettings()->Gas == VENT_GAS_BTPS` 时，系数暂按 `760/(760-47)*310.15/298.15` 计算，其他气体类型为 1。患者流量先扣除零点偏移再乘系数；零点偏移接口使用当前气体条件的 L/min，内部保存补偿前偏移，切换气体类型不改变传感器零点。
+
+2026-09-08 时间补偿测试肺自测：经 Device Tool 构建、烧录、RTT 采集，PEEP 5 cmH₂O、设定 Ti 2000 ms、频率 15/min、暂停 0%，300/500/800 mL 各记录 15 次完整呼吸，全部符合 ±(10 mL + 目标×5%)，且无容量限幅标志。末尾五次 VTI 分别为 295.39～303.82、496.89～503.01、783.48～805.41 mL，均值分别为 300.518、499.800、791.908 mL；三个设定均从首个完整呼吸进入验收范围。流量设定分别固定在 9/15/24 L/min。原始记录及验收见 `build/vac_time_300/`、`build/vac_time_500/`、`build/vac_time_800/`，汇总为 `build/vac_time_summary.json`。测量使用设备近端 VTI，未使用独立流量分析仪；结论仅覆盖上述测试肺工况。测试结束已停止通气。
+
+2026-09-08 短吸气时间回归：氧浓度 21%、PEEP 5、频率 20/min、设定 Ti 500 ms、暂停 0%、触发关闭。原 100 ms 相同风机目标重发间隔下，400 mL 出现 353.22～448.04 mL，600 mL 出现 544.16～645.72 mL，均未通过。400 mL 波形显示，部分呼气入口风机降速滞后，正向尾流为 61.68～115.09 mL。将 `BLOWER_VCM_CONTROL_KEEPALIVE_MS` 改为 10 ms 后，尾流收窄为 60.60～76.05 mL；此对比支持缩短重发窗口，未单独证明驱动器内部丢弃首帧的原因。双帧 DMA、230400 波特率及原压力/转速限值保持原配置。
+
+同一修复固件上，200/400/600 mL 各测 30 次完整 VAC 呼吸，全部符合 ±(10 mL + 目标×5%)，全程范围分别为 190.10～212.05、375.82～410.14、570.81～612.65 mL；末尾五次均值为 200.940、403.012、600.824 mL。流量分别固定为 24/48/72 L/min，计划供气时间范围为 500～546/500～525/500～526 ms，沿用 ±20 ms 逐呼吸时间步长。波形中的监测 Ti 含切换后的正向尾流，不能当作 Scheduler 计划时间。原始记录在 `build/vac_short_200_v2/`、`build/vac_short_400_v2/`、`build/vac_short_600_v2_run/`，汇总为 `build/vac_short_summary.json`。600 mL 期间 CRC、帧尾、UART、DMA、RX 溢出计数均为零；TX busy 计数非零，不能表述为从未发生发送竞争。所有容量值来自设备近端 VTI，结论仅覆盖当前测试肺工况。
+
+同固件补测 500 mL、Ti 2000 ms、15/min：10 次完整呼吸全部通过，范围 495.83～524.54 mL，末尾五次均值 500.994 mL，记录在 `build/vac_long_500_v2/`。

@@ -37,7 +37,8 @@ extern "C" {
 #define BLOWER_VCM_RX_FIFO_MASK                 (BLOWER_VCM_RX_FIFO_SIZE - 1U)
 #define BLOWER_VCM_PROCESS_BYTE_LIMIT           BLOWER_VCM_RX_FIFO_SIZE
 #define BLOWER_VCM_FEEDBACK_TIMEOUT_MS          1000U
-#define BLOWER_VCM_CONTROL_KEEPALIVE_MS          100U
+/* Repeat unchanged targets promptly, including the zero-speed release command. */
+#define BLOWER_VCM_CONTROL_KEEPALIVE_MS           10U
 #define BLOWER_VCM_BAUDRATE                     230400U
 #define BLOWER_VCM_SATURATION_MAX               1U
 #define BLOWER_VCM_CONTROL_FRAME_COUNT           2U

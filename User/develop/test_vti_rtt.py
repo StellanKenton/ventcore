@@ -4,6 +4,7 @@ import csv
 import hashlib
 import json
 import re
+import statistics
 import time
 from pathlib import Path
 
@@ -17,14 +18,19 @@ def main():
     parser.add_argument('--peep', type=int, default=5)
     parser.add_argument('--volume', type=int, default=500)
     parser.add_argument('--pause', type=int, default=0)
+    parser.add_argument('--ti-ms', type=int, default=2000)
+    parser.add_argument('--rate', type=int, default=15)
     args = parser.parse_args()
     if (not 0 <= args.pause <= 99 or args.seconds < 12 or
-            not 1 <= args.peep <= 25 or not 50 <= args.volume <= 2000):
-        parser.error('Use pause 0..99, seconds >=12, PEEP 1..25 and volume 50..2000')
+            not 1 <= args.peep <= 25 or not 50 <= args.volume <= 2000 or
+            not 1 <= args.rate <= 160 or not 1 <= args.ti_ms <= 60000 or
+            args.ti_ms + 192 > 60000 / args.rate):
+        parser.error('Use pause 0..99, seconds >=12, PEEP 1..25, volume 50..2000, rate 1..160 and Ti leaving >=192 ms expiration')
     args.output.mkdir(parents=True, exist_ok=True)
     metadata = dict(peep=args.peep, pause=args.pause, target_ml=args.volume,
-                    seconds=args.seconds,
+                    seconds=args.seconds, ti_ms=args.ti_ms, rate=args.rate, trigger='off',
                     scheduler_header=(ROOT/'User/app/ventlogic/breathscheduler.h').read_text(encoding='utf-8'),
+                    blower_header=(ROOT/'User/bsp/blower_vcm/blower_vcm.h').read_text(encoding='utf-8'),
                     scheduler_sha256=hashlib.sha256((ROOT/'User/app/ventlogic/breathscheduler.c').read_bytes()).hexdigest(),
                     firmware_sha256=hashlib.sha256((ROOT/'build/Debug/ventcore.hex').read_bytes()).hexdigest())
     (args.output/'metadata.json').write_text(json.dumps(metadata, indent=2)+'\n', encoding='utf-8')
@@ -43,6 +49,8 @@ def main():
             for tag, collection in [('VT_BREATH_RESULT,', breaths), ('VT_VOLUME_FEEDBACK,', feedback)]:
                 if tag in line and start is not None:
                     values = dict(item.split('=', 1) for item in line.split(tag, 1)[1].split(','))
+                    if tag == 'VT_BREATH_RESULT,' and (values['mode'] != '2' or values['trigger'] != '1'):
+                        raise RuntimeError('Unexpected mode or trigger during mandatory VAC test: '+line)
                     key = int(values['sequence'])
                     if key not in collection:
                         values['received_s'] = round(time.monotonic()-start, 3)
@@ -65,7 +73,11 @@ def main():
                     raise
         rtt.command('vt stop', 'stop status=')
         time.sleep(1)
-        rtt.command(f'vt volume {args.peep} {args.volume} {args.pause}', 'volume peep=')
+        rtt.command(f'vt volume {args.peep} {args.volume} {args.pause} {args.ti_ms} {args.rate}',
+                    f'ti_ms={args.ti_ms} pause_pct={args.pause} rate={args.rate} status=1')
+        rtt.command('vt trigger off', 'trigger mode=2 type=0 threshold100=0 status=1')
+        rtt.send('bsp blower stats')
+        rtt.until('blower errors')
         status(discard=True)
         start = time.monotonic()
         rtt.command('vt run 1', 'run 1 status=')
@@ -76,6 +88,8 @@ def main():
             status()
             time.sleep(max(0, 0.25-(time.monotonic()-poll)))
         status()
+        rtt.send('bsp blower stats')
+        rtt.until('blower errors')
     finally:
         try:
             rtt.close()
@@ -91,6 +105,29 @@ def main():
             raise RuntimeError('Discontinuous waveform')
     if len(breaths) < 2:
         raise RuntimeError('Insufficient completed breaths')
+    completed = list(breaths.values())
+    tolerance = 10.0 + args.volume * 0.05
+    values = [int(item['vti100']) / 100.0 for item in completed]
+    valid = [((int(item['valid'], 0) & 0x203) == 0x003 and
+              item['cycle_reason'] == '1' and item['mode'] == '2' and
+              item['trigger'] == '1') for item in completed]
+    within = [ok and abs(value - args.volume) <= tolerance
+              for value, ok in zip(values, valid)]
+    settled = next((index + 1 for index in range(len(values) - 4)
+                    if all(within[index:])), None)
+    acceptance = dict(target_ml=args.volume, tolerance_ml=tolerance,
+                      completed_breaths=len(values), vti_ml=values,
+                      all_breaths_min_ml=min(values), all_breaths_max_ml=max(values),
+                      all_breaths_passed=all(within),
+                      last_five_min_ml=min(values[-5:]),
+                      last_five_max_ml=max(values[-5:]),
+                      last_five_mean_ml=statistics.mean(values[-5:]),
+                      settled_from_breath=settled,
+                      passed=len(values) >= 5 and all(within[-5:]))
+    (args.output/'acceptance.json').write_text(json.dumps(acceptance, indent=2)+'\n', encoding='utf-8')
+    print(json.dumps(acceptance), flush=True)
+    if not acceptance['passed']:
+        raise RuntimeError('Last five completed breaths failed VTI acceptance')
     print('Saved '+str(args.output), flush=True)
 
 

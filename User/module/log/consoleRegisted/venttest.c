@@ -92,7 +92,7 @@ static bool ventTestUnsignedParse(const char **arguments, uint16_t *value)
 /** Show the supported ventilation test commands. */
 static void ventTestUsageShow(void)
 {
-    LOG_I(gVentTestTag, "usage: vt mode <x> | run <0|1> | pac | vac | psv | psvst | stop | set <peep> <delta> | volume <peep> <ml> [pause_pct] | trigger off | trigger pressure <cmh2o100> | trigger flow <lpm100> | status");
+    LOG_I(gVentTestTag, "usage: vt mode <x> | run <0|1> | pac | vac | psv | psvst | stop | set <peep> <delta> | volume <peep> <ml> [pause_pct [ti_ms rate]] | trigger off | trigger pressure <cmh2o100> | trigger flow <lpm100> | status");
 }
 
 /** Upload only samples recorded since the previous status command. */
@@ -231,6 +231,8 @@ static eConsoleCommandResult ventTestConsoleCommand(const char *arguments)
     uint16_t lPeep;
     uint16_t lTidalVolume;
     uint16_t lPausePct;
+    uint16_t lInspTimeMs;
+    uint16_t lRate;
     uint16_t lTriggerThreshold;
     uint8_t lRun;
     eVentTriggerType lTriggerType;
@@ -285,11 +287,23 @@ static eConsoleCommandResult ventTestConsoleCommand(const char *arguments)
                ventTestUnsignedParse(&arguments, &lTidalVolume)) {
         /* An omitted pause preserves the current setting; zero is explicit. */
         lPausePct = (uint16_t)GetVentVacSettings()->inspPausePct;
+        lInspTimeMs = (uint16_t)GetVentVacSettings()->inspTimeMs;
+        lRate = (uint16_t)GetVentVacSettings()->freq;
         if ((*ventTestSkipSpaces(arguments) != '\0') &&
             !ventTestUnsignedParse(&arguments, &lPausePct)) {
             return CONSOLE_COMMAND_RESULT_INVALID_ARGUMENT;
         }
-        if ((*ventTestSkipSpaces(arguments) != '\0') || (lPausePct >= 100U)) {
+        /* Optional Ti and rate are supplied together after the pause percentage. */
+        if ((*ventTestSkipSpaces(arguments) != '\0') &&
+            (!ventTestUnsignedParse(&arguments, &lInspTimeMs) ||
+             !ventTestUnsignedParse(&arguments, &lRate))) {
+            return CONSOLE_COMMAND_RESULT_INVALID_ARGUMENT;
+        }
+        if ((*ventTestSkipSpaces(arguments) != '\0') || (lPausePct >= 100U) ||
+            (lRate < GetVentLimitSettings()->frequencyLow) ||
+            (lRate > GetVentLimitSettings()->frequencyHigh) ||
+            (lInspTimeMs == 0U) ||
+            ((uint32_t)lInspTimeMs + BREATH_PEEP_LOCK_TIME_MS > 60000U / lRate)) {
             return CONSOLE_COMMAND_RESULT_INVALID_ARGUMENT;
         }
         if (((float)lPeep < GetVentLimitSettings()->pressureLow) ||
@@ -304,6 +318,8 @@ static eConsoleCommandResult ventTestConsoleCommand(const char *arguments)
         lVacSettings->peep = (float)lPeep;
         lVacSettings->tidalVolume = (float)lTidalVolume;
         lVacSettings->inspPausePct = (float)lPausePct;
+        lVacSettings->inspTimeMs = lInspTimeMs;
+        lVacSettings->freq = (float)lRate;
         lStatus = breathSchedulerTestModeSet((uint8_t)VENT_MD_VAC);
         if (lStatus != BREATH_CONTROL_SUCCESS) {
             *lVacSettings = lPreviousVacSettings;
@@ -336,7 +352,21 @@ static eConsoleCommandResult ventTestConsoleCommand(const char *arguments)
 
         lConfiguredMode = breathSchedulerModeGet();
         (void)breathSchedulerStop();
-        if (lConfiguredMode == VENT_MD_CPAP_PSV) {
+        if (lConfiguredMode == VENT_MD_VAC) {
+            lVacSettings = GetVentVacSettings();
+            lPreviousVacSettings = *lVacSettings;
+            lVacSettings->triggerType = lTriggerType;
+            if (lTriggerType == VENT_TRIGGER_PRESSURE) {
+                lVacSettings->pressureTriggerCmh2o = -((float)lTriggerThreshold / 100.0F);
+            } else if (lTriggerType == VENT_TRIGGER_FLOW) {
+                lVacSettings->flowTriggerLpm = (float)lTriggerThreshold / 100.0F;
+            }
+            lStatus = breathSchedulerTestModeSet((uint8_t)lConfiguredMode);
+            if (lStatus != BREATH_CONTROL_SUCCESS) {
+                *lVacSettings = lPreviousVacSettings;
+                (void)breathSchedulerTestModeSet((uint8_t)lConfiguredMode);
+            }
+        } else if (lConfiguredMode == VENT_MD_CPAP_PSV) {
             lCpapPsvSettings = GetVentCpapPsvSettings();
             lPreviousCpapPsvSettings = *lCpapPsvSettings;
             lCpapPsvSettings->triggerType = lTriggerType;

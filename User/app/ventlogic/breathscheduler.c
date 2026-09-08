@@ -49,6 +49,8 @@ void breathSchedulerVolumeFeedback(const stBreathPlan *plan, float vtiMl, uint8_
     float lTarget;
     float lStep;
     float lGain = BREATH_VOLUME_CORRECTION_GAIN;
+    float lStepLimit;
+    float lCorrectionLimit;
 
     if (plan == NULL) {
         return;
@@ -91,11 +93,17 @@ void breathSchedulerVolumeFeedback(const stBreathPlan *plan, float vtiMl, uint8_
         (gBreathVolumeFeedback.correctionMl - gBreathVolumeFeedback.filteredAppliedCorrectionMl);
     if ((lError > lTarget * BREATH_VOLUME_ERROR_DEADBAND_RATIO) ||
         (lError < -lTarget * BREATH_VOLUME_ERROR_DEADBAND_RATIO)) {
-        lStep = breathSchedulerVolumeClamp(lGain * lError,
-                                           lTarget * BREATH_VOLUME_CORRECTION_STEP_RATIO);
+        lStepLimit = lTarget * BREATH_VOLUME_CORRECTION_STEP_RATIO;
+        lCorrectionLimit = lTarget * BREATH_VOLUME_CORRECTION_LIMIT_RATIO;
+#if !BREATH_VOLUME_FLOW_COMPENSATION_ENABLE
+        /* Store time adaptation as equivalent mL for the existing EMA feedback. */
+        lStepLimit = plan->inspiratoryFlowLpm * BREATH_VOLUME_TIME_STEP_MS / 60.0F;
+        lCorrectionLimit = plan->inspiratoryFlowLpm *
+            (float)gBreathPlanTemplate.riseTimeMs * BREATH_VOLUME_TIME_LIMIT_RATIO / 60.0F;
+#endif
+        lStep = breathSchedulerVolumeClamp(lGain * lError, lStepLimit);
         gBreathVolumeFeedback.correctionMl = breathSchedulerVolumeClamp(
-            gBreathVolumeFeedback.correctionMl + lStep,
-            lTarget * BREATH_VOLUME_CORRECTION_LIMIT_RATIO);
+            gBreathVolumeFeedback.correctionMl + lStep, lCorrectionLimit);
     }
     repRtosExitCritical();
 }
@@ -103,11 +111,15 @@ void breathSchedulerVolumeFeedback(const stBreathPlan *plan, float vtiMl, uint8_
 /** Convert an internal delivery volume using the existing rise/startup model. */
 static float breathSchedulerVacFlowCalculate(float deliveryTargetMl, float flowTimeMs) {
     float lSafeTimeMs = NUMFILTER_MAX(BREATH_VOLUME_MIN_EFFECTIVE_FLOW_TIME_MS, flowTimeMs);
+#if BREATH_VOLUME_FLOW_COMPENSATION_ENABLE
     float lEffectiveTimeMs = NUMFILTER_MAX(BREATH_VOLUME_MIN_EFFECTIVE_FLOW_TIME_MS,
                                           lSafeTimeMs - BREATH_VOLUME_FLOW_RISE_AREA_LOSS_MS);
     float lStartupLossMl = NUMFILTER_MIN(BREATH_VOLUME_STARTUP_VOLUME_LOSS_MAX_ML,
                                         BREATH_VOLUME_STARTUP_LOSS_TIME_ML_MS / lSafeTimeMs);
     return (deliveryTargetMl + lStartupLossMl) * 60.0F / lEffectiveTimeMs;
+#else
+    return deliveryTargetMl * 60.0F / lSafeTimeMs;
+#endif
 }
 
 /** Return true when the PAC source settings differ from the applied snapshot. */
@@ -203,7 +215,7 @@ static void breathSchedulerVacPlanApply(const stVentVacSettings *vacSettings,
     lPlan.breathType = BREATH_TYPE_MANDATORY_VOLUME;
     lPlan.allowedTriggerType = vacSettings->triggerType;
     lPlan.peepCmh2o = vacSettings->peep;
-    /* Compensate rise area and startup backflow without scaling short Ti sharply. */
+    /* Select nominal flow or the compile-time legacy startup compensation. */
     lPlan.inspiratoryFlowLpm = breathSchedulerVacFlowCalculate(vacSettings->tidalVolume,
                                                               lFlowTimeMs);
     lPlan.targetTidalVolumeMl = vacSettings->tidalVolume;
@@ -517,12 +529,30 @@ int8_t breathSchedulerNextPlanGet(eBreathTriggerReason triggerReason, stBreathPl
         plan->filteredVtiMl = gBreathVolumeFeedback.filteredVtiMl;
         plan->volumeCorrectionMl = gBreathVolumeFeedback.correctionMl;
         plan->deliveryTargetMl = plan->targetTidalVolumeMl + plan->volumeCorrectionMl;
+#if BREATH_VOLUME_FLOW_COMPENSATION_ENABLE
         /* Recompute from the user target; never compound the previous flow request. */
         plan->inspiratoryFlowLpm = breathSchedulerVacFlowCalculate(
             plan->deliveryTargetMl,
             (float)gBreathAppliedVacSettings.inspTimeMs -
             ((float)gBreathAppliedVacSettings.inspTimeMs *
              gBreathAppliedVacSettings.inspPausePct / 100.0F));
+#else
+        /* Extend only delivery, preserve the pause and total mandatory period. */
+        float lTimeMs = plan->volumeCorrectionMl * 60.0F / plan->inspiratoryFlowLpm;
+        int32_t lDeltaMs;
+        lTimeMs = NUMFILTER_MIN(lTimeMs,
+            (float)(plan->expiratoryTimeMs - plan->minimumExpiratoryTimeMs));
+        lTimeMs = NUMFILTER_MAX(lTimeMs, 1.0F - (float)plan->riseTimeMs);
+        lDeltaMs = (int32_t)(lTimeMs + ((lTimeMs >= 0.0F) ? 0.5F : -0.5F));
+        plan->riseTimeMs = (uint32_t)((int32_t)plan->riseTimeMs + lDeltaMs);
+        plan->minimumInspiratoryTimeMs = (uint32_t)((int32_t)plan->minimumInspiratoryTimeMs + lDeltaMs);
+        plan->maximumInspiratoryTimeMs = plan->minimumInspiratoryTimeMs;
+        plan->expiratoryTimeMs = (uint32_t)((int32_t)plan->expiratoryTimeMs - lDeltaMs);
+        plan->volumeCorrectionMl = (float)lDeltaMs * plan->inspiratoryFlowLpm / 60.0F;
+        plan->deliveryTargetMl = plan->targetTidalVolumeMl + plan->volumeCorrectionMl;
+        /* Track the applied bound to prevent windup when expiration has no room. */
+        gBreathVolumeFeedback.correctionMl = plan->volumeCorrectionMl;
+#endif
     }
     repRtosExitCritical();
     return BREATH_CONTROL_SUCCESS;
