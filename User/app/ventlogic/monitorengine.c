@@ -121,6 +121,15 @@ static void monitorEngineLeakFlowProcess(void)
         }
     }
     (void)monitorEngineSet(MONITOR_LEAK_FLOW, lLeakFlow);
+    if ((gMonitorEngine.breathActive != 0U) && (gMonitorEngine.breathCompleted == 0U)) {
+        /* Fixed 6 ms samples: integral divided by duration is mean L/min. */
+        gMonitorEngine.minuteLeakSumLpm += monitorEngineGet(MONITOR_LEAK_FLOW);
+        gMonitorEngine.minuteLeakSampleCount++;
+        if ((monitorEngineGet(MONITOR_LEAK_VALID) == 0.0F) ||
+            (monitorEngineFinite(lPressure) == 0U) || (lPressure <= 0.0F)) {
+            gMonitorEngine.minuteLeakInvalid = 1U;
+        }
+    }
 }
 
 /** Average valid zero-flow pressure samples from the plateau window. */
@@ -284,6 +293,14 @@ static void monitorEngineBreathResultPublish(uint32_t nowMs)
                                   (float)gMonitorEngine.meanPressureSampleCount;
         lResult.validMask |= BREATH_RESULT_VALID_MEAN_PRESSURE;
     }
+    if ((gMonitorEngine.minuteLeakInvalid == 0U) &&
+        (gMonitorEngine.leakCycleInvalid == 0U) &&
+        (gMonitorEngine.minuteLeakSampleCount > 0U) &&
+        (monitorEngineFinite(gMonitorEngine.minuteLeakSumLpm) != 0U)) {
+        lResult.minuteLeakLpm = gMonitorEngine.minuteLeakSumLpm /
+                               (float)gMonitorEngine.minuteLeakSampleCount;
+        lResult.validMask |= BREATH_RESULT_VALID_MINUTE_LEAK;
+    }
     if ((monitorEngineFinite(lResult.vtiMl) != 0U) &&
         (gMonitorEngine.volumeInvalid == 0U)) {
         lResult.validMask |= BREATH_RESULT_VALID_VTI;
@@ -307,9 +324,28 @@ static void monitorEngineBreathResultPublish(uint32_t nowMs)
     if (gMonitorEngine.volumeLimited != 0U) {
         lResult.validMask |= BREATH_RESULT_VOLUME_LIMITED;
     }
+    /* VTe in mL and cycle time in ms give total expiratory L/min. */
+    if (((lResult.validMask & BREATH_RESULT_VALID_VTE) != 0U) &&
+        (gMonitorEngine.volumeInvalid == 0U) &&
+        (lResult.vteMl >= 0.0F) && (lResult.cycleTimeMs > 0U)) {
+        float lTotalFlow;
+        lResult.minuteTotalLpm = lResult.vteMl * (60.0F / (float)lResult.cycleTimeMs);
+        lTotalFlow = lResult.minuteTotalLpm + lResult.minuteLeakLpm;
+        if (((lResult.validMask & BREATH_RESULT_VALID_MINUTE_LEAK) != 0U) &&
+            (monitorEngineFinite(lTotalFlow) != 0U) && (lTotalFlow > 0.0F)) {
+            lResult.leakPercent = (lResult.minuteLeakLpm / lTotalFlow) * 100.0F;
+            lResult.validMask |= BREATH_RESULT_VALID_LEAK_PERCENT;
+        }
+        if (monitorEngineFinite(lResult.minuteTotalLpm) == 0U) {
+            lResult.minuteTotalLpm = 0.0F;
+        }
+    }
     repRtosEnterCritical();
     gMonitorData[MONITOR_HMI_TIDA_VOL_INSP] = lResult.vtiMl;
     gMonitorData[MONITOR_HMI_PRS_MEAN] = lResult.meanPressureCmh2o;
+    gMonitorData[MONITOR_HMI_MV_LEAK] = lResult.minuteLeakLpm;
+    gMonitorData[MONITOR_HMI_MV_TOTAL] = lResult.minuteTotalLpm;
+    gMonitorData[MONITOR_HMI_LEAK_PERCENT] = lResult.leakPercent;
     gMonitorData[MONITOR_HMI_TIDA_VOL_EXP] = lResult.vteMl;
     gMonitorData[MONITOR_HMI_PPEAK] = lResult.ppeakCmh2o;
     gMonitorData[MONITOR_HMI_PLATEAU_PRS] = lResult.plateauPressureCmh2o;
@@ -379,6 +415,9 @@ static int8_t monitorEngineBreathStart(uint32_t nowMs)
     gMonitorEngine.peepPreviousValid = 0U;
     gMonitorEngine.peepSampleCount = 0U;
     gMonitorEngine.peepSampleIndex = 0U;
+    gMonitorEngine.minuteLeakSumLpm = 0.0F;
+    gMonitorEngine.minuteLeakSampleCount = 0U;
+    gMonitorEngine.minuteLeakInvalid = 0U;
     gMonitorEngine.leakFlowSumLpm = 0.0F;
     gMonitorEngine.leakPressureRootSum = 0.0F;
     gMonitorEngine.leakCycleInvalid = 0U;

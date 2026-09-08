@@ -83,3 +83,7 @@ CommTask 独占 PA9/PA10 串口和协议队列，SysTask 恢复 20 ms 空任务�
 同固件补测 500 mL、Ti 2000 ms、15/min：10 次完整呼吸全部通过，范围 495.83～524.54 mL，末尾五次均值 500.994 mL，记录在 `build/vac_long_500_v2/`。
 
 PAC 压力控制不使用报警高限 `pressureHigh` 限制患者压力参考值或吸气压力目标；仍保留控制器固有的 100 cmH₂O 目标上限。高压报警检测继续使用 MCM 下发的报警高限。CPAP-PSV/PSV-ST 和 VAC 保持原有限压逻辑。`develop/test_flow_pause.py` 覆盖 PAC 报警高限变化不影响目标及 PSV/ST 限压回归。
+
+`MONITOR_HMI_MV_LEAK` 为完整呼吸周期内 `MONITOR_LEAK_FLOW` 的 6 ms 等间隔均值，单位 L/min（等价于周期泄漏积分除以周期时长），包含吸气、暂停和呼气。周期结束发布到 `stBreathResult.minuteLeakLpm`，周期内保持不变；首个周期尚无有效泄漏系数、周期内估计无效或压力异常时置零且不置 `BREATH_RESULT_VALID_MINUTE_LEAK`。停止、调零和无有效计划时清零。CommTask 按逐呼吸结果通过 MCM `0x0B` 上传，无符号 16 位、数值 ×10、scale=1，沿用现有队列重试。监测与协议主机回归覆盖周期均值、快照保持、异常窗口和报文编码。
+
+`MONITOR_HMI_MV_TOTAL` 按同一完整周期的呼出 VTe（mL）×60/实测周期时长（ms）计算，单位 L/min，包含自主和机控呼吸，不另加跨周期平滑。`MONITOR_HMI_LEAK_PERCENT = MONITOR_HMI_MV_LEAK / (MONITOR_HMI_MV_TOTAL + MONITOR_HMI_MV_LEAK) × 100`，随完成结果发布。容量采样或泄漏估计无效、分母非有限或为零时，泄漏率置零且不上传；有效的零泄漏上传 0%。MCM `0x0C` 使用一字节整数百分比、scale=0，截断小数并限幅 0..100；沿用逐呼吸上传与队列重试。停止、调零时监测快照清零。

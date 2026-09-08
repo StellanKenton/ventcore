@@ -135,6 +135,68 @@ static void testMeanPressure(void) {
     gRunning = 0U;
 }
 
+/** Verify completed minute leak reaches the wire with decimal scaling. */
+static void testMinuteLeak(void) {
+    uint8_t lExpected[32];
+    gRunning = 1U;
+    ProtocolProcessInit(0);
+    for (uint32_t lIndex = 1U; lIndex <= 2U; lIndex++) {
+        gBreathResult = (stBreathResult){.sequence = lIndex,
+            .minuteLeakLpm = lIndex == 1U ? 12.5F : 0.0F,
+            .validMask = BREATH_RESULT_VALID_COMPLETE | BREATH_RESULT_VALID_MINUTE_LEAK};
+        SubIDCache_t lItem = {.m_id = 0x0BU,
+            .m_value = (uint16_t)(int16_t)(gBreathResult.minuteLeakLpm * 10.0F),
+            .m_size = E_MVLEAK_SIZE, .m_scale = E_MVLEAK_SCALE};
+        uint16_t lLength = ProtocolCreateSubIdData(lExpected, PROTOCOL_ADDR_VCM_TO_MCM,
+            false, PROTOCOL_TX_MID_MONITOR_PARAMS, (const uint8_t *)&lItem, 1U);
+        ProtocolDetectDataPreProcess(0, 50U);
+        ProtocolSchedulerProcess(0);
+        assert(gTxSize == lLength && memcmp(gTx, lExpected, lLength) == 0);
+        assert(ProtocolCheckCRC(gTx));
+        gTxSize = 0U;
+        ProtocolDetectDataPreProcess(0, 100U);
+        ProtocolSchedulerProcess(0);
+        assert(gTxSize == 0U);
+    }
+    gBreathResult.sequence++;
+    gBreathResult.validMask = BREATH_RESULT_VALID_COMPLETE;
+    ProtocolDetectDataPreProcess(0, 150U);
+    ProtocolSchedulerProcess(0);
+    assert(gTxSize == 0U);
+    gRunning = 0U;
+}
+
+/** Verify completed leak percentage reaches the wire as an integer. */
+static void testLeakPercent(void) {
+    uint8_t lExpected[32];
+    gRunning = 1U;
+    ProtocolProcessInit(0);
+    for (uint32_t lIndex = 1U; lIndex <= 2U; lIndex++) {
+        gBreathResult = (stBreathResult){.sequence = lIndex,
+            .leakPercent = lIndex == 1U ? 25.0F : 0.0F,
+            .validMask = BREATH_RESULT_VALID_COMPLETE | BREATH_RESULT_VALID_LEAK_PERCENT};
+        SubIDCache_t lItem = {.m_id = 0x0CU,
+            .m_value = (uint16_t)(int16_t)(gBreathResult.leakPercent),
+            .m_size = E_LEAKPERCENT_SIZE, .m_scale = E_LEAKPERCENT_SCALE};
+        uint16_t lLength = ProtocolCreateSubIdData(lExpected, PROTOCOL_ADDR_VCM_TO_MCM,
+            false, PROTOCOL_TX_MID_MONITOR_PARAMS, (const uint8_t *)&lItem, 1U);
+        ProtocolDetectDataPreProcess(0, 50U);
+        ProtocolSchedulerProcess(0);
+        assert(gTxSize == lLength && memcmp(gTx, lExpected, lLength) == 0);
+        assert(ProtocolCheckCRC(gTx));
+        gTxSize = 0U;
+        ProtocolDetectDataPreProcess(0, 100U);
+        ProtocolSchedulerProcess(0);
+        assert(gTxSize == 0U);
+    }
+    gBreathResult.sequence++;
+    gBreathResult.validMask = BREATH_RESULT_VALID_COMPLETE;
+    ProtocolDetectDataPreProcess(0, 150U);
+    ProtocolSchedulerProcess(0);
+    assert(gTxSize == 0U);
+    gRunning = 0U;
+}
+
 /** Deliver bytes through the production UART-to-parser path. */
 static void feed(const uint8_t *data, uint16_t length) {
     memcpy(gRx + gRxSize, data, length); gRxSize += length;
@@ -305,6 +367,8 @@ int main(void) {
     ProtocolSchedulerProcess(0); assert(gTxSize == length && memcmp(bytes, gTx, length) == 0);
     testPhysAlarms();
     testMeanPressure();
+    testMinuteLeak();
+    testLeakPercent();
     testHeartbeat();
     return 0;
 }

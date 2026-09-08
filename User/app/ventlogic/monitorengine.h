@@ -45,6 +45,8 @@ extern "C" {
 #define BREATH_RESULT_VALID_PLATEAU_PRESSURE     (1UL << 8)
 #define BREATH_RESULT_VOLUME_LIMITED            (1UL << 9)
 #define BREATH_RESULT_VALID_MEAN_PRESSURE       (1UL << 10)
+#define BREATH_RESULT_VALID_MINUTE_LEAK         (1UL << 11)
+#define BREATH_RESULT_VALID_LEAK_PERCENT        (1UL << 12)
 
 typedef enum {
     MONITOR_DATA_NONE = 0,
@@ -71,6 +73,10 @@ typedef enum {
     MONITOR_HMI_CYCLE_TIME_MS,
     /* Mean PAT pressure over the latest complete inspiration and expiration. */
     MONITOR_HMI_PRS_MEAN,
+    /* Mean compensated leak flow over the completed breath, in L/min. */
+    MONITOR_HMI_MV_LEAK,
+    MONITOR_HMI_MV_TOTAL,
+    MONITOR_HMI_LEAK_PERCENT,
     MONITOR_DATA_COUNT,
 } eMonitorDataType;
 
@@ -90,6 +96,9 @@ typedef struct stBreathResult {
     float ppeakCmh2o;
     float plateauPressureCmh2o;
     float meanPressureCmh2o;
+    float minuteLeakLpm;
+    float minuteTotalLpm;
+    float leakPercent;
     float peepCmh2o;
     float peakInspiratoryFlowLpm;
     eBreathCycleReason cycleReason;
@@ -116,6 +125,9 @@ typedef struct stMonitorEngine {
     uint8_t peepSampleCount;
     uint8_t peepSampleIndex;
     uint8_t peepPreviousValid;
+    float minuteLeakSumLpm;
+    uint32_t minuteLeakSampleCount;
+    uint8_t minuteLeakInvalid;
     float leakFlowSumLpm;
     float leakPressureRootSum;
     float flowZeroOffsetLpm;

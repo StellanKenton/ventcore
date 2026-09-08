@@ -322,7 +322,69 @@ static void meanPressure(void) {
     assert(monitorEngineBreathResultGet(&lResult) == MONITOR_ENGINE_ERROR_STATE);
 }
 
+/** Verify leak averaging uses both phases and preserves completed snapshots. */
+static void minuteLeak(void) {
+    stBreathResult lResult;
+    reset();
+    sample(PHASE_INSP, 10.0F, 25.0F);
+    sample(PHASE_EXP, 10.0F, 25.0F);
+    monitorEngineBreathComplete(gNow);
+    assert(monitorEngineBreathResultGet(&lResult) == MONITOR_ENGINE_SUCCESS);
+    assert((lResult.validMask & BREATH_RESULT_VALID_MINUTE_LEAK) == 0U);
+    assert((lResult.validMask & BREATH_RESULT_VALID_LEAK_PERCENT) == 0U);
+    gPlan.sequence++;
+    sample(PHASE_INSP, 10.0F, 25.0F);
+    sample(PHASE_INSP, 10.0F, 25.0F);
+    sample(PHASE_EXP, -4.0F, 4.0F);
+    assert(monitorEngineGet(MONITOR_HMI_MV_LEAK) == 0.0F);
+    monitorEngineBreathComplete(gNow);
+    assert(monitorEngineBreathResultGet(&lResult) == MONITOR_ENGINE_SUCCESS);
+    assert((lResult.validMask & BREATH_RESULT_VALID_MINUTE_LEAK) != 0U);
+    assert(fabsf(lResult.minuteLeakLpm - 8.0F) < 0.001F);
+    assert(fabsf(lResult.minuteTotalLpm - 2.0F) < 0.001F);
+    assert(fabsf(lResult.leakPercent - 80.0F) < 0.001F);
+    assert((lResult.validMask & BREATH_RESULT_VALID_LEAK_PERCENT) != 0U);
+    assert(fabsf(monitorEngineGet(MONITOR_HMI_LEAK_PERCENT) - 80.0F) < 0.001F);
+    assert(fabsf(monitorEngineGet(MONITOR_HMI_MV_LEAK) - 8.0F) < 0.001F);
+    gPlan.sequence++;
+    sample(PHASE_INSP, 10.0F, 25.0F);
+    assert(fabsf(monitorEngineGet(MONITOR_HMI_MV_LEAK) - 8.0F) < 0.001F);
+    sample(PHASE_EXP, 4.0F, NAN);
+    monitorEngineBreathComplete(gNow);
+    assert(monitorEngineBreathResultGet(&lResult) == MONITOR_ENGINE_SUCCESS);
+    assert((lResult.validMask & BREATH_RESULT_VALID_MINUTE_LEAK) == 0U);
+    assert((lResult.validMask & BREATH_RESULT_VALID_LEAK_PERCENT) == 0U);
+    assert(monitorEngineGet(MONITOR_HMI_MV_LEAK) == 0.0F);
+    sample(PHASE_IDLE, 0.0F, 0.0F);
+    assert(monitorEngineGet(MONITOR_HMI_MV_LEAK) == 0.0F);
+}
+
+/** Reject zero denominators and retain valid zero-leak percentages. */
+static void leakPercent(void) {
+    stBreathResult lResult;
+    reset();
+    sample(PHASE_INSP, 10.0F, 25.0F);
+    sample(PHASE_EXP, -10.0F, 25.0F);
+    monitorEngineBreathComplete(gNow);
+    gPlan.sequence++;
+    sample(PHASE_INSP, 10.0F, 25.0F);
+    sample(PHASE_EXP, -10.0F, 25.0F);
+    monitorEngineBreathComplete(gNow);
+    assert(monitorEngineBreathResultGet(&lResult) == MONITOR_ENGINE_SUCCESS);
+    assert((lResult.validMask & BREATH_RESULT_VALID_LEAK_PERCENT) != 0U);
+    assert(lResult.leakPercent == 0.0F);
+    gPlan.sequence++;
+    sample(PHASE_INSP, 0.0F, 25.0F);
+    sample(PHASE_EXP, 0.0F, 25.0F);
+    monitorEngineBreathComplete(gNow);
+    assert(monitorEngineBreathResultGet(&lResult) == MONITOR_ENGINE_SUCCESS);
+    assert((lResult.validMask & BREATH_RESULT_VALID_LEAK_PERCENT) == 0U);
+    assert(monitorEngineGet(MONITOR_HMI_LEAK_PERCENT) == 0.0F);
+}
+
 int main(void) {
+    leakPercent();
+    minuteLeak();
     meanPressure();
     cpapAlarms();
     stBreathResult lResult;

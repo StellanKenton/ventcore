@@ -1644,8 +1644,8 @@ static void protocolMonitorSubIdAppend(SubIDCache_t *subIds, uint8_t *count,
 void ProtocolSendMonitorParamsFromCache(uint8_t instance)
 {
 #if PROTOCOL_MONITOR_PARAMS_SEND_ENABLE
-    static uint8_t lTxData[80];
-    static SubIDCache_t lSubIds[14];
+    static uint8_t lTxData[88];
+    static SubIDCache_t lSubIds[16];
     uint64_t lIeValue = 0U;
     uint8_t lCount = 0U;
 
@@ -1663,6 +1663,10 @@ void ProtocolSendMonitorParamsFromCache(uint8_t instance)
         g_txMonitorParamsCache.m_tve, E_TVE_SIZE, E_TVE_SCALE);
     protocolMonitorSubIdAppend(lSubIds, &lCount, 0x07U,
         g_txMonitorParamsCache.m_tveSpn, E_TVESPN_SIZE, E_TVESPN_SCALE);
+    protocolMonitorSubIdAppend(lSubIds, &lCount, 0x0BU,
+        g_txMonitorParamsCache.m_mvLeak, E_MVLEAK_SIZE, E_MVLEAK_SCALE);
+    protocolMonitorSubIdAppend(lSubIds, &lCount, 0x0CU,
+        g_txMonitorParamsCache.m_leakPercent, E_LEAKPERCENT_SIZE, E_LEAKPERCENT_SCALE);
     protocolMonitorSubIdAppend(lSubIds, &lCount, 0x0EU,
         g_txMonitorParamsCache.m_inspFlow, E_INSPFLOW_SIZE, E_INSPFLOW_SCALE);
     protocolMonitorSubIdAppend(lSubIds, &lCount, 0x10U,
@@ -1746,6 +1750,18 @@ void ProtocolDetectDataPreProcess(uint8_t instance, uint32_t taskCounter)
                 INT16_MIN, INT16_MAX);
             g_txMonitorParamsCache.m_valid[0x03U] = true;
         }
+        if ((lResult.validMask & BREATH_RESULT_VALID_MINUTE_LEAK) != 0U) {
+            g_txMonitorParamsCache.m_mvLeak = (uint16_t)protocolWaveValue(
+                lResult.minuteLeakLpm * (float)ProtocolGetScale(E_MVLEAK_SCALE),
+                0, UINT16_MAX);
+            g_txMonitorParamsCache.m_valid[0x0BU] = true;
+        }
+        if ((lResult.validMask & BREATH_RESULT_VALID_LEAK_PERCENT) != 0U) {
+            g_txMonitorParamsCache.m_leakPercent = (uint16_t)protocolWaveValue(
+                lResult.leakPercent * (float)ProtocolGetScale(E_LEAKPERCENT_SCALE),
+                0, 100);
+            g_txMonitorParamsCache.m_valid[0x0CU] = true;
+        }
         if ((lResult.validMask & BREATH_RESULT_VALID_PEEP) != 0U) {
             g_txMonitorParamsCache.m_peep = (uint16_t)protocolWaveValue(
                 monitorEngineGet(MONITOR_HMI_PEEP) *
@@ -1815,7 +1831,7 @@ void ProtocolDetectDataPreProcess(uint8_t instance, uint32_t taskCounter)
         }
 
         /* Unavailable monitor outputs remain unset: FiO2, minute volumes,
-         * leak percentage, expiratory peak flow, resistance, compliance, RCexp,
+         * expiratory peak flow, resistance, compliance, RCexp,
          * WOB, PEEPi/PEEPtotal, P0.1, NIF, PTP, TVE/IBW, oxygen source pressure
          * and derived oxygen/mechanics indices. */
     }
