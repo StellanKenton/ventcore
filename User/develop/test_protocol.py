@@ -197,6 +197,130 @@ static void testLeakPercent(void) {
     gRunning = 0U;
 }
 
+/** Verify completed resistance reaches the wire as an integer. */
+static void testResistanceInspiratory(void) {
+    uint8_t lExpected[32];
+    gRunning = 1U;
+    ProtocolProcessInit(0);
+    for (uint32_t lIndex = 1U; lIndex <= 2U; lIndex++) {
+        gBreathResult = (stBreathResult){.sequence = lIndex,
+            .resistanceInspiratory = lIndex == 1U ? 25.0F : 0.0F,
+            .validMask = BREATH_RESULT_VALID_COMPLETE | BREATH_RESULT_VALID_RES_INSP};
+        SubIDCache_t lItem = {.m_id = 0x16U,
+            .m_value = (uint16_t)(int16_t)(gBreathResult.resistanceInspiratory),
+            .m_size = E_RINSP_SIZE, .m_scale = E_RINSP_SCALE};
+        uint16_t lLength = ProtocolCreateSubIdData(lExpected, PROTOCOL_ADDR_VCM_TO_MCM,
+            false, PROTOCOL_TX_MID_MONITOR_PARAMS, (const uint8_t *)&lItem, 1U);
+        ProtocolDetectDataPreProcess(0, 50U);
+        ProtocolSchedulerProcess(0);
+        assert(gTxSize == lLength && memcmp(gTx, lExpected, lLength) == 0);
+        assert(ProtocolCheckCRC(gTx));
+        gTxSize = 0U;
+        ProtocolDetectDataPreProcess(0, 100U);
+        ProtocolSchedulerProcess(0);
+        assert(gTxSize == 0U);
+    }
+    gBreathResult.sequence++;
+    gBreathResult.validMask = BREATH_RESULT_VALID_COMPLETE;
+    ProtocolDetectDataPreProcess(0, 150U);
+    ProtocolSchedulerProcess(0);
+    assert(gTxSize == 0U);
+    gRunning = 0U;
+}
+
+/** Verify completed resistance reaches the wire as an integer. */
+static void testResistanceExpiratory(void) {
+    uint8_t lExpected[32];
+    gRunning = 1U;
+    ProtocolProcessInit(0);
+    for (uint32_t lIndex = 1U; lIndex <= 2U; lIndex++) {
+        gBreathResult = (stBreathResult){.sequence = lIndex,
+            .resistanceExpiratory = lIndex == 1U ? 25.0F : 0.0F,
+            .validMask = BREATH_RESULT_VALID_COMPLETE | BREATH_RESULT_VALID_RES_EXP};
+        SubIDCache_t lItem = {.m_id = 0x17U,
+            .m_value = (uint16_t)(int16_t)(gBreathResult.resistanceExpiratory),
+            .m_size = E_REXP_SIZE, .m_scale = E_REXP_SCALE};
+        uint16_t lLength = ProtocolCreateSubIdData(lExpected, PROTOCOL_ADDR_VCM_TO_MCM,
+            false, PROTOCOL_TX_MID_MONITOR_PARAMS, (const uint8_t *)&lItem, 1U);
+        ProtocolDetectDataPreProcess(0, 50U);
+        ProtocolSchedulerProcess(0);
+        assert(gTxSize == lLength && memcmp(gTx, lExpected, lLength) == 0);
+        assert(ProtocolCheckCRC(gTx));
+        gTxSize = 0U;
+        ProtocolDetectDataPreProcess(0, 100U);
+        ProtocolSchedulerProcess(0);
+        assert(gTxSize == 0U);
+    }
+    gBreathResult.sequence++;
+    gBreathResult.validMask = BREATH_RESULT_VALID_COMPLETE;
+    ProtocolDetectDataPreProcess(0, 150U);
+    ProtocolSchedulerProcess(0);
+    assert(gTxSize == 0U);
+    gRunning = 0U;
+}
+
+/** Verify completed compliance reaches the wire with decimal scaling. */
+static void testComplianceDynamic(void) {
+    uint8_t lExpected[32];
+    gRunning = 1U;
+    ProtocolProcessInit(0);
+    for (uint32_t lIndex = 1U; lIndex <= 2U; lIndex++) {
+        gBreathResult = (stBreathResult){.sequence = lIndex,
+            .complianceDynamic = lIndex == 1U ? 25.5F : 0.0F,
+            .validMask = BREATH_RESULT_VALID_COMPLETE | BREATH_RESULT_VALID_C_DYNC};
+        SubIDCache_t lItem = {.m_id = 0x19U,
+            .m_value = (uint16_t)(int16_t)(gBreathResult.complianceDynamic * 10.0F),
+            .m_size = E_CDYN_SIZE, .m_scale = E_CDYN_SCALE};
+        uint16_t lLength = ProtocolCreateSubIdData(lExpected, PROTOCOL_ADDR_VCM_TO_MCM,
+            false, PROTOCOL_TX_MID_MONITOR_PARAMS, (const uint8_t *)&lItem, 1U);
+        ProtocolDetectDataPreProcess(0, 50U);
+        ProtocolSchedulerProcess(0);
+        assert(gTxSize == lLength && memcmp(gTx, lExpected, lLength) == 0);
+        assert(ProtocolCheckCRC(gTx));
+        gTxSize = 0U;
+        ProtocolDetectDataPreProcess(0, 100U);
+        ProtocolSchedulerProcess(0);
+        assert(gTxSize == 0U);
+    }
+    gBreathResult.sequence++;
+    gBreathResult.validMask = BREATH_RESULT_VALID_COMPLETE;
+    ProtocolDetectDataPreProcess(0, 150U);
+    ProtocolSchedulerProcess(0);
+    assert(gTxSize == 0U);
+    gRunning = 0U;
+}
+
+/** Verify completed compliance reaches the wire with decimal scaling. */
+static void testComplianceStatic(void) {
+    uint8_t lExpected[32];
+    gRunning = 1U;
+    ProtocolProcessInit(0);
+    for (uint32_t lIndex = 1U; lIndex <= 2U; lIndex++) {
+        gBreathResult = (stBreathResult){.sequence = lIndex,
+            .complianceStatic = lIndex == 1U ? 25.5F : 0.0F,
+            .validMask = BREATH_RESULT_VALID_COMPLETE | BREATH_RESULT_VALID_C_STAT};
+        SubIDCache_t lItem = {.m_id = 0x18U,
+            .m_value = (uint16_t)(int16_t)(gBreathResult.complianceStatic * 10.0F),
+            .m_size = E_CSTAT_SIZE, .m_scale = E_CSTAT_SCALE};
+        uint16_t lLength = ProtocolCreateSubIdData(lExpected, PROTOCOL_ADDR_VCM_TO_MCM,
+            false, PROTOCOL_TX_MID_MONITOR_PARAMS, (const uint8_t *)&lItem, 1U);
+        ProtocolDetectDataPreProcess(0, 50U);
+        ProtocolSchedulerProcess(0);
+        assert(gTxSize == lLength && memcmp(gTx, lExpected, lLength) == 0);
+        assert(ProtocolCheckCRC(gTx));
+        gTxSize = 0U;
+        ProtocolDetectDataPreProcess(0, 100U);
+        ProtocolSchedulerProcess(0);
+        assert(gTxSize == 0U);
+    }
+    gBreathResult.sequence++;
+    gBreathResult.validMask = BREATH_RESULT_VALID_COMPLETE;
+    ProtocolDetectDataPreProcess(0, 150U);
+    ProtocolSchedulerProcess(0);
+    assert(gTxSize == 0U);
+    gRunning = 0U;
+}
+
 /** Deliver bytes through the production UART-to-parser path. */
 static void feed(const uint8_t *data, uint16_t length) {
     memcpy(gRx + gRxSize, data, length); gRxSize += length;
@@ -368,6 +492,10 @@ int main(void) {
     testPhysAlarms();
     testMeanPressure();
     testMinuteLeak();
+    testComplianceDynamic();
+    testComplianceStatic();
+    testResistanceInspiratory();
+    testResistanceExpiratory();
     testLeakPercent();
     testHeartbeat();
     return 0;

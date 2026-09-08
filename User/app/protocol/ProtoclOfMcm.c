@@ -1644,8 +1644,8 @@ static void protocolMonitorSubIdAppend(SubIDCache_t *subIds, uint8_t *count,
 void ProtocolSendMonitorParamsFromCache(uint8_t instance)
 {
 #if PROTOCOL_MONITOR_PARAMS_SEND_ENABLE
-    static uint8_t lTxData[88];
-    static SubIDCache_t lSubIds[16];
+    static uint8_t lTxData[112];
+    static SubIDCache_t lSubIds[20];
     uint64_t lIeValue = 0U;
     uint8_t lCount = 0U;
 
@@ -1683,6 +1683,14 @@ void ProtocolSendMonitorParamsFromCache(uint8_t instance)
            sizeof(g_txMonitorParamsCache.m_ie));
     protocolMonitorSubIdAppend(lSubIds, &lCount, 0x15U,
         lIeValue, E_IE_SIZE, E_IE_SCALE);
+    protocolMonitorSubIdAppend(lSubIds, &lCount, 0x16U,
+        g_txMonitorParamsCache.m_rInsp, E_RINSP_SIZE, E_RINSP_SCALE);
+    protocolMonitorSubIdAppend(lSubIds, &lCount, 0x17U,
+        g_txMonitorParamsCache.m_rExp, E_REXP_SIZE, E_REXP_SCALE);
+    protocolMonitorSubIdAppend(lSubIds, &lCount, 0x18U,
+        g_txMonitorParamsCache.m_cStat, E_CSTAT_SIZE, E_CSTAT_SCALE);
+    protocolMonitorSubIdAppend(lSubIds, &lCount, 0x19U,
+        g_txMonitorParamsCache.m_cDyn, E_CDYN_SIZE, E_CDYN_SCALE);
 
     if (lCount > 0U) {
         uint16_t lSendLength = ProtocolCreateSubIdData(
@@ -1762,6 +1770,30 @@ void ProtocolDetectDataPreProcess(uint8_t instance, uint32_t taskCounter)
                 0, 100);
             g_txMonitorParamsCache.m_valid[0x0CU] = true;
         }
+        if ((lResult.validMask & BREATH_RESULT_VALID_C_DYNC) != 0U) {
+            g_txMonitorParamsCache.m_cDyn = (uint16_t)protocolWaveValue(
+                lResult.complianceDynamic * (float)ProtocolGetScale(E_CDYN_SCALE),
+                0, UINT16_MAX);
+            g_txMonitorParamsCache.m_valid[0x19U] = true;
+        }
+        if ((lResult.validMask & BREATH_RESULT_VALID_C_STAT) != 0U) {
+            g_txMonitorParamsCache.m_cStat = (uint16_t)protocolWaveValue(
+                lResult.complianceStatic * (float)ProtocolGetScale(E_CSTAT_SCALE),
+                0, UINT16_MAX);
+            g_txMonitorParamsCache.m_valid[0x18U] = true;
+        }
+        if ((lResult.validMask & BREATH_RESULT_VALID_RES_INSP) != 0U) {
+            g_txMonitorParamsCache.m_rInsp = (uint16_t)protocolWaveValue(
+                lResult.resistanceInspiratory * (float)ProtocolGetScale(E_RINSP_SCALE),
+                0, UINT16_MAX);
+            g_txMonitorParamsCache.m_valid[0x16U] = true;
+        }
+        if ((lResult.validMask & BREATH_RESULT_VALID_RES_EXP) != 0U) {
+            g_txMonitorParamsCache.m_rExp = (uint16_t)protocolWaveValue(
+                lResult.resistanceExpiratory * (float)ProtocolGetScale(E_REXP_SCALE),
+                0, UINT16_MAX);
+            g_txMonitorParamsCache.m_valid[0x17U] = true;
+        }
         if ((lResult.validMask & BREATH_RESULT_VALID_PEEP) != 0U) {
             g_txMonitorParamsCache.m_peep = (uint16_t)protocolWaveValue(
                 monitorEngineGet(MONITOR_HMI_PEEP) *
@@ -1831,7 +1863,7 @@ void ProtocolDetectDataPreProcess(uint8_t instance, uint32_t taskCounter)
         }
 
         /* Unavailable monitor outputs remain unset: FiO2, minute volumes,
-         * expiratory peak flow, resistance, compliance, RCexp,
+         * expiratory peak flow, RCexp,
          * WOB, PEEPi/PEEPtotal, P0.1, NIF, PTP, TVE/IBW, oxygen source pressure
          * and derived oxygen/mechanics indices. */
     }

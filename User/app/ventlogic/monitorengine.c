@@ -340,7 +340,63 @@ static void monitorEngineBreathResultPublish(uint32_t nowMs)
             lResult.minuteTotalLpm = 0.0F;
         }
     }
+    /* Use the requested L/min formulas; expiration uses peak flow magnitude. */
+    if ((gMonitorEngine.volumeInvalid == 0U) &&
+        ((lResult.validMask & BREATH_RESULT_VALID_PEEP) != 0U)) {
+        float lResistance;
+        if (((lResult.validMask & BREATH_RESULT_VALID_PPEAK) != 0U) &&
+            (lResult.peakInspiratoryFlowLpm > 0.0F)) {
+            lResistance = 60.0F * (lResult.ppeakCmh2o - lResult.peepCmh2o) /
+                          lResult.peakInspiratoryFlowLpm;
+            if ((monitorEngineFinite(lResistance) != 0U) && (lResistance >= 0.0F)) {
+                lResult.resistanceInspiratory = lResistance;
+                lResult.validMask |= BREATH_RESULT_VALID_RES_INSP;
+            }
+        }
+        if (((lResult.validMask & BREATH_RESULT_VALID_PLATEAU_PRESSURE) != 0U) &&
+            (gMonitorEngine.peakExpiratoryFlowLpm > 0.0F)) {
+            lResistance = 60.0F * (lResult.plateauPressureCmh2o - lResult.peepCmh2o) /
+                          gMonitorEngine.peakExpiratoryFlowLpm;
+            if ((monitorEngineFinite(lResistance) != 0U) && (lResistance >= 0.0F)) {
+                lResult.resistanceExpiratory = lResistance;
+                lResult.validMask |= BREATH_RESULT_VALID_RES_EXP;
+            }
+        }
+    }
+    /* Compliance uses completed volumes in mL and positive pressure differences. */
+    if ((gMonitorEngine.volumeInvalid == 0U) &&
+        ((lResult.validMask & (BREATH_RESULT_VALID_VTI | BREATH_RESULT_VALID_PPEAK |
+                              BREATH_RESULT_VALID_PEEP)) ==
+         (BREATH_RESULT_VALID_VTI | BREATH_RESULT_VALID_PPEAK | BREATH_RESULT_VALID_PEEP))) {
+        float lPressureDifference = lResult.ppeakCmh2o - lResult.peepCmh2o;
+        if ((monitorEngineFinite(lPressureDifference) != 0U) &&
+            (lPressureDifference > 0.0F) && (lResult.vtiMl >= 0.0F)) {
+            float lCompliance = lResult.vtiMl / lPressureDifference;
+            if (monitorEngineFinite(lCompliance) != 0U) {
+                lResult.complianceDynamic = lCompliance;
+                lResult.validMask |= BREATH_RESULT_VALID_C_DYNC;
+            }
+        }
+    }
+    if ((gMonitorEngine.volumeInvalid == 0U) &&
+        ((lResult.validMask & (BREATH_RESULT_VALID_VTE | BREATH_RESULT_VALID_PLATEAU_PRESSURE |
+                              BREATH_RESULT_VALID_PEEP)) ==
+         (BREATH_RESULT_VALID_VTE | BREATH_RESULT_VALID_PLATEAU_PRESSURE | BREATH_RESULT_VALID_PEEP))) {
+        float lPressureDifference = lResult.plateauPressureCmh2o - lResult.peepCmh2o;
+        if ((monitorEngineFinite(lPressureDifference) != 0U) &&
+            (lPressureDifference > 0.0F) && (lResult.vteMl >= 0.0F)) {
+            float lCompliance = lResult.vteMl / lPressureDifference;
+            if (monitorEngineFinite(lCompliance) != 0U) {
+                lResult.complianceStatic = lCompliance;
+                lResult.validMask |= BREATH_RESULT_VALID_C_STAT;
+            }
+        }
+    }
     repRtosEnterCritical();
+    gMonitorData[MONITOR_HMI_C_DYNC] = lResult.complianceDynamic;
+    gMonitorData[MONITOR_HMI_C_STAT] = lResult.complianceStatic;
+    gMonitorData[MONITOR_HMI_RES_INSP] = lResult.resistanceInspiratory;
+    gMonitorData[MONITOR_HMI_RES_EXP] = lResult.resistanceExpiratory;
     gMonitorData[MONITOR_HMI_TIDA_VOL_INSP] = lResult.vtiMl;
     gMonitorData[MONITOR_HMI_PRS_MEAN] = lResult.meanPressureCmh2o;
     gMonitorData[MONITOR_HMI_MV_LEAK] = lResult.minuteLeakLpm;
@@ -406,6 +462,7 @@ static int8_t monitorEngineBreathStart(uint32_t nowMs)
     gMonitorEngine.breathStartedMs = nowMs;
     gMonitorEngine.peakPressureCmh2o = lPressure;
     gMonitorEngine.peakInspiratoryFlowLpm = 0.0F;
+    gMonitorEngine.peakExpiratoryFlowLpm = 0.0F;
     gMonitorEngine.plateauPressureSumCmh2o = 0.0F;
     gMonitorEngine.plateauPressureSampleCount = 0U;
     gMonitorEngine.meanPressureSumCmh2o = 0.0F;
@@ -521,6 +578,11 @@ static void monitorEngineTidalVolumeProcess(uint32_t nowMs)
     if ((gMonitorEngine.runState == MONITOR_STATE_INSP) &&
         (lFlow > gMonitorEngine.peakInspiratoryFlowLpm)) {
         gMonitorEngine.peakInspiratoryFlowLpm = lFlow;
+    }
+
+    if ((gMonitorEngine.runState == MONITOR_STATE_EXP) &&
+        (-lFlow > gMonitorEngine.peakExpiratoryFlowLpm)) {
+        gMonitorEngine.peakExpiratoryFlowLpm = -lFlow;
     }
 
     /* Keep a signed whole-breath integral for volume-balance diagnostics. */

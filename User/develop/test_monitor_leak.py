@@ -382,7 +382,96 @@ static void leakPercent(void) {
     assert(monitorEngineGet(MONITOR_HMI_LEAK_PERCENT) == 0.0F);
 }
 
+/** Verify resistance formulas, phase peaks, invalid inputs and cycle reset. */
+static void resistance(void) {
+    stBreathResult lResult;
+    reset();
+    sample(PHASE_INSP, 10.0F, 25.0F);
+    gPause = 1U;
+    sample(PHASE_INSP, 0.0F, 20.0F);
+    sample(PHASE_EXP, -30.0F, 10.0F);
+    sample(PHASE_EXP, 100.0F, 5.0F);
+    monitorEngineBreathComplete(gNow);
+    assert(monitorEngineBreathResultGet(&lResult) == MONITOR_ENGINE_SUCCESS);
+    assert((lResult.validMask & BREATH_RESULT_VALID_RES_INSP) != 0U);
+    assert((lResult.validMask & BREATH_RESULT_VALID_RES_EXP) != 0U);
+    assert(lResult.resistanceInspiratory == 120.0F);
+    assert(lResult.resistanceExpiratory == 30.0F);
+    assert(monitorEngineGet(MONITOR_HMI_RES_INSP) == 120.0F);
+    assert(monitorEngineGet(MONITOR_HMI_RES_EXP) == 30.0F);
+    gPlan.sequence++;
+    sample(PHASE_INSP, 0.0F, 20.0F);
+    assert(monitorEngineGet(MONITOR_HMI_RES_EXP) == 30.0F);
+    sample(PHASE_EXP, 0.0F, 5.0F);
+    monitorEngineBreathComplete(gNow);
+    assert(monitorEngineBreathResultGet(&lResult) == MONITOR_ENGINE_SUCCESS);
+    assert((lResult.validMask & (BREATH_RESULT_VALID_RES_INSP | BREATH_RESULT_VALID_RES_EXP)) == 0U);
+    assert(monitorEngineGet(MONITOR_HMI_RES_INSP) == 0.0F);
+    assert(monitorEngineGet(MONITOR_HMI_RES_EXP) == 0.0F);
+    reset();
+    sample(PHASE_INSP, 10.0F, 25.0F);
+    sample(PHASE_EXP, -30.0F, 5.0F);
+    monitorEngineBreathComplete(gNow);
+    assert(monitorEngineBreathResultGet(&lResult) == MONITOR_ENGINE_SUCCESS);
+    assert((lResult.validMask & BREATH_RESULT_VALID_RES_INSP) != 0U);
+    assert((lResult.validMask & BREATH_RESULT_VALID_RES_EXP) == 0U);
+    reset();
+    sample(PHASE_INSP, 10.0F, NAN);
+    sample(PHASE_EXP, -30.0F, 5.0F);
+    monitorEngineBreathComplete(gNow);
+    assert(monitorEngineBreathResultGet(&lResult) == MONITOR_ENGINE_SUCCESS);
+    assert((lResult.validMask & (BREATH_RESULT_VALID_RES_INSP | BREATH_RESULT_VALID_RES_EXP)) == 0U);
+    sample(PHASE_IDLE, 0.0F, 0.0F);
+    assert(monitorEngineGet(MONITOR_HMI_RES_INSP) == 0.0F);
+}
+
+/** Verify compliance formulas, invalid denominators and snapshot lifetime. */
+static void compliance(void) {
+    stBreathResult lResult;
+    for (unsigned int lCase = 0U; lCase < 6U; lCase++) {
+        reset();
+        sample(PHASE_INSP, 100.0F, lCase == 4U ? NAN : 25.0F);
+        if (lCase != 3U) {
+            gPause = 1U;
+            sample(PHASE_INSP, 0.0F, 20.0F);
+        }
+        sample(PHASE_EXP, -60.0F, 10.0F);
+        sample(PHASE_EXP, 0.0F, lCase == 1U ? 25.0F :
+               lCase == 2U ? 30.0F : lCase == 5U ? 20.0F : 5.0F);
+        monitorEngineBreathComplete(gNow);
+        assert(monitorEngineBreathResultGet(&lResult) == MONITOR_ENGINE_SUCCESS);
+        if (lCase == 0U || lCase == 3U || lCase == 5U) {
+            assert((lResult.validMask & BREATH_RESULT_VALID_C_DYNC) != 0U);
+            assert(fabsf(lResult.complianceDynamic - (lCase == 5U ? 2.0F : 0.5F)) < 0.0001F);
+        } else {
+            assert((lResult.validMask & BREATH_RESULT_VALID_C_DYNC) == 0U);
+            assert(lResult.complianceDynamic == 0.0F);
+        }
+        if (lCase == 0U) {
+            assert((lResult.validMask & BREATH_RESULT_VALID_C_STAT) != 0U);
+            assert(fabsf(lResult.complianceStatic - 0.4F) < 0.0001F);
+            assert(monitorEngineGet(MONITOR_HMI_C_DYNC) == lResult.complianceDynamic);
+            assert(monitorEngineGet(MONITOR_HMI_C_STAT) == lResult.complianceStatic);
+            gPlan.sequence++;
+            sample(PHASE_INSP, 0.0F, 5.0F);
+            assert(monitorEngineGet(MONITOR_HMI_C_STAT) == lResult.complianceStatic);
+            sample(PHASE_EXP, 0.0F, 5.0F);
+            monitorEngineBreathComplete(gNow);
+            assert(monitorEngineGet(MONITOR_HMI_C_STAT) == 0.0F);
+            assert(monitorEngineGet(MONITOR_HMI_C_DYNC) == 0.0F);
+        } else {
+            assert((lResult.validMask & BREATH_RESULT_VALID_C_STAT) == 0U);
+            assert(lResult.complianceStatic == 0.0F);
+        }
+        sample(PHASE_IDLE, 0.0F, 0.0F);
+        assert(monitorEngineGet(MONITOR_HMI_C_STAT) == 0.0F);
+        assert(monitorEngineGet(MONITOR_HMI_C_DYNC) == 0.0F);
+    }
+}
+
 int main(void) {
+    compliance();
+    resistance();
     leakPercent();
     minuteLeak();
     meanPressure();

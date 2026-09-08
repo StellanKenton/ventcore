@@ -47,6 +47,10 @@ extern "C" {
 #define BREATH_RESULT_VALID_MEAN_PRESSURE       (1UL << 10)
 #define BREATH_RESULT_VALID_MINUTE_LEAK         (1UL << 11)
 #define BREATH_RESULT_VALID_LEAK_PERCENT        (1UL << 12)
+#define BREATH_RESULT_VALID_RES_INSP            (1UL << 13)
+#define BREATH_RESULT_VALID_RES_EXP             (1UL << 14)
+#define BREATH_RESULT_VALID_C_DYNC              (1UL << 15)
+#define BREATH_RESULT_VALID_C_STAT              (1UL << 16)
 
 typedef enum {
     MONITOR_DATA_NONE = 0,
@@ -77,6 +81,10 @@ typedef enum {
     MONITOR_HMI_MV_LEAK,
     MONITOR_HMI_MV_TOTAL,
     MONITOR_HMI_LEAK_PERCENT,
+    MONITOR_HMI_RES_INSP,
+    MONITOR_HMI_RES_EXP,
+    MONITOR_HMI_C_DYNC,
+    MONITOR_HMI_C_STAT,
     MONITOR_DATA_COUNT,
 } eMonitorDataType;
 
@@ -99,6 +107,10 @@ typedef struct stBreathResult {
     float minuteLeakLpm;
     float minuteTotalLpm;
     float leakPercent;
+    float resistanceInspiratory;
+    float resistanceExpiratory;
+    float complianceDynamic;
+    float complianceStatic;
     float peepCmh2o;
     float peakInspiratoryFlowLpm;
     eBreathCycleReason cycleReason;
@@ -113,6 +125,7 @@ typedef struct stMonitorEngine {
     uint32_t inspiratoryTimeMs;
     float peakPressureCmh2o;
     float peakInspiratoryFlowLpm;
+    float peakExpiratoryFlowLpm;
     float plateauPressureSumCmh2o;
     uint32_t plateauPressureSampleCount;
     float meanPressureSumCmh2o;
