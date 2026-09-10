@@ -28,6 +28,8 @@ static uint32_t gPressurePlanSequence;
 static uint8_t gPressureHoldSettled;
 static uint8_t gPressureHoldTrackPending;
 static uint16_t gPressureBlowerTarget;
+static float gPressureHoldPreviousPressure;
+static float gPressureHoldPressureSlope;
 
 /** Clamp a pressure-controller value to a configured range. */
 static float pressureControllerClamp(float value, float minimum, float maximum)
@@ -146,6 +148,8 @@ static void pressureControllerStateEnter(ePressureControllerState state)
         gPressureRiseStartPressure = controlDataGet(PAT_REAL_PRS);
         gPressureRiseElapsedMs = 0U;
     } else if (state == PRESSURE_CONTROLLER_INSP_HOLD) {
+        gPressureHoldPreviousPressure = controlDataGet(PAT_REAL_PRS);
+        gPressureHoldPressureSlope = 0.0F;
         (void)pidSetTunings(&gPressureOuterPid,
                             PRESSURE_CONTROLLER_OUTER_HOLD_KP,
                             PRESSURE_CONTROLLER_OUTER_KI,
@@ -265,13 +269,25 @@ static int8_t pressureControllerInnerLoopProcess(float inspTarget, float *effort
 }
 
 /** Vent bounded excess pressure during inspiratory hold. */
-static void pressureControllerHoldReliefProcess(stActuatorRequest *request)
+static void pressureControllerHoldReliefProcess(const stBreathPlan *plan, stActuatorRequest *request)
 {
     float lExcessPressure;
+    float lPatientPressure = controlDataGet(PAT_REAL_PRS);
     float lValveOpening;
 
-    lExcessPressure = controlDataGet(PAT_REAL_PRS) -
+    lExcessPressure = lPatientPressure -
                       phaseControlGet(PHASE_REF_PRESSURE);
+    if (plan->mode == VENT_MD_PAC) {
+        /* As in expiration capture, close before falling pressure crosses target. */
+        gPressureHoldPressureSlope += PRESSURE_CONTROLLER_HOLD_SLOPE_FILTER_GAIN *
+            (((lPatientPressure - gPressureHoldPreviousPressure) /
+              PRESSURE_CONTROLLER_SAMPLE_PERIOD_S) - gPressureHoldPressureSlope);
+        gPressureHoldPreviousPressure = lPatientPressure;
+        lExcessPressure += pressureControllerClamp(
+            gPressureHoldPressureSlope * PRESSURE_CONTROLLER_HOLD_PREDICTION_TIME_S,
+            -PRESSURE_CONTROLLER_HOLD_PREDICTION_MAX,
+            PRESSURE_CONTROLLER_HOLD_PREDICTION_MAX);
+    }
     if (lExcessPressure <= PRESSURE_CONTROLLER_HOLD_RELIEF_DEADBAND) {
         return;
     }
@@ -378,7 +394,7 @@ static int8_t pressureControllerHoldProcess(const stBreathPlan *plan,
                                                   PRESSURE_CONTROLLER_INSP_HOLD,
                                                   request);
     if (lStatus == ACTUATOR_REQUEST_SUCCESS) {
-        pressureControllerHoldReliefProcess(request);
+        pressureControllerHoldReliefProcess(plan, request);
     }
     return lStatus;
 }

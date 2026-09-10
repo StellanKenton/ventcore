@@ -99,7 +99,7 @@ static void testPacSettledHold(void) {
         lPlan.mode = lModes[lMode];
         gData[PAT_REAL_PRS] = 31.0F;
         gData[INSP_REAL_PRS] = 31.0F;
-        gData[PAT_REAL_FLOW] = 20.0F;
+        gData[PAT_REAL_FLOW] = 30.0F;
         gData[INSP_REAL_FLOW] = 20.0F;
         pressureControllerInit();
         for (unsigned lStep = 0U; lStep < 100U; lStep++) {
@@ -107,9 +107,13 @@ static void testPacSettledHold(void) {
         }
         pressureControllerDiagnosticGet(&lDiagnostic);
         assert(lDiagnostic.flowCompensation > 1.0F);
+        gData[PAT_REAL_FLOW] = 21.0F;
+        assert(pressureControllerProcess(&lPlan, &lRequest) == ACTUATOR_REQUEST_SUCCESS);
+        pressureControllerDiagnosticGet(&lDiagnostic);
+        assert(lDiagnostic.flowCompensation > 1.0F);
         lTrackedSpeed = lRequest.blowerTarget + 12U;
         gData[RAW_BLOWER_SPEED] = (float)lTrackedSpeed;
-        gData[PAT_REAL_FLOW] = 2.0F;
+        gData[PAT_REAL_FLOW] = 20.0F;
         assert(pressureControllerProcess(&lPlan, &lRequest) == ACTUATOR_REQUEST_SUCCESS);
         pressureControllerDiagnosticGet(&lDiagnostic);
         if (lMode != 0U) {
@@ -120,7 +124,7 @@ static void testPacSettledHold(void) {
         assert(lDiagnostic.flowCompensation == 0.0F);
         /* Residual supply flow must not reintroduce withdrawn feedforward. */
         gData[INSP_REAL_FLOW] = 40.0F;
-        gData[PAT_REAL_FLOW] = 11.0F;
+        gData[PAT_REAL_FLOW] = 21.0F;
         assert(pressureControllerProcess(&lPlan, &lRequest) == ACTUATOR_REQUEST_SUCCESS);
         pressureControllerDiagnosticGet(&lDiagnostic);
         assert(lDiagnostic.flowCompensation == 0.0F);
@@ -153,7 +157,7 @@ static void testPacSettledHold(void) {
         assert(pressureControllerProcess(&lPlan, &lRequest) == ACTUATOR_REQUEST_SUCCESS);
         assert(lRequest.blowerTarget < 750U);
         lPlan.sequence++;
-        gData[PAT_REAL_FLOW] = 20.0F;
+        gData[PAT_REAL_FLOW] = 30.0F;
         gData[PAT_REAL_PRS] = 5.0F;
         gData[INSP_REAL_PRS] = 5.0F;
         assert(pressureControllerProcess(&lPlan, &lRequest) == ACTUATOR_REQUEST_SUCCESS);
@@ -171,7 +175,7 @@ static void testPacSettledHold(void) {
         pressureControllerInit();
         gData[PAT_REAL_PRS] = 30.0F;
         gData[INSP_REAL_PRS] = 30.0F;
-        gData[PAT_REAL_FLOW] = 20.0F;
+        gData[PAT_REAL_FLOW] = 30.0F;
         gData[INSP_REAL_FLOW] = 20.0F;
         for (unsigned lStep = 0U; lStep < 100U; lStep++) {
             assert(pressureControllerProcess(&lPlan, &lRequest) == ACTUATOR_REQUEST_SUCCESS);
@@ -181,6 +185,52 @@ static void testPacSettledHold(void) {
         gData[PAT_REAL_FLOW] = 0.0F;
         assert(pressureControllerProcess(&lPlan, &lRequest) == ACTUATOR_REQUEST_SUCCESS);
         assert(abs((int)lRequest.blowerTarget - (int)lInitialTarget) <= (lCase == 2U ? 40 : 1));
+    }
+    for (unsigned lIndex = 0U; lIndex < CONTROL_DATA_COUNT; lIndex++) {
+        gData[lIndex] = 0.0F;
+    }
+    gRefs[PHASE_REF_PRESSURE] = 0.0F;
+}
+
+/** Predictive PAC relief must brake falling pressure without changing PSV. */
+static void testPacPredictiveRelief(void) {
+    const eVentMode lModes[] = {VENT_MD_PAC, VENT_MD_CPAP_PSV, VENT_MD_PSV_ST};
+    stVentLimitSettings lLimits = {.pressureLow = 1.0F, .pressureHigh = 60.0F};
+    stBreathPlan lPlan = {.sequence = 1U, .mode = VENT_MD_PAC,
+        .breathType = BREATH_TYPE_MANDATORY_PRESSURE, .peepCmh2o = 5.0F,
+        .inspiratoryPressureCmh2o = 30.0F, .riseTimeMs = 200U,
+        .maximumInspiratoryTimeMs = 2000U, .pressureLimitCmh2o = 60.0F,
+        .limitSettings = &lLimits};
+    stActuatorRequest lRequest;
+    for (unsigned lMode = 0U; lMode < 3U; lMode++) {
+        lPlan.mode = lModes[lMode];
+        pressureControllerInit();
+        gData[PAT_REAL_FLOW] = 0.0F;
+        gData[INSP_REAL_FLOW] = 0.0F;
+        gData[PAT_REAL_PRS] = 31.4F;
+        gData[INSP_REAL_PRS] = 31.4F;
+        for (unsigned lStep = 0U; lStep < 100U; lStep++) {
+            assert(pressureControllerProcess(&lPlan, &lRequest) == ACTUATOR_REQUEST_SUCCESS);
+        }
+        assert(lRequest.expiratoryValveDuty < 100U);
+        gData[PAT_REAL_PRS] = 30.9F;
+        assert(pressureControllerProcess(&lPlan, &lRequest) == ACTUATOR_REQUEST_SUCCESS);
+        assert(lMode == 0U ? lRequest.expiratoryValveDuty == 100U :
+                            lRequest.expiratoryValveDuty < 100U);
+        /* A sustained excess must still vent after the slope decays. */
+        for (unsigned lStep = 0U; lStep < 100U; lStep++) {
+            assert(pressureControllerProcess(&lPlan, &lRequest) == ACTUATOR_REQUEST_SUCCESS);
+        }
+        assert(lRequest.expiratoryValveDuty < 100U);
+        gData[PAT_REAL_PRS] = 40.0F;
+        assert(pressureControllerProcess(&lPlan, &lRequest) == ACTUATOR_REQUEST_SUCCESS);
+        assert(lRequest.expiratoryValveDuty == 95U);
+        lPlan.sequence++;
+        gData[PAT_REAL_PRS] = 30.9F;
+        for (unsigned lStep = 0U; lStep < 100U; lStep++) {
+            assert(pressureControllerProcess(&lPlan, &lRequest) == ACTUATOR_REQUEST_SUCCESS);
+        }
+        assert(lRequest.expiratoryValveDuty == 99U);
     }
     for (unsigned lIndex = 0U; lIndex < CONTROL_DATA_COUNT; lIndex++) {
         gData[lIndex] = 0.0F;
@@ -248,6 +298,7 @@ static void testVacFeedforward(void) {
 int main(void) {
     testPressureAlarmLimit();
     testPacSettledHold();
+    testPacPredictiveRelief();
     stVentLimitSettings lLimits = {.pressureLow = 1.0F, .pressureHigh = 60.0F};
     stBreathPlan lPlan = {.sequence = 1U, .mode = VENT_MD_VAC,
         .breathType = BREATH_TYPE_MANDATORY_VOLUME, .targetTidalVolumeMl = 500.0F,
