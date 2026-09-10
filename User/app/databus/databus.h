@@ -5,9 +5,15 @@
 #ifndef USER_APP_DATABUS_DATABUS_H
 #define USER_APP_DATABUS_DATABUS_H
 
+#include <stdint.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+#define DATABUS_STATUS_OK                    1
+#define DATABUS_ERROR_ARGUMENT             (-1)
+#define DATABUS_ERROR_CALIBRATION          (-2)
 
 #define VENT_DATA_CHANNEL_COUNT            6U
 
@@ -22,7 +28,7 @@ void controlDataCalibrationProcess(void);
 
 /* Add the difference from the cumulative offset as an ADC-domain zero correction.
  * Call only with a measured zero-flow residual plus the current getter value. */
-void controlDataMdiffFlowZeroOffsetSet(float offsetLpm);
+int8_t controlDataMdiffFlowZeroOffsetSet(float offsetLpm);
 
 /* Return the cumulative re-zero token in current gas-corrected L/min units. */
 float controlDataMdiffFlowZeroOffsetGet(void);

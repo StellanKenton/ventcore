@@ -177,23 +177,24 @@ void controlDataCalibrationProcess(void) {
 }
 
 /** Apply a new zero offset to the current and subsequent proximal-flow data. */
-void controlDataMdiffFlowZeroOffsetSet(float offsetLpm) {
+int8_t controlDataMdiffFlowZeroOffsetSet(float offsetLpm) {
     float lBtpsCoefficient = controlDataGet(BTPS_COEFFICIENT);
     float lShiftAd;
     float lResidualFlow;
 
     if (!isfinite(offsetLpm) || !isfinite(lBtpsCoefficient) || (lBtpsCoefficient <= 0.0F)) {
-        return;
+        return DATABUS_ERROR_ARGUMENT;
     }
     lResidualFlow = offsetLpm / lBtpsCoefficient - gMdiffFlowZeroOffsetLpm;
     if ((calibtransAdultProxFlowZeroShift(lResidualFlow, &lShiftAd) != CALIBTRANS_STATUS_OK) ||
         !isfinite(lShiftAd)) {
-        return;
+        return DATABUS_ERROR_CALIBRATION;
     }
     /* The public cumulative L/min offset is a re-zero token, not a flow subtraction. */
     gMdiffZeroShiftAd += lShiftAd;
     gMdiffFlowZeroOffsetLpm = offsetLpm / lBtpsCoefficient;
     controlDataPatientFlowProcess(lBtpsCoefficient);
+    return DATABUS_STATUS_OK;
 }
 
 /** Return the proximal-flow zero offset currently in use. */

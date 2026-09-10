@@ -400,18 +400,21 @@ def invoke_jlink_commander(jlink: Dict[str, Any], commands: Iterable[str]) -> No
     jlink_exe = require_executable(str(jlink["jlink_exe"]), "J-Link commander")
     script = "\n".join(commands) + "\n"
     output = run_command_checked_output([jlink_exe, *jlink_base_args(jlink)], input_text=script)
-    if "O.K." in output:
-        return
-
     failure_markers = [
         "Cannot connect to the probe/programmer",
+        "Cannot connect to J-Link",
         "J-Link connection not established",
         "Failed to connect",
+        "Failed to prepare for programming",
+        "Failed to power up DAP",
         "ERROR:",
         "Error:",
+        "****** Error:",
     ]
     if any(marker in output for marker in failure_markers):
         raise DeviceToolError("J-Link command reported a failure.")
+    if "O.K." not in output:
+        raise DeviceToolError("J-Link command did not report success.")
 
 
 def flash(profile: Dict[str, Any]) -> None:

@@ -33,7 +33,10 @@ static float gQuietFlow;
 
 float controlDataGet(ControlData_Index_EnumDef index) { return gData[index]; }
 float controlDataMdiffFlowZeroOffsetGet(void) { return gOffset; }
-void controlDataMdiffFlowZeroOffsetSet(float offset) { gOffset = offset; }
+int8_t controlDataMdiffFlowZeroOffsetSet(float offset) {
+    gOffset = offset;
+    return DATABUS_STATUS_OK;
+}
 uint8_t calibrationIsValid(eCalibrationType type) { (void)type; return 1U; }
 int8_t calibtransPrsSpeed(float pressure, float *speed) {
     *speed = pressure * 10.0F;

@@ -25,11 +25,16 @@ static float gData[CONTROL_DATA_COUNT];
 static float gOffset = 1.5F;
 static uint32_t gRunSequence = 1U;
 static unsigned int gOffsetSetCount;
+static int8_t gOffsetSetStatus = DATABUS_STATUS_OK;
 
 float controlDataGet(ControlData_Index_EnumDef index) { return gData[index]; }
-void controlDataMdiffFlowZeroOffsetSet(float offsetLpm) {
+int8_t controlDataMdiffFlowZeroOffsetSet(float offsetLpm) {
+    if (gOffsetSetStatus != DATABUS_STATUS_OK) {
+        return gOffsetSetStatus;
+    }
     gOffset = offsetLpm;
     gOffsetSetCount++;
+    return DATABUS_STATUS_OK;
 }
 float controlDataMdiffFlowZeroOffsetGet(void) { return gOffset; }
 uint8_t breathSchedulerRunningGet(void) { return 1U; }
@@ -57,8 +62,8 @@ int main(void) {
     assert(gOffset == 1.5F);
 
     gData[INSP_REAL_FLOW] = 0.0F;
-    /* The attached board currently exhibits about 4.4 L/min of zero drift. */
-    gData[PAT_REAL_FLOW] = 4.4F;
+    /* A large zero drift must not lock itself out of compensation. */
+    gData[PAT_REAL_FLOW] = 14.4F;
     gData[PAT_REAL_PRS] = 0.0F;
     for (lNowMs = 6U; lNowMs < PHASE_COMPENSATION_TIME_MS; lNowMs += 6U) {
         phaseControllerProcess(lNowMs);
@@ -68,18 +73,32 @@ int main(void) {
     phaseControllerProcess(PHASE_COMPENSATION_TIME_MS + 6U);
     assert(phaseControllerStateGet() == PHASE_EXP);
     assert(gOffsetSetCount == 1U);
-    assert((gOffset > 5.899F) && (gOffset < 5.901F));
+    assert((gOffset > 15.899F) && (gOffset < 15.901F));
+
+    gRunSequence++;
+    phaseControllerProcess(5000U);
+    assert(phaseControllerStateGet() == PHASE_COMPEN);
+    gOffsetSetStatus = DATABUS_ERROR_CALIBRATION;
+    for (lNowMs = 5006U; lNowMs < 5000U + PHASE_COMPENSATION_TIME_MS;
+         lNowMs += 6U) {
+        phaseControllerProcess(lNowMs);
+    }
+    phaseControllerProcess(5000U + PHASE_COMPENSATION_TIME_MS + 6U);
+    assert(phaseControllerStateGet() == PHASE_IDLE);
+    assert(gOffsetSetCount == 1U);
+    assert((gOffset > 15.899F) && (gOffset < 15.901F));
 
     gRunSequence++;
     phaseControllerProcess(10000U);
     assert(phaseControllerStateGet() == PHASE_COMPEN);
+    gOffsetSetStatus = DATABUS_STATUS_OK;
     gData[INSP_REAL_FLOW] = 1.0F;
     for (lNowMs = 10006U; lNowMs <= 10000U + PHASE_COMPENSATION_TIMEOUT_MS + 6U; lNowMs += 6U) {
         phaseControllerProcess(lNowMs);
     }
     assert(phaseControllerStateGet() == PHASE_EXP);
     assert(gOffsetSetCount == 1U);
-    assert((gOffset > 5.899F) && (gOffset < 5.901F));
+    assert((gOffset > 15.899F) && (gOffset < 15.901F));
     return 0;
 }
 /**************************End of file********************************/
@@ -109,7 +128,7 @@ def main():
         environment["PATH"] = str(Path(compiler).parent) + os.pathsep + environment["PATH"]
         subprocess.run(command, check=True, env=environment)
         subprocess.run([str(executable)], check=True, env=environment)
-    print("PASS: correction accumulates on the active offset and timeout preserves it")
+    print("PASS: large-drift correction, apply failure, and timeout retention")
 
 
 if __name__ == "__main__":

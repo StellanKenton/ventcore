@@ -94,7 +94,7 @@ int main(void) {
     assert(calibtransAdultProxFlowAtPressure(2048, -CALIBTRANS_AMBIENT_PRESSURE_CMH2O, &lFlow) < 0);
     /* Remove positive sensor drift in ADC space; both flow directions stay exact. */
     for (lIndex = 0; lIndex < 100; ++lIndex) sample(0, 0, 3);
-    controlDataMdiffFlowZeroOffsetSet(controlDataGet(PAT_REAL_FLOW));
+    assert(controlDataMdiffFlowZeroOffsetSet(controlDataGet(PAT_REAL_FLOW)) == DATABUS_STATUS_OK);
     assert(fabsf(controlDataGet(PAT_REAL_FLOW)) < 0.01F);
     for (lIndex = 0; lIndex < 100; ++lIndex) sample(30, 30, 3);
     assert(fabsf(controlDataGet(PAT_REAL_FLOW) - 30) < 0.01F);
@@ -102,7 +102,8 @@ int main(void) {
     assert(fabsf(controlDataGet(PAT_REAL_FLOW) + 60) < 0.01F);
     /* Re-zero after a drift reversal; cumulative API must apply only the residual. */
     for (lIndex = 0; lIndex < 100; ++lIndex) sample(0, 0, -2);
-    controlDataMdiffFlowZeroOffsetSet(controlDataMdiffFlowZeroOffsetGet() + controlDataGet(PAT_REAL_FLOW));
+    assert(controlDataMdiffFlowZeroOffsetSet(controlDataMdiffFlowZeroOffsetGet() +
+        controlDataGet(PAT_REAL_FLOW)) == DATABUS_STATUS_OK);
     for (lIndex = 0; lIndex < 100; ++lIndex) sample(30, 30, -2);
     assert(fabsf(controlDataGet(PAT_REAL_FLOW) - 30) < 0.01F);
     lOffset = controlDataMdiffFlowZeroOffsetGet();

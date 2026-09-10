@@ -9,6 +9,7 @@
 ***********************************************************************************/
 #include "phasecontroller.h"
 
+#include <math.h>
 #include <string.h>
 
 #include "controldata.h"
@@ -84,11 +85,12 @@ static int8_t phaseControllerCompensationProcess(uint32_t nowMs)
     float lInspFlow = controlDataGet(INSP_REAL_FLOW);
     float lPatientFlow = controlDataGet(PAT_REAL_FLOW);
     float lPatientPressure = controlDataGet(PAT_REAL_PRS);
+    float lOffset;
 
-    if ((lInspFlow > -PHASE_COMPENSATION_INSP_FLOW_MAX) &&
+    /* Gate on independent quiet-circuit signals, not on the drift being removed. */
+    if (isfinite(lPatientFlow) &&
+        (lInspFlow > -PHASE_COMPENSATION_INSP_FLOW_MAX) &&
         (lInspFlow < PHASE_COMPENSATION_INSP_FLOW_MAX) &&
-        (lPatientFlow > -PHASE_COMPENSATION_PAT_FLOW_MAX) &&
-        (lPatientFlow < PHASE_COMPENSATION_PAT_FLOW_MAX) &&
         (lPatientPressure > -PHASE_COMPENSATION_PRESSURE_MAX) &&
         (lPatientPressure < PHASE_COMPENSATION_PRESSURE_MAX)) {
         if (gPhaseController.compensationSampleCount == 0U) {
@@ -100,10 +102,15 @@ static int8_t phaseControllerCompensationProcess(uint32_t nowMs)
             PHASE_COMPENSATION_TIME_MS) {
             lPatientFlow = gPhaseController.compensationFlowSum /
                            (float)gPhaseController.compensationSampleCount;
-            controlDataMdiffFlowZeroOffsetSet(
-                controlDataMdiffFlowZeroOffsetGet() + lPatientFlow);
-            LOG_I("phase", "prox zero100=%ld samples=%u",
+            lOffset = controlDataMdiffFlowZeroOffsetGet() + lPatientFlow;
+            if (controlDataMdiffFlowZeroOffsetSet(lOffset) != DATABUS_STATUS_OK) {
+                LOG_E("phase", "prox zero apply failed residual100=%ld",
+                      (long)(lPatientFlow * 100.0F));
+                return PHASE_CONTROL_ERROR_STATE;
+            }
+            LOG_I("phase", "prox zero applied residual100=%ld offset100=%ld samples=%u",
                   (long)(lPatientFlow * 100.0F),
+                  (long)(controlDataMdiffFlowZeroOffsetGet() * 100.0F),
                   (unsigned int)gPhaseController.compensationSampleCount);
             return phaseControllerInitialExpirationStart(nowMs);
         }
@@ -117,7 +124,17 @@ static int8_t phaseControllerCompensationProcess(uint32_t nowMs)
         return PHASE_CONTROL_SUCCESS;
     }
     /* Keep the EEPROM-calibrated zero when no valid quiet window is available. */
-    LOG_W("phase", "prox zero skipped: no quiet window");
+    if (isfinite(lInspFlow) && isfinite(lPatientFlow) &&
+        isfinite(lPatientPressure)) {
+        LOG_W("phase", "prox zero skipped insp100=%ld prox100=%ld prs100=%ld samples=%u",
+              (long)(lInspFlow * 100.0F),
+              (long)(lPatientFlow * 100.0F),
+              (long)(lPatientPressure * 100.0F),
+              (unsigned int)gPhaseController.compensationSampleCount);
+    } else {
+        LOG_W("phase", "prox zero skipped: invalid sensor samples=%u",
+              (unsigned int)gPhaseController.compensationSampleCount);
+    }
     return phaseControllerInitialExpirationStart(nowMs);
 }
 
