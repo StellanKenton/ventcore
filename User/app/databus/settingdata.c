@@ -67,19 +67,14 @@ stVentCpapPsvSettings gVentCpapPsvSettings = {
 stVentPsvStSettings gVentPsvStSettings = {
     .oxygenPercent = 21.0f,
     .peepCmh2o = 5.0f,
-    .pressureLimitCmh2o = 40.0f,
     .triggerType = VENT_TRIGGER_PRESSURE,
     .pressureTriggerCmh2o = -2.0f,
     .flowTriggerLpm = 3.0f,
     .pressureSupportCmh2o = 10.0f,
     .riseTimeMs = 200U,
     .cycleOffPercent = 25.0f,
-    .maxInspiratoryTimeMs = 2000U,
-    .apneaTimeMs = 10000U,
-    .backupRespiratoryRateBpm = 12.0f,
-    .backupInspiratoryTimeMs = 1200U,
-    .backupInspiratoryPressureCmh2o = 15.0f,
-    .backupRiseTimeMs = 200U,
+    .apneaInspTimeMs = 1300U,
+    .apneaRateBpm = 15.0f,
 };
 
 static stVentLimitSettings gHostVentLimitSettings = {
@@ -133,19 +128,14 @@ static stVentCpapPsvSettings gHostVentCpapPsvSettings = {
 static stVentPsvStSettings gHostVentPsvStSettings = {
     .oxygenPercent = 21.0f,
     .peepCmh2o = 5.0f,
-    .pressureLimitCmh2o = 40.0f,
     .triggerType = VENT_TRIGGER_PRESSURE,
     .pressureTriggerCmh2o = -2.0f,
     .flowTriggerLpm = 3.0f,
     .pressureSupportCmh2o = 10.0f,
     .riseTimeMs = 200U,
     .cycleOffPercent = 25.0f,
-    .maxInspiratoryTimeMs = 2000U,
-    .apneaTimeMs = 10000U,
-    .backupRespiratoryRateBpm = 12.0f,
-    .backupInspiratoryTimeMs = 1200U,
-    .backupInspiratoryPressureCmh2o = 15.0f,
-    .backupRiseTimeMs = 200U,
+    .apneaInspTimeMs = 1300U,
+    .apneaRateBpm = 15.0f,
 };
 
 stVentLimitSettings *GetVentLimitSettings(void)

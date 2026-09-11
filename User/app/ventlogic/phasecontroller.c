@@ -146,13 +146,11 @@ static int8_t phaseControllerInspirationStart(eBreathTriggerReason triggerReason
 
     /* Publish the just-ended VTI before the scheduler builds this inspiration. */
     monitorEngineBreathComplete(nowMs);
-    if ((gPhaseController.breathStarted != 0U) ||
-        (triggerReason == BREATH_TRIGGER_REASON_APNEA_BACKUP)) {
-        if (phaseControllerPlanLoad(triggerReason) != PHASE_CONTROL_SUCCESS) {
-            return PHASE_CONTROL_ERROR_STATE;
-        }
-    } else {
-        gPhaseController.activePlan.triggerReason = triggerReason;
+    /* Every inspiration needs a new sequence, including the first patient breath.
+     * Reusing the startup expiration plan leaves the expiration controller in
+     * PEEP with capture cleared, permanently blocking the next trigger. */
+    if (phaseControllerPlanLoad(triggerReason) != PHASE_CONTROL_SUCCESS) {
+        return PHASE_CONTROL_ERROR_STATE;
     }
 
     lPatientPressure = controlDataGet(PAT_REAL_PRS);

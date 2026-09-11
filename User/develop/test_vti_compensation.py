@@ -17,6 +17,9 @@ HARNESS = r'''
 #include "breathscheduler.h"
 #include "phasecontroller.h"
 #include "triggerengine.h"
+#include "cycleengine.h"
+#include "apneaengine.h"
+#include "expirationcontroller.h"
 #include "monitorengine.h"
 #include "flowcontroller.h"
 #include "controldata.h"
@@ -440,7 +443,132 @@ static void testVacTrigger(void) {
     }
 }
 
+/** Exercise production PSV flow cycling, timeout, apnea and ST backup selection. */
+static void testPsv(void) {
+    stBreathPlan lPlan;
+    for (unsigned int lCase = 0U; lCase < 4U; lCase++) {
+        reset();
+        triggerEngineInit();
+        cycleEngineInit();
+        apneaEngineInit();
+        gData[INSP_REAL_FLOW] = 0.0F;
+        gData[PAT_REAL_FLOW] = 0.0F;
+        gData[PAT_REAL_PRS] = 0.0F;
+        GetVentCpapPsvSettings()->triggerType = lCase == 3U ? VENT_TRIGGER_FLOW : VENT_TRIGGER_PRESSURE;
+        assert(breathSchedulerStart(VENT_MD_CPAP_PSV) == BREATH_CONTROL_SUCCESS);
+        for (gNow = 0U; gNow < 2000U; gNow += 6U) {
+            phaseControllerProcess(gNow);
+            if (phaseControllerStateGet() == PHASE_EXP) { break; }
+        }
+        assert(phaseControllerStateGet() == PHASE_EXP);
+        assert(phaseControllerExpirationCaptureNotify() == PHASE_CONTROL_SUCCESS);
+        gData[PAT_REAL_PRS] = 5.0F;
+        gData[PAT_REAL_FLOW] = 0.0F;
+        for (unsigned int lIndex = 0; lIndex < 50; lIndex++, gNow += 6U) {
+            phaseControllerProcess(gNow);
+            triggerEngineProcess(gNow);
+        }
+        if (lCase == 2U) {
+            apneaEngineProcess(gNow);
+            gNow += 10000U;
+            phaseControllerProcess(gNow);
+            apneaEngineProcess(gNow);
+            assert(apneaEngineStateGet() == APNEA_ENGINE_ALARM);
+            assert(phaseControllerStateGet() == PHASE_EXP);
+            continue;
+        }
+        gData[PAT_REAL_PRS] = 2.5F;
+        gData[PAT_REAL_FLOW] = 4.0F;
+        for (unsigned int lIndex = 0; lIndex < 5; lIndex++, gNow += 6U) {
+            triggerEngineProcess(gNow);
+            if (phaseControllerStateGet() == PHASE_INSP) { break; }
+        }
+        assert(phaseControllerStateGet() == PHASE_INSP);
+        assert(phaseControllerActivePlanGet(&lPlan) == PHASE_CONTROL_SUCCESS);
+        assert(lPlan.triggerReason == (lCase == 3U ? BREATH_TRIGGER_REASON_FLOW : BREATH_TRIGGER_REASON_PRESSURE));
+        assert(lPlan.timeTriggerEnabled == 0U && lPlan.cycleType == BREATH_CYCLE_TYPE_FLOW);
+        near(lPlan.inspiratoryPressureCmh2o, 15.0F);
+        gData[PAT_REAL_FLOW] = 40.0F;
+        cycleEngineProcess(gNow);
+        if (lCase == 0U) {
+            gData[PAT_REAL_FLOW] = 9.0F;
+            cycleEngineProcess(gNow + 100U);
+            assert(phaseControllerStateGet() == PHASE_INSP);
+            for (unsigned int lIndex = 0; lIndex < 10; lIndex++) {
+                cycleEngineProcess(gNow + 300U + lIndex * 6U);
+            }
+        } else {
+            cycleEngineProcess(gNow + lPlan.maximumInspiratoryTimeMs);
+        }
+        assert(phaseControllerStateGet() == PHASE_EXP);
+    }
+    GetVentCpapPsvSettings()->cycleOffPercent = NAN;
+    assert(breathSchedulerSettingsUpdate(VENT_MD_CPAP_PSV) == BREATH_CONTROL_ERROR_SETTINGS);
+    GetVentCpapPsvSettings()->cycleOffPercent = 25.0F;
+    reset();
+    assert(breathSchedulerStart(VENT_MD_PSV_ST) == BREATH_CONTROL_SUCCESS);
+    assert(breathSchedulerNextPlanGet(BREATH_TRIGGER_REASON_APNEA_BACKUP, &lPlan) == BREATH_CONTROL_SUCCESS);
+    near(lPlan.inspiratoryPressureCmh2o, 15.0F);
+    assert(lPlan.maximumInspiratoryTimeMs == 1300U && lPlan.backupBreathIntervalMs == 4000U);
+    assert(lPlan.riseTimeMs + lPlan.holdTimeMs == 1300U);
+    GetVentPsvStSettings()->apneaRateBpm = 0.0F;
+    assert(breathSchedulerSettingsUpdate(VENT_MD_PSV_ST) == BREATH_CONTROL_ERROR_SETTINGS);
+    GetVentPsvStSettings()->apneaRateBpm = 15.0F;
+}
+
+/** Run repeated PSV breaths with real expiration readiness, without forced capture. */
+static void testPsvRepeat(void) {
+    stBreathPlan lPlan;
+    stActuatorRequest lRequest = {0};
+    for (unsigned int lType = VENT_TRIGGER_PRESSURE; lType <= VENT_TRIGGER_FLOW; lType++) {
+        reset();
+        triggerEngineInit();
+        cycleEngineInit();
+        expirationControllerInit();
+        GetVentCpapPsvSettings()->triggerType = (eVentTriggerType)lType;
+        assert(breathSchedulerStart(VENT_MD_CPAP_PSV) == BREATH_CONTROL_SUCCESS);
+        gData[INSP_REAL_FLOW] = 0.0F;
+        gData[PAT_REAL_FLOW] = 0.0F;
+        gData[PAT_REAL_PRS] = 0.0F;
+        for (gNow = 0U; gNow < 2000U; gNow += 6U) {
+            phaseControllerProcess(gNow);
+            if (phaseControllerStateGet() == PHASE_EXP) { break; }
+        }
+        for (unsigned int lBreath = 0U; lBreath < 3U; lBreath++) {
+            gData[PAT_REAL_PRS] = 5.0F;
+            gData[INSP_REAL_PRS] = 5.0F;
+            gData[PAT_REAL_FLOW] = 0.0F;
+            for (unsigned int lIndex = 0; lIndex < 200U; lIndex++, gNow += 6U) {
+                phaseControllerProcess(gNow);
+                triggerEngineProcess(gNow);
+                assert(phaseControllerActivePlanGet(&lPlan) == PHASE_CONTROL_SUCCESS);
+                assert(expirationControllerProcess(&lPlan, &lRequest, &lRequest) == ACTUATOR_REQUEST_SUCCESS);
+            }
+            assert(phaseControllerExpirationReadyGet() != 0U);
+            gData[PAT_REAL_PRS] = 2.5F;
+            gData[PAT_REAL_FLOW] = 4.0F;
+            for (unsigned int lIndex = 0; lIndex < 5U; lIndex++, gNow += 6U) {
+                triggerEngineProcess(gNow);
+                if (phaseControllerStateGet() == PHASE_INSP) { break; }
+            }
+            assert(phaseControllerStateGet() == PHASE_INSP);
+            triggerEngineProcess(gNow);
+            gData[PAT_REAL_FLOW] = 40.0F;
+            cycleEngineProcess(gNow);
+            gNow += 300U;
+            gData[PAT_REAL_FLOW] = 9.0F;
+            for (unsigned int lIndex = 0; lIndex < 5U; lIndex++, gNow += 6U) {
+                cycleEngineProcess(gNow);
+            }
+            assert(phaseControllerStateGet() == PHASE_EXP);
+            assert(phaseControllerExpirationReadyGet() == 0U);
+        }
+    }
+}
+
 int main(void) {
+    testPsvRepeat();
+    testPsv();
     testVacTrigger();
     (void)testTimeCompensation;
 #if BREATH_VOLUME_FLOW_COMPENSATION_ENABLE
@@ -481,6 +609,8 @@ def main():
                     "user/tools/filter/numfilter", "user/module/log", "user/tools/ringbuffer"]
         sources = ["user/app/ventlogic/breathscheduler.c", "user/app/ventlogic/phasecontroller.c",
                    "user/app/ventlogic/triggerengine.c",
+                   "user/app/ventalgo/expirationcontroller.c",
+                   "user/app/ventlogic/cycleengine.c", "user/app/ventlogic/apneaengine.c",
                    "user/app/ventlogic/monitorengine.c", "user/app/ventalgo/flowcontroller.c",
                    "user/app/databus/settingdata.c", "user/tools/controller/pid.c"]
         command = [compiler, "-std=c11", "-Wall", "-Wextra", "-Werror",

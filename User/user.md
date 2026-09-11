@@ -119,3 +119,9 @@ PAC 压力控制不使用报警高限 `pressureHigh` 限制患者压力参考值
 启动调零需要连续 1000 ms 满足入口流量及患者压力的独立静息门限，并要求近端流量样本为有限值；任一条件中断即重新计时，3000 ms 超时保留旧零点。近端流量的绝对值不再作为准入门限，避免超过旧 ±10 L/min 门限的零漂反向锁死补偿。补偿写入失败会中止本次启动并记录错误，不再误报成功。此窗口用于降低滤波后相关零点噪声对整周期容量的偏置，不根据 VTi/VTe 差值自动学习零点。`test_flow_zero_offset.py` 验证大零漂、写入失败、完整窗口前不更新以及超时保留。
 
 2026-09-08 潮气量换算台架回归：模拟肺 PAC，PEEP 5、Delta-P 25 cmH₂O、Ti 1350 ms、20/min、21% 氧、触发关闭。统一排除前两次启动呼吸并取随后 13 次：旧版平均 VTe−VTi 为 22.80 mL（3.34%）；最终 1000 ms 调零固件两次分别为 12.69 mL（1.78%）和 20.06 mL（2.84%），最大单次差值分别为 21.76、28.45 mL，未消除误差。原始日志/结果在 `build/volume_balance_old/`、`build/volume_balance_zero_long/`、`build/volume_balance_zero_repeat/`；统一统计、固件及源码 SHA-256 在 `build/volume_balance_comparison.json`。VAC 500 mL、PEEP 5、Ti 2000 ms、15/min、无暂停的末五次 VTI 为 495.93..503.00 mL，通过原 ±35 mL 目标验收，记录在 `build/volume_balance_vac/`。其中末次 VTi/VTe 为 500.02/533.09 mL，同时 PEEP 降到 3.48 cmH₂O，提示周期首尾储气变化仍影响两者比较；不能把容量目标通过解读为每次吸呼气相等。全部经 Device Tool 构建/烧录/RTT，最终收到停机确认；仅设备自身测量，无独立呼气参考仪器。
+
+CPAP/PSV 使用 `gVentCpapPsvSettings`，通过 `vt psv` 或 `breathSchedulerStart(VENT_MD_CPAP_PSV)` 启动。压力/流量触发后以 PEEP + pressureSupportCmh2o 为目标，按峰值流量百分比切换呼气，保留最短吸气、最大吸气及最短呼气保护；无触发时保持呼气，窒息引擎进入 ALARM 状态，不启动后备呼吸。Scheduler 校验氧浓度、压力、触发、流量切换比例及吸气时序。
+
+PSV-ST 的精简结构体使用 `apneaInspTimeMs` / `apneaRateBpm` 定义后备吸气时长及频率；后备压力共用 PEEP + pressureSupportCmh2o，上升时间共用 riseTimeMs 并限制到后备吸气时长。自主吸气最大时长固定为 2000 ms，压力上限取公共 pressureHigh，窒息等待时间取公共 apneaTimeHigh（秒）。旧协议独立后备压力、最大吸气时间及峰压字段不再写入 PSV-ST；CPAP/PSV 原绑定保留。`test_vti_compensation.py` 用真实 Scheduler/Phase/Trigger/Cycle/Apnea 覆盖 CPAP/PSV 两类触发、流量切换、最大吸气时间、窒息状态及 PSV-ST 后备计划和非法参数拒绝。此回归使用主机合成输入，未验证实机气路。
+
+每次吸气（包括启动等待后的第一口）均加载新的计划序号，启动等待呼气的计划不能复用于第一口吸气。否则吸气结束清除 capture 标志后，呼气控制器因序号未变停留在 PEEP，不再通知捕获完成，CPAP/PSV 第二次触发永久被挡住。`test_vti_compensation.py` 使用真实呼气控制器及相位/触发/流量切换引擎验证压力、流量两类各连续三口，无手动 capture 通知；修复前在呼气准备标志恢复处失败，修复后通过。

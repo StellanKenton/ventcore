@@ -82,6 +82,10 @@ target board.
   tunings and source/firmware hashes alongside raw logs, CSV and summary JSON.
 - `device_tool.py`: command line entry point.
 - `test_vti_compensation.py`: real scheduler/phase/monitor/flow-controller host regression.
+  Also covers CPAP/PSV pressure/flow triggers, flow cycling, maximum inspiration,
+  apnea without backup, and the simplified PSV-ST backup plan and invalid settings.
+  Real expiration control verifies three consecutive PSV breaths for pressure and
+  flow triggering, including rearming after the first breath without forced capture.
   Run `py -3 user/develop/test_vti_compensation.py`. Tests first-sample EMA initialization,
   next-breath application, duplicate/stale rejection, volume-to-flow conversion, bounds,
   convergence under a scripted 80 mL delivery loss, invalid/limited breaths and resets.

@@ -136,19 +136,14 @@ typedef struct stVentCpapPsvSettings {
 typedef struct stVentPsvStSettings {
     float oxygenPercent;
     float peepCmh2o;
-    float pressureLimitCmh2o;
     eVentTriggerType triggerType;
     float pressureTriggerCmh2o;
     float flowTriggerLpm;
     float pressureSupportCmh2o;
     uint32_t riseTimeMs;
     float cycleOffPercent;
-    uint32_t maxInspiratoryTimeMs;
-    uint32_t apneaTimeMs;
-    float backupRespiratoryRateBpm;
-    uint32_t backupInspiratoryTimeMs;
-    float backupInspiratoryPressureCmh2o;
-    uint32_t backupRiseTimeMs;
+    uint32_t apneaInspTimeMs; /* Timed backup inspiration duration. */
+    float apneaRateBpm;       /* Backup frequency after the apnea alarm timeout. */
 } stVentPsvStSettings;
 
 /* Pressure SIMV with spontaneous pressure support. */
