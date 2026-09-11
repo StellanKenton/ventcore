@@ -14,6 +14,7 @@
 #include <string.h>
 
 #include "controldata.h"
+#include "log.h"
 
 static stTriggerEngine gTriggerEngine;
 
@@ -35,7 +36,9 @@ static void triggerEngineIdleEnter(ePhaseControllerState phase)
     gTriggerEngine.state = TRIGGER_ENGINE_IDLE;
     gTriggerEngine.previousPhase = phase;
     gTriggerEngine.planSequence = 0U;
+    gTriggerEngine.triggerType = VENT_TRIGGER_OFF;
     gTriggerEngine.pressureBaselineCmh2o = 0.0F;
+    gTriggerEngine.pressureStableSamples = 0U;
     gTriggerEngine.flowBaselineLpm = 0.0F;
     gTriggerEngine.settleSamples = 0U;
     gTriggerEngine.confirmSamples = 0U;
@@ -48,21 +51,83 @@ static void triggerEngineSettlingEnter(const stBreathPlan *plan,
 {
     gTriggerEngine.state = TRIGGER_ENGINE_SETTLING;
     gTriggerEngine.planSequence = plan->sequence;
+    gTriggerEngine.triggerType = plan->allowedTriggerType;
     gTriggerEngine.pressureBaselineCmh2o = patientPressure;
+    gTriggerEngine.pressureWindowMinCmh2o = patientPressure;
+    gTriggerEngine.pressureWindowMaxCmh2o = patientPressure;
+    gTriggerEngine.pressureStableSamples = 1U;
     gTriggerEngine.flowBaselineLpm = proximalFlow;
     gTriggerEngine.settleSamples = 1U;
     gTriggerEngine.confirmSamples = 0U;
 }
 
-/** Track the stable expiratory baseline with a lightweight IIR filter. */
-static void triggerEngineBaselineUpdate(float patientPressure, float proximalFlow)
-{
-    gTriggerEngine.pressureBaselineCmh2o +=
-        TRIGGER_ENGINE_BASELINE_GAIN *
-        (patientPressure - gTriggerEngine.pressureBaselineCmh2o);
-    gTriggerEngine.flowBaselineLpm +=
-        TRIGGER_ENGINE_BASELINE_GAIN *
-        (proximalFlow - gTriggerEngine.flowBaselineLpm);
+/** Rebuild pressure reference only after a bounded, quiet pressure window. */
+static void triggerEnginePressureBaselineUpdate(float patientPressure) {
+    if ((gTriggerEngine.pressureStableSamples == 0U) ||
+        (patientPressure < gTriggerEngine.pressureWindowMaxCmh2o -
+         TRIGGER_ENGINE_PRESSURE_STABLE_RANGE_CMH2O) ||
+        (patientPressure > gTriggerEngine.pressureWindowMinCmh2o +
+         TRIGGER_ENGINE_PRESSURE_STABLE_RANGE_CMH2O)) {
+        gTriggerEngine.pressureWindowMinCmh2o = patientPressure;
+        gTriggerEngine.pressureWindowMaxCmh2o = patientPressure;
+        gTriggerEngine.pressureStableSamples = 1U;
+        return;
+    }
+    if (patientPressure < gTriggerEngine.pressureWindowMinCmh2o) {
+        gTriggerEngine.pressureWindowMinCmh2o = patientPressure;
+    }
+    if (patientPressure > gTriggerEngine.pressureWindowMaxCmh2o) {
+        gTriggerEngine.pressureWindowMaxCmh2o = patientPressure;
+    }
+    if (gTriggerEngine.pressureStableSamples < TRIGGER_ENGINE_SETTLE_SAMPLES) {
+        gTriggerEngine.pressureStableSamples++;
+    }
+    if (gTriggerEngine.pressureStableSamples >= TRIGGER_ENGINE_SETTLE_SAMPLES) {
+        gTriggerEngine.pressureBaselineCmh2o +=
+            TRIGGER_ENGINE_BASELINE_GAIN *
+            (patientPressure - gTriggerEngine.pressureBaselineCmh2o);
+    }
+}
+
+/** Follow signed expiratory flow; retain the reference on a positive effort. */
+static void triggerEngineFlowBaselineUpdate(float proximalFlow) {
+    if ((gTriggerEngine.state == TRIGGER_ENGINE_SETTLING) ||
+        (proximalFlow < 0.0F) ||
+        (proximalFlow < gTriggerEngine.flowBaselineLpm)) {
+        gTriggerEngine.flowBaselineLpm +=
+            TRIGGER_ENGINE_FLOW_BASELINE_GAIN *
+            (proximalFlow - gTriggerEngine.flowBaselineLpm);
+    }
+    /* Do not carry a small negative residual into the zero-flow interval. */
+    if ((proximalFlow >= 0.0F) && (gTriggerEngine.flowBaselineLpm < 0.0F)) {
+        gTriggerEngine.flowBaselineLpm = 0.0F;
+    }
+}
+
+/** Detect pressure effort before allowing stable samples to move its reference. */
+static bool triggerEnginePressureProcess(float patientPressure, float peep, float threshold) {
+    if (gTriggerEngine.pressureBaselineCmh2o > peep) {
+        gTriggerEngine.pressureBaselineCmh2o = peep;
+    }
+    if ((gTriggerEngine.pressureBaselineCmh2o - patientPressure) >= threshold) {
+        gTriggerEngine.pressureStableSamples = 0U;
+        return true;
+    }
+    if (patientPressure <= peep + TRIGGER_ENGINE_PEEP_TOLERANCE_CMH2O) {
+        triggerEnginePressureBaselineUpdate(patientPressure);
+    } else {
+        gTriggerEngine.pressureStableSamples = 0U;
+    }
+    return false;
+}
+
+/** Detect effort relative to moving expiratory flow, even before zero crossing. */
+static bool triggerEngineFlowProcess(float proximalFlow, float threshold) {
+    if ((proximalFlow - gTriggerEngine.flowBaselineLpm) >= threshold) {
+        return true;
+    }
+    triggerEngineFlowBaselineUpdate(proximalFlow);
+    return false;
 }
 
 void triggerEngineInit(void)
@@ -78,14 +143,13 @@ void triggerEngineProcess(uint32_t nowMs)
     ePhaseControllerState lPhase = phaseControllerStateGet();
     float lPatientPressure;
     float lProximalFlow;
-    float lTriggerEffort;
     float lTriggerThreshold;
     bool lCandidate;
 
     if ((lPhase != PHASE_EXP) ||
-        (phaseControllerExpirationReadyGet() == 0U) ||
         (phaseControllerActivePlanGet(&lPlan) != PHASE_CONTROL_SUCCESS) ||
         ((lPlan.mode != VENT_MD_PAC) &&
+         (lPlan.mode != VENT_MD_VAC) &&
          (lPlan.mode != VENT_MD_CPAP_PSV) &&
          (lPlan.mode != VENT_MD_PSV_ST)) ||
         (lPlan.allowedTriggerType == VENT_TRIGGER_OFF)) {
@@ -101,8 +165,19 @@ void triggerEngineProcess(uint32_t nowMs)
         return;
     }
 
+    /* Reject residual high pressure, but allow an actual baseline below PEEP. */
+    if ((lPlan.allowedTriggerType == VENT_TRIGGER_PRESSURE) &&
+        ((gTriggerEngine.state != TRIGGER_ENGINE_ARMED) ||
+         (gTriggerEngine.planSequence != lPlan.sequence)) &&
+        ((lPatientPressure - lPlan.peepCmh2o) >
+         TRIGGER_ENGINE_PEEP_TOLERANCE_CMH2O)) {
+        triggerEngineIdleEnter(lPhase);
+        return;
+    }
+
     if ((gTriggerEngine.previousPhase != PHASE_EXP) ||
         (gTriggerEngine.planSequence != lPlan.sequence) ||
+        (gTriggerEngine.triggerType != lPlan.allowedTriggerType) ||
         (gTriggerEngine.state == TRIGGER_ENGINE_IDLE)) {
         triggerEngineSettlingEnter(&lPlan, lPatientPressure, lProximalFlow);
         gTriggerEngine.previousPhase = lPhase;
@@ -111,7 +186,17 @@ void triggerEngineProcess(uint32_t nowMs)
     gTriggerEngine.previousPhase = lPhase;
 
     if (gTriggerEngine.state == TRIGGER_ENGINE_SETTLING) {
-        triggerEngineBaselineUpdate(lPatientPressure, lProximalFlow);
+        if (lPlan.allowedTriggerType == VENT_TRIGGER_PRESSURE) {
+            triggerEnginePressureBaselineUpdate(lPatientPressure);
+            if (gTriggerEngine.pressureStableSamples < TRIGGER_ENGINE_SETTLE_SAMPLES) {
+                return;
+            }
+            gTriggerEngine.pressureBaselineCmh2o = lPatientPressure;
+            gTriggerEngine.state = TRIGGER_ENGINE_ARMED;
+            return;
+        } else {
+            triggerEngineFlowBaselineUpdate(lProximalFlow);
+        }
         if (gTriggerEngine.settleSamples < TRIGGER_ENGINE_SETTLE_SAMPLES) {
             gTriggerEngine.settleSamples++;
         }
@@ -123,21 +208,37 @@ void triggerEngineProcess(uint32_t nowMs)
 
     if (lPlan.allowedTriggerType == VENT_TRIGGER_PRESSURE) {
         lTriggerReason = BREATH_TRIGGER_REASON_PRESSURE;
-        lTriggerEffort = gTriggerEngine.pressureBaselineCmh2o - lPatientPressure;
         lTriggerThreshold = triggerEngineMagnitude(lPlan.pressureTriggerCmh2o);
     } else if (lPlan.allowedTriggerType == VENT_TRIGGER_FLOW) {
         lTriggerReason = BREATH_TRIGGER_REASON_FLOW;
-        lTriggerEffort = lProximalFlow - gTriggerEngine.flowBaselineLpm;
         lTriggerThreshold = lPlan.flowTriggerLpm;
     } else {
         triggerEngineIdleEnter(lPhase);
         return;
     }
 
-    lCandidate = (lTriggerEffort >= lTriggerThreshold);
+    if (!triggerEngineFinite(lTriggerThreshold) || (lTriggerThreshold <= 0.0F)) {
+        triggerEngineIdleEnter(lPhase);
+        return;
+    }
+
+    if (phaseControllerExpirationReadyGet() == 0U) {
+        gTriggerEngine.confirmSamples = 0U;
+        if (lPlan.allowedTriggerType == VENT_TRIGGER_FLOW) {
+            triggerEngineFlowBaselineUpdate(lProximalFlow);
+        } else if (lPatientPressure <= lPlan.peepCmh2o +
+                   TRIGGER_ENGINE_PEEP_TOLERANCE_CMH2O) {
+            triggerEnginePressureBaselineUpdate(lPatientPressure);
+        } else {
+            gTriggerEngine.pressureStableSamples = 0U;
+        }
+        return;
+    }
+    lCandidate = (lPlan.allowedTriggerType == VENT_TRIGGER_PRESSURE) ?
+        triggerEnginePressureProcess(lPatientPressure, lPlan.peepCmh2o, lTriggerThreshold) :
+        triggerEngineFlowProcess(lProximalFlow, lTriggerThreshold);
     if (!lCandidate) {
         gTriggerEngine.confirmSamples = 0U;
-        triggerEngineBaselineUpdate(lPatientPressure, lProximalFlow);
         return;
     }
 
@@ -146,6 +247,13 @@ void triggerEngineProcess(uint32_t nowMs)
     }
     if ((gTriggerEngine.confirmSamples >= TRIGGER_ENGINE_CONFIRM_SAMPLES) &&
         (phaseControllerTrigger(lTriggerReason, nowMs) == PHASE_CONTROL_SUCCESS)) {
+        LOG_I("trigger", "reason=%u p100=%ld pb100=%ld q100=%ld qb100=%ld threshold100=%ld",
+              (unsigned int)lTriggerReason,
+              (long)(lPatientPressure * 100.0F),
+              (long)(gTriggerEngine.pressureBaselineCmh2o * 100.0F),
+              (long)(lProximalFlow * 100.0F),
+              (long)(gTriggerEngine.flowBaselineLpm * 100.0F),
+              (long)(lTriggerThreshold * 100.0F));
         triggerEngineIdleEnter(phaseControllerStateGet());
     }
 }

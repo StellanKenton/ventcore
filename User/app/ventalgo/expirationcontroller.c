@@ -10,6 +10,7 @@
 #include "expirationcontroller.h"
 
 #include <stddef.h>
+#include <math.h>
 
 #include "calibtrans.h"
 #include "controldata.h"
@@ -380,7 +381,8 @@ static int8_t expirationControllerReleaseProcess(const stBreathPlan *plan, stAct
         lValveDuty,
         EXPIRATION_CONTROLLER_RELEASE_VALVE_MAX_STEP);
 
-    if ((lPatientPressure >= (plan->peepCmh2o - lPeepTolerance)) &&
+    /* Undershoot has completed release too; do not wait for PEEP to recover. */
+    if (isfinite(lPatientPressure) &&
         (lPatientPressure <= (plan->peepCmh2o + lPeepTolerance))) {
         if (gExpirationReleaseStableElapsedMs <
             EXPIRATION_CONTROLLER_RELEASE_CAPTURE_STABLE_MS) {

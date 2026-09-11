@@ -16,6 +16,7 @@ HARNESS = r'''
 #include <stdlib.h>
 #include "breathscheduler.h"
 #include "phasecontroller.h"
+#include "triggerengine.h"
 #include "monitorengine.h"
 #include "flowcontroller.h"
 #include "controldata.h"
@@ -370,7 +371,77 @@ static void testTimeCompensation(void) {
     assert(lPlan.maximumInspiratoryTimeMs == 808U);
 }
 
+/** Verify VAC efforts start volume breaths and restart the mandatory timer. */
+static void testVacTrigger(void) {
+    stBreathPlan lPlan;
+    uint32_t lExpirationStart;
+    uint32_t lInspirationStart;
+    for (unsigned int lCase = 0U; lCase < 4U; lCase++) {
+        unsigned int lType = lCase == 3U ? VENT_TRIGGER_FLOW : lCase;
+        reset();
+        triggerEngineInit();
+        GetVentVacSettings()->triggerType = (eVentTriggerType)lType;
+        GetVentVacSettings()->flowTriggerLpm = lCase == 3U ? 10.0F : 1.0F;
+        GetVentVacSettings()->pressureTriggerCmh2o = -1.0F;
+        breathSchedulerProcess();
+        gData[INSP_REAL_FLOW] = 0.0F;
+        gData[PAT_REAL_FLOW] = 0.0F;
+        gData[PAT_REAL_PRS] = 0.0F;
+        for (gNow = 0U; gNow < 2000U; gNow += 6U) {
+            phaseControllerProcess(gNow);
+            if (phaseControllerStateGet() == PHASE_EXP) { break; }
+        }
+        assert(phaseControllerStateGet() == PHASE_EXP);
+        lExpirationStart = gNow;
+        assert(phaseControllerExpirationCaptureNotify() == PHASE_CONTROL_SUCCESS);
+        gData[PAT_REAL_PRS] = 5.0F;
+        gData[PAT_REAL_FLOW] = lCase == 3U ? -25.0F : 0.0F;
+        for (unsigned int lIndex = 0U; lIndex < 10U; lIndex++, gNow += 6U) {
+            phaseControllerProcess(gNow);
+            triggerEngineProcess(gNow);
+        }
+        gData[PAT_REAL_FLOW] = lCase == 3U ? -14.0F : 1.1F;
+        gData[PAT_REAL_PRS] = 3.9F;
+        for (; gNow < lExpirationStart + BREATH_PEEP_LOCK_TIME_MS; gNow += 6U) {
+            phaseControllerProcess(gNow);
+            triggerEngineProcess(gNow);
+            assert(phaseControllerStateGet() == PHASE_EXP);
+        }
+        assert(phaseControllerActivePlanGet(&lPlan) == PHASE_CONTROL_SUCCESS);
+        for (; gNow <= lExpirationStart + lPlan.expiratoryTimeMs + 6U; gNow += 6U) {
+            phaseControllerProcess(gNow);
+            triggerEngineProcess(gNow);
+            if (phaseControllerStateGet() == PHASE_INSP) { break; }
+        }
+        assert(phaseControllerStateGet() == PHASE_INSP);
+        assert(phaseControllerActivePlanGet(&lPlan) == PHASE_CONTROL_SUCCESS);
+        assert(lPlan.mode == VENT_MD_VAC);
+        assert(lPlan.breathType == BREATH_TYPE_MANDATORY_VOLUME);
+        assert(lPlan.triggerReason == (lType == VENT_TRIGGER_OFF ? BREATH_TRIGGER_REASON_TIME :
+               lType == VENT_TRIGGER_FLOW ? BREATH_TRIGGER_REASON_FLOW : BREATH_TRIGGER_REASON_PRESSURE));
+        near(lPlan.targetTidalVolumeMl, 500.0F);
+        assert(lPlan.timeTriggerEnabled == 1U && lPlan.cycleType == BREATH_CYCLE_TYPE_TIME);
+        lInspirationStart = gNow;
+        gData[PAT_REAL_FLOW] = 0.0F;
+        gData[PAT_REAL_PRS] = 5.0F;
+        phaseControllerProcess(gNow + 100U);
+        assert(phaseControlGet(PHASE_REF_FLOW) > 0.0F);
+        gNow = lInspirationStart + lPlan.maximumInspiratoryTimeMs;
+        phaseControllerProcess(gNow);
+        assert(phaseControllerStateGet() == PHASE_EXP);
+        lExpirationStart = gNow;
+        phaseControllerProcess(lExpirationStart + lPlan.expiratoryTimeMs - 1U);
+        assert(phaseControllerStateGet() == PHASE_EXP);
+        phaseControllerProcess(lExpirationStart + lPlan.expiratoryTimeMs);
+        assert(phaseControllerStateGet() == PHASE_INSP);
+        assert(phaseControllerActivePlanGet(&lPlan) == PHASE_CONTROL_SUCCESS);
+        assert(lPlan.triggerReason == BREATH_TRIGGER_REASON_TIME);
+        assert(lPlan.breathType == BREATH_TYPE_MANDATORY_VOLUME);
+    }
+}
+
 int main(void) {
+    testVacTrigger();
     (void)testTimeCompensation;
 #if BREATH_VOLUME_FLOW_COMPENSATION_ENABLE
     testEma();
@@ -409,6 +480,7 @@ def main():
                     "user/app/calibration", "user/module/rtos", "user/tools/controller",
                     "user/tools/filter/numfilter", "user/module/log", "user/tools/ringbuffer"]
         sources = ["user/app/ventlogic/breathscheduler.c", "user/app/ventlogic/phasecontroller.c",
+                   "user/app/ventlogic/triggerengine.c",
                    "user/app/ventlogic/monitorengine.c", "user/app/ventalgo/flowcontroller.c",
                    "user/app/databus/settingdata.c", "user/tools/controller/pid.c"]
         command = [compiler, "-std=c11", "-Wall", "-Wextra", "-Werror",

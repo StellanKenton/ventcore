@@ -7,6 +7,22 @@ target board.
 
 ## Files
 
+- `test_trigger.py`: host regression for the production trigger engine. Run
+  `py -3 user/develop/test_trigger.py`. Covers passive negative-flow recovery,
+  positive bias flow, real flow/pressure efforts, consecutive confirmation,
+  PEEP settling, low-PEEP rearming across breaths, real release/capture-controller
+  recovery after pressure undershoot, consecutive release dwell, high-pressure
+  blocking, pressure overshoot recovery, invalid samples/thresholds and
+  disabled/unsupported modes, including VAC flow/pressure triggering and trigger off.
+  Covers a 300 ms VAC flow ramp to 23.2 L/min at a 10 L/min threshold,
+  established positive bias, subthreshold ramps, and bias reset/decay across breaths.
+  Pressure cases include a 300 ms fall from 2.5 to 0 cmH2O with a 2 cmH2O
+  threshold, low-pressure rebound, threshold confirmation and per-breath reset.
+  Pressure references continue updating in stable windows. Signed flow references
+  follow negative expiration; tests cover efforts before zero crossing, linear and
+  exponential passive emptying, readiness gating and trigger-type changes.
+  Uses a native GCC or Clang; does not operate hardware.
+
 - `test_flow_conversion.py`: host regression using production calibration and data
   processing with asymmetric nonlinear flow tables. Checks table knots, ADC zero
   drift in both directions, repeated zeroing, SFM3119-to-BTPS conversion,
@@ -69,6 +85,9 @@ target board.
   Run `py -3 user/develop/test_vti_compensation.py`. Tests first-sample EMA initialization,
   next-breath application, duplicate/stale rejection, volume-to-flow conversion, bounds,
   convergence under a scripted 80 mL delivery loss, invalid/limited breaths and resets.
+  Also checks VAC flow/pressure efforts through the real trigger engine, scheduler
+  and phase controller (including negative-flow efforts), minimum expiration, volume-breath selection and the next
+  mandatory time trigger with both compensation configurations.
   This is a software model, not a test-lung validation of the selected tuning.
 - `test_monitor_leak.py`: production monitor and pause-controller integration test.
   Run `py -3 user/develop/test_monitor_leak.py` with native GCC/Clang. Covers known

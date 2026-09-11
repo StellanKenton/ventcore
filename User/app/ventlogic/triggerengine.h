@@ -19,8 +19,11 @@ extern "C" {
 #endif
 
 #define TRIGGER_ENGINE_BASELINE_GAIN       0.10F
+#define TRIGGER_ENGINE_FLOW_BASELINE_GAIN  0.50F
+#define TRIGGER_ENGINE_PRESSURE_STABLE_RANGE_CMH2O 0.10F
 #define TRIGGER_ENGINE_SETTLE_SAMPLES         8U
 #define TRIGGER_ENGINE_CONFIRM_SAMPLES        3U
+#define TRIGGER_ENGINE_PEEP_TOLERANCE_CMH2O 0.5F
 
 typedef enum {
     TRIGGER_ENGINE_IDLE = 0,
@@ -32,8 +35,12 @@ typedef struct stTriggerEngine {
     eTriggerEngineState state;
     ePhaseControllerState previousPhase;
     uint32_t planSequence;
+    eVentTriggerType triggerType;
     float pressureBaselineCmh2o;
+    float pressureWindowMinCmh2o;
+    float pressureWindowMaxCmh2o;
     float flowBaselineLpm;
+    uint8_t pressureStableSamples;
     uint8_t settleSamples;
     uint8_t confirmSamples;
 } stTriggerEngine;
