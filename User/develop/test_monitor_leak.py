@@ -21,6 +21,7 @@ HARNESS = r'''
 #include "calibtrans.h"
 #include "rtos.h"
 #include "physalarmmanager.h"
+#include "techalarm.h"
 
 static float gData[CONTROL_DATA_COUNT];
 static float gOffset;
@@ -195,6 +196,11 @@ static void peepAlarms(void) {
         sample(PHASE_INSP, 30.0F, 25.0F);
         physAlarmManagerProcess(gNow);
         assert(physAlarmManagerStateGet(lType));
+        stMcmTechAlarmStatusSnapshot lStatus;
+        techAlarmSnapshotGet(&lStatus);
+        assert(lStatus.phys.value == (lCase == 0U ? 1U : 2U));
+        assert(lStatus.tech.value == 0U && lStatus.power.value == 0U);
+        assert(lStatus.comm.value == 0U && lStatus.cal.value == 0U);
         assert(!physAlarmManagerStateGet(lCase == 0U ? PHYS_ALARM_PEEP_LOW : PHYS_ALARM_PEEP_HIGH));
 
         peepAlarmNextBreath(5.0F);
@@ -245,6 +251,10 @@ static void cpapCheck(uint32_t nowMs, float insp, float patient, bool active) {
     gData[PAT_REAL_PRS] = patient;
     physAlarmManagerProcess(nowMs);
     assert(physAlarmManagerStateGet(PHYS_ALARM_CPAP_TOO_HIGH) == active);
+    stMcmTechAlarmStatusSnapshot lStatus;
+    techAlarmSnapshotGet(&lStatus);
+    assert(((lStatus.phys.value & 0x10U) != 0U) == active);
+    assert((lStatus.phys.value & 0x1000U) == 0U);
 }
 
 /** Exercise the enabled CPAP detector through the alarm manager. */
@@ -605,6 +615,7 @@ def main():
                    str(ROOT / "user/app/ventlogic/monitorengine.c"),
                    str(ROOT / "user/app/physalarm/physalarmvent.c"),
                    str(ROOT / "user/app/physalarm/physalarmmanager.c"),
+                   str(ROOT / "user/app/physalarm/techalarm.c"),
                    str(ROOT / "user/app/ventalgo/flowcontroller.c"),
                    str(ROOT / "user/tools/controller/pid.c"), "-o", str(executable)]
         environment = os.environ.copy()

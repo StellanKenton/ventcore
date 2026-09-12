@@ -22,6 +22,7 @@ extern "C" {
 #endif
 #include "ProtoclOfProcess.h"
 #include "settingdata.h"
+#include "alarmbits.h"
 /* ====================================================== 项目相关定义 ====================================================== */
 // - Boot 起始地址：`0x08000000`
 // - Boot 空间大小：`0x0000C000`（Sector 0 ~ Sector 2，共 48 KB）
@@ -60,7 +61,7 @@ extern "C" {
 #define PROTOCOL_WAVE_DATA_SEND_ENABLE         1        /* 通气波形数据发送开关 */
 #define PROTOCOL_MONITOR_PARAMS_SEND_ENABLE    1        /* 通气监测参数发送开关 */
 #define PROTOCOL_HEARTBEAT_SEND_ENABLE         1        /* 心跳发送开关 */
-#define PROTOCOL_TECHALARM_SEND_ENABLE         0        /* 技术报警发送开关 */
+#define PROTOCOL_TECHALARM_SEND_ENABLE         1        /* 技术报警发送开关 */
 #define PROTOCOL_SELFTEST_SEND_ENABLE          0        /* 自检发送开关 */
 #define PROTOCOL_DIAGNOSES_SEND_ENABLE         0        /* 诊断数据发送开关 */
 #define PROTOCOL_CALIBDATA_SEND_ENABLE         0        /* 校准数据发送开关 */
@@ -608,26 +609,7 @@ typedef struct {
 } TxTechAlarmCache_t;
 
 /* 呼吸机报警事件枚举定义*/
-typedef enum {
-    AIRWAY_PRESSURE_HIGH,          // 气道压力过高
-    AIRWAY_PRESSURE_LOW,           // 气道压力过低
-    FIO2_HIGH,                     // FiO2过高
-    FIO2_LOW,                      // FiO2过低
-    EXPIRATORY_TIDAL_VOLUME_HIGH,  // 呼出潮气量过高
-    EXPIRATORY_TIDAL_VOLUME_LOW,   // 呼出潮气量过低
-    EXPIRATORY_MINUTE_VENTILATION_HIGH,  // 呼出分钟通气量过高
-    EXPIRATORY_MINUTE_VENTILATION_LOW,   // 呼出分钟通气量过低
-    APNEA_ALARM,                   // 窒息报警
-    APNEA_VENTILATION_ALARM,     // 窒息通气报警
-    APNEA_VENTILATION_END,       // 窒息通气结束
-    RESPIRATORY_RATE_HIGH,         // 呼吸频率过高
-    RESPIRATORY_RATE_LOW,          // 呼吸频率过低
-    PHYSALARM_RESERVE1,          // 保留
-    PHYSALARM_RESERVE2,          // 保留
-    INVERSE_VENTILATION_ALARM,   // 反比通气报警
 
-    VENTILATOR_EVENT_MAX
-} VentilatorEvent;
 
 /* 特殊功能状态缓存 (0xA9) */
 #define PROTOCOL_SPECIAL_FUNC_SUBID_MAX      14      /* 特殊功能子ID最大数量 */
@@ -1014,6 +996,7 @@ void ProtocolDetectDataPreProcess(uint8_t instance, uint32_t taskCounter);
  * @param taskCounter 任务计数器
  */
 void ProtocolPhysAlarmDataProcess(uint8_t instance, uint32_t taskCounter);
+void ProtocolTechAlarmDataProcess(uint8_t instance, uint32_t taskCounter);
 
 
 bool ProtocolIsMCMConnected(void);

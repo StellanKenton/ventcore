@@ -16,6 +16,7 @@
 #include "monitorengine.h"
 #include "phasecontroller.h"
 #include "physalarmmanager.h"
+#include "techalarm.h"
 #include "rtos.h"
 #include "log.h"
 #include <math.h>
@@ -2281,102 +2282,66 @@ float ProtocolPhysAlarmDataGet(uint8_t event) {
     }
 }
 
-void ProtocolPhysAlarmDataProcess(uint8_t instance, uint32_t taskCounter)
-{
-    uint8_t TxData[256];
-    uint32_t alarmStatus;
-    static uint32_t lastAlarmStatus = 0;
-    if(taskCounter%2000 == 0) {
-        alarmStatus = 0;
-        /* 定时发送生理报警参数 */
-        for(uint8_t i = 0; i < VENTILATOR_EVENT_MAX && i < 32U; i++) {
-            if (ProtocolPhysAlarmDataGet(i)) {
-                alarmStatus |= (1UL << i);
-            }
+/** Send the complete current physiological bitmap every 500 ms, including zeros. */
+void ProtocolPhysAlarmDataProcess(uint8_t instance, uint32_t taskCounter) {
+    uint8_t lTxData[32];
+    uint8_t lPayload[MCM_PHYS_ALARM_PAYLOAD_SIZE];
+    stMcmPhysAlarmStatus lStatus = {0};
+    uint16_t lLength;
+
+    if ((taskCounter % MCM_ALARM_REPORT_PERIOD_MS) != 0U) {
+        return;
+    }
+    repRtosEnterCritical();
+    for (uint8_t lBit = 0U; lBit <= INVERSE_VENTILATION_ALARM; lBit++) {
+        if (ProtocolPhysAlarmDataGet(lBit)) {
+            lStatus.value |= (1UL << lBit);
         }
-        
-        if(alarmStatus != lastAlarmStatus) {
-            lastAlarmStatus = alarmStatus;
-            // 发送数据包
-            uint16_t SendLen = ProtocolCreateDirectData(TxData,PROTOCOL_ADDR_VCM_TO_MCM,false,
-                                                    PROTOCOL_TX_MID_PHYS_ALARM,(uint8_t*)&alarmStatus,sizeof(alarmStatus));
-            if (SendLen > 0) {
-                ProtocolSendData(instance, PROTOCOL_PRIORITY_HIGH, TxData, SendLen);
-            }
-        }
+    }
+    repRtosExitCritical();
+    /* Serialize explicitly: do not depend on the host union byte order. */
+    for (uint8_t lByte = 0U; lByte < sizeof(lPayload); lByte++) {
+        lPayload[lByte] = (uint8_t)(lStatus.value >> (8U * lByte));
+    }
+    lLength = ProtocolCreateDirectData(lTxData, PROTOCOL_ADDR_VCM_TO_MCM, false,
+                                      PROTOCOL_TX_MID_PHYS_ALARM, lPayload, sizeof(lPayload));
+    if (lLength > 0U) {
+        ProtocolSendData(instance, PROTOCOL_PRIORITY_HIGH, lTxData, lLength);
     }
 }
 
-#if 0 /* Legacy machine features retained for later migration. */
-void ProtocolTechAlarmDataProcess(uint8_t instance, uint32_t taskCounter)
-{
+/** Send every technical module at its fixed wire width, even when all bits are zero. */
+void ProtocolTechAlarmDataProcess(uint8_t instance, uint32_t taskCounter) {
 #if PROTOCOL_TECHALARM_SEND_ENABLE == 1
-    static uint32_t lastModuleValues[TECH_ALARM_MAX_MODULES] = {0};
-    static PhysiologicalFaultReg physAlarm;
-    static PowerFaultReg powerAlarm;
-    static TechFaultReg techAlarm;
-    bool forceFullReport;
-    uint8_t TxData[256];
-    uint8_t faultStatus[8];
-    SubIDCache_t subIds[TECH_ALARM_MAX_MODULES];
-    uint8_t count = 0;   
-    
-    /* 检测周期设置为100ms（或依任务周期），只有当报警触发或消失才发生上报 */
-    if(taskCounter % 100 == 0) {
-        forceFullReport = (taskCounter % 5000 == 0);
-        physAlarm.value = 0;
-        powerAlarm.value = 0;
-        techAlarm.value = 0;
-        for (uint8_t i = 0; i < TECH_ALARM_MAX_MODULES; i++) {
-            uint32_t currentValue = 0;
-            uint8_t faultSize = TechAlarmGetModuleFaultSize(i);
-            
-            if (faultSize > 0) {
-                TechAlarmGetModuleFaultStatus(i, faultStatus, faultSize);
-                for (uint8_t j = 0; j < faultSize; j++) {
-                    currentValue |= ((uint32_t)faultStatus[j] << (8 * j));
-                }
-                
-                /* 状态变化立即上报，同时每5s全量上报一次当前状态 */
-                if (forceFullReport || (currentValue != lastModuleValues[i])) {
-                    lastModuleValues[i] = currentValue;
-                    
-                    SubIDCache_t* subId = &subIds[count];
-                    subId->m_size = faultSize;
-                    subId->m_value = currentValue;
-                    subId->m_id = i;
-                    subId->m_scale = 0; // 无缩放
-                    subId->m_valid = 1; 
-                    count++;  
-                }
-            }
-            switch(i){
-                case TECH_ALARM_PHYS_MODULE_ID:
-                        physAlarm.value = (uint32_t)currentValue;
-                        break;
-                case TECH_ALARM_TECH_MODULE_ID:
-                        techAlarm.value = (uint32_t)currentValue;
-                        break;
-                case TECH_ALARM_POWER_MODULE_ID:
-                        powerAlarm.value = (uint32_t)currentValue;
-                        break;
-                default:
-                        break;
-            }
-        }
+    uint8_t lTxData[32];
+    stMcmTechAlarmStatusSnapshot lStatus;
+    SubIDCache_t lSubIds[TECH_ALARM_MAX_MODULES] = {0};
+    uint16_t lLength;
 
-        // 发送数据包
-        if (count > 0) {
-            uint16_t SendLen = ProtocolCreateSubIdData(TxData,PROTOCOL_ADDR_VCM_TO_MCM,false,
-                                                    PROTOCOL_TX_MID_TECH_ALARM,(uint8_t *)subIds, count);
-            if (SendLen > 0) {
-                ProtocolSendData(instance, PROTOCOL_PRIORITY_HIGH, TxData, SendLen);
-            }
-        }
+    if ((taskCounter % MCM_ALARM_REPORT_PERIOD_MS) != 0U) {
+        return;
+    }
+    techAlarmSnapshotGet(&lStatus);
+    lSubIds[TECH_ALARM_PHYS_MODULE_ID].m_value = lStatus.phys.value;
+    lSubIds[TECH_ALARM_TECH_MODULE_ID].m_value = lStatus.tech.value;
+    lSubIds[TECH_ALARM_POWER_MODULE_ID].m_value = lStatus.power.value;
+    lSubIds[TECH_ALARM_COMM_MODULE_ID].m_value = lStatus.comm.value;
+    lSubIds[TECH_ALARM_CAL_MODULE_ID].m_value = lStatus.cal.value;
+    for (uint8_t lModule = 0U; lModule < TECH_ALARM_MAX_MODULES; lModule++) {
+        lSubIds[lModule].m_id = lModule;
+        lSubIds[lModule].m_size = (lModule <= TECH_ALARM_TECH_MODULE_ID) ? 4U : 1U;
+        lSubIds[lModule].m_valid = true;
+    }
+    lLength = ProtocolCreateSubIdData(lTxData, PROTOCOL_ADDR_VCM_TO_MCM, false,
+                                     PROTOCOL_TX_MID_TECH_ALARM, (const uint8_t *)lSubIds,
+                                     TECH_ALARM_MAX_MODULES);
+    if (lLength > 0U) {
+        ProtocolSendData(instance, PROTOCOL_PRIORITY_HIGH, lTxData, lLength);
     }
 #endif
 }
 
+#if 0 /* Legacy machine features retained for later migration. */
 void ProtocolSelfTestDataProcess(uint8_t instance, uint32_t taskCounter)
 {
 #ifdef PROTOCOL_SELFTEST_SEND_ENABLE
@@ -3115,7 +3080,7 @@ void ProtocolDataPreProcess(uint8_t instance)
     ProtocolPhysAlarmDataProcess(instance, taskCounter);
 
     /*定时处理技术报警*/
-    // ProtocolTechAlarmDataProcess(instance, taskCounter); /* Pending machine port. */
+    ProtocolTechAlarmDataProcess(instance, taskCounter);
 
     /*定时处理自检数据*/
     // ProtocolSelfTestDataProcess(instance, taskCounter); /* Pending machine port. */

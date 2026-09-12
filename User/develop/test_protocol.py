@@ -20,6 +20,7 @@ HARNESS = r'''
 #include "monitorengine.h"
 #include "controldata.h"
 #include "physalarmmanager.h"
+#include "techalarm.h"
 #include "rtos.h"
 #include "log.h"
 static uint8_t gRx[2048], gTx[256];
@@ -31,8 +32,206 @@ static bool gUartBusy;
 static uint32_t gHeartbeatTx;
 static bool gAlarmStates[PHYS_ALARM_COUNT];
 bool physAlarmManagerStateGet(ePhysAlarmType type) { return gAlarmStates[type]; }
+static stMcmTechAlarmStatusSnapshot gTechStatus;
+void techAlarmSnapshotGet(stMcmTechAlarmStatusSnapshot *status) { *status = gTechStatus; }
 
-/** Verify alarm wire bits, unchanged-state suppression and recovery reporting. */
+/** Verify union sizes and every documented field position. */
+static void testAlarmBitfields(void) {
+    {
+        stMcmPhysAlarmStatus lStatus = {0};
+        assert(sizeof(lStatus) == 4U);
+        lStatus.value = 0U; lStatus.bits.airwayPressureHigh = 1U;
+        assert(lStatus.value == (1UL << 0));
+        lStatus.value = 0U; lStatus.bits.airwayPressureLow = 1U;
+        assert(lStatus.value == (1UL << 1));
+        lStatus.value = 0U; lStatus.bits.fio2High = 1U;
+        assert(lStatus.value == (1UL << 2));
+        lStatus.value = 0U; lStatus.bits.fio2Low = 1U;
+        assert(lStatus.value == (1UL << 3));
+        lStatus.value = 0U; lStatus.bits.expiratoryTidalVolumeHigh = 1U;
+        assert(lStatus.value == (1UL << 4));
+        lStatus.value = 0U; lStatus.bits.expiratoryTidalVolumeLow = 1U;
+        assert(lStatus.value == (1UL << 5));
+        lStatus.value = 0U; lStatus.bits.expiratoryMinuteVentilationHigh = 1U;
+        assert(lStatus.value == (1UL << 6));
+        lStatus.value = 0U; lStatus.bits.expiratoryMinuteVentilationLow = 1U;
+        assert(lStatus.value == (1UL << 7));
+        lStatus.value = 0U; lStatus.bits.apneaAlarm = 1U;
+        assert(lStatus.value == (1UL << 8));
+        lStatus.value = 0U; lStatus.bits.apneaVentilationAlarm = 1U;
+        assert(lStatus.value == (1UL << 9));
+        lStatus.value = 0U; lStatus.bits.apneaVentilationEnd = 1U;
+        assert(lStatus.value == (1UL << 10));
+        lStatus.value = 0U; lStatus.bits.respiratoryRateHigh = 1U;
+        assert(lStatus.value == (1UL << 11));
+        lStatus.value = 0U; lStatus.bits.respiratoryRateLow = 1U;
+        assert(lStatus.value == (1UL << 12));
+        lStatus.value = 0U; lStatus.bits.physalarmReserve1 = 1U;
+        assert(lStatus.value == (1UL << 13));
+        lStatus.value = 0U; lStatus.bits.physalarmReserve2 = 1U;
+        assert(lStatus.value == (1UL << 14));
+        lStatus.value = 0U; lStatus.bits.inverseVentilationAlarm = 1U;
+        assert(lStatus.value == (1UL << 15));
+    }
+    {
+        stMcmTechPhysAlarmStatus lStatus = {0};
+        assert(sizeof(lStatus) == 4U);
+        lStatus.value = 0U; lStatus.bits.physioFaultPeepTooHigh = 1U;
+        assert(lStatus.value == (1UL << 0));
+        lStatus.value = 0U; lStatus.bits.physioFaultPeepTooLow = 1U;
+        assert(lStatus.value == (1UL << 1));
+        lStatus.value = 0U; lStatus.bits.physioFaultPipelineBlockage = 1U;
+        assert(lStatus.value == (1UL << 2));
+        lStatus.value = 0U; lStatus.bits.physioFaultInspBranchBlockage = 1U;
+        assert(lStatus.value == (1UL << 3));
+        lStatus.value = 0U; lStatus.bits.physioFaultCpapTooHigh = 1U;
+        assert(lStatus.value == (1UL << 4));
+        lStatus.value = 0U; lStatus.bits.physioFaultPipelineLeak = 1U;
+        assert(lStatus.value == (1UL << 5));
+        lStatus.value = 0U; lStatus.bits.physioFaultPipelineDisconnect = 1U;
+        assert(lStatus.value == (1UL << 6));
+        lStatus.value = 0U; lStatus.bits.physioFaultPressureLimit = 1U;
+        assert(lStatus.value == (1UL << 7));
+        lStatus.value = 0U; lStatus.bits.physioFaultVolumeLimit = 1U;
+        assert(lStatus.value == (1UL << 8));
+        lStatus.value = 0U; lStatus.bits.physioFaultInspPressNotReached = 1U;
+        assert(lStatus.value == (1UL << 9));
+        lStatus.value = 0U; lStatus.bits.physioFaultTidalVolNotReached = 1U;
+        assert(lStatus.value == (1UL << 10));
+        lStatus.value = 0U; lStatus.bits.physioFaultSighCyclePressLimit = 1U;
+        assert(lStatus.value == (1UL << 11));
+        lStatus.value = 0U; lStatus.bits.physioFaultReserved = 1U;
+        assert(lStatus.value == (1UL << 12));
+        lStatus.value = 0U; lStatus.bits.physioFaultInspTimeTooLong = 1U;
+        assert(lStatus.value == (1UL << 13));
+        lStatus.value = 0U; lStatus.bits.physioFaultInhaledGasTempHigh = 1U;
+        assert(lStatus.value == (1UL << 14));
+        lStatus.value = 0U; lStatus.bits.physioFaultAmvTargetNotReached = 1U;
+        assert(lStatus.value == (1UL << 15));
+        lStatus.value = 0U; lStatus.bits.physioFaultO2FlowNotReached = 1U;
+        assert(lStatus.value == (1UL << 16));
+        lStatus.value = 0U; lStatus.bits.physioFaultPatFlowSensorFault = 1U;
+        assert(lStatus.value == (1UL << 17));
+        lStatus.value = 0U; lStatus.bits.physioFaultPatPressSensorFault = 1U;
+        assert(lStatus.value == (1UL << 18));
+        lStatus.value = 0U; lStatus.bits.physioFaultMechPipelineDisconnect = 1U;
+        assert(lStatus.value == (1UL << 19));
+        lStatus.value = 0U; lStatus.bits.physioFaultExpBranchBlockage = 1U;
+        assert(lStatus.value == (1UL << 20));
+        lStatus.value = 0U; lStatus.bits.physioFaultMaxInspNegPressure = 1U;
+        assert(lStatus.value == (1UL << 21));
+        lStatus.value = 0U; lStatus.bits.physioFaultInspPressureNotReleased = 1U;
+        assert(lStatus.value == (1UL << 22));
+        lStatus.value = 0U; lStatus.bits.physioFaultO2SourceFailure = 1U;
+        assert(lStatus.value == (1UL << 23));
+        lStatus.value = 0U; lStatus.bits.physioFaultProximalPressTubeDisconnect = 1U;
+        assert(lStatus.value == (1UL << 24));
+    }
+    {
+        stMcmTechAlarmStatus lStatus = {0};
+        assert(sizeof(lStatus) == 4U);
+        lStatus.value = 0U; lStatus.bits.techFaultInspPressSensor = 1U;
+        assert(lStatus.value == (1UL << 0));
+        lStatus.value = 0U; lStatus.bits.techFaultExpPressSensor = 1U;
+        assert(lStatus.value == (1UL << 1));
+        lStatus.value = 0U; lStatus.bits.techFaultProximalPressSensor = 1U;
+        assert(lStatus.value == (1UL << 2));
+        lStatus.value = 0U; lStatus.bits.techFaultInspFlowSensor = 1U;
+        assert(lStatus.value == (1UL << 3));
+        lStatus.value = 0U; lStatus.bits.techFaultO2FlowSensor = 1U;
+        assert(lStatus.value == (1UL << 4));
+        lStatus.value = 0U; lStatus.bits.techFaultAirFlowSensorTypeErr = 1U;
+        assert(lStatus.value == (1UL << 5));
+        lStatus.value = 0U; lStatus.bits.techFaultTriO2FlowSensorTypeErr = 1U;
+        assert(lStatus.value == (1UL << 6));
+        lStatus.value = 0U; lStatus.bits.techFaultProximalFlowSensorDisconnect = 1U;
+        assert(lStatus.value == (1UL << 7));
+        lStatus.value = 0U; lStatus.bits.techFaultProximalFlowSensorTypeErr = 1U;
+        assert(lStatus.value == (1UL << 8));
+        lStatus.value = 0U; lStatus.bits.techFaultProximalFlowSensorReversed = 1U;
+        assert(lStatus.value == (1UL << 9));
+        lStatus.value = 0U; lStatus.bits.techFaultTurbineTempSensor = 1U;
+        assert(lStatus.value == (1UL << 10));
+        lStatus.value = 0U; lStatus.bits.techFaultTurbineHallSignalErr = 1U;
+        assert(lStatus.value == (1UL << 11));
+        lStatus.value = 0U; lStatus.bits.techFaultNegativePressSensor = 1U;
+        assert(lStatus.value == (1UL << 12));
+        lStatus.value = 0U; lStatus.bits.techFaultO2Sensor = 1U;
+        assert(lStatus.value == (1UL << 13));
+        lStatus.value = 0U; lStatus.bits.techFaultAtmosphericPressSensor = 1U;
+        assert(lStatus.value == (1UL << 14));
+        lStatus.value = 0U; lStatus.bits.techFaultPressSensorZeroError = 1U;
+        assert(lStatus.value == (1UL << 15));
+        lStatus.value = 0U; lStatus.bits.techFaultSafetyValve = 1U;
+        assert(lStatus.value == (1UL << 16));
+        lStatus.value = 0U; lStatus.bits.techFaultThreeWayValve = 1U;
+        assert(lStatus.value == (1UL << 17));
+        lStatus.value = 0U; lStatus.bits.techFaultTotalInspManifold = 1U;
+        assert(lStatus.value == (1UL << 18));
+        lStatus.value = 0U; lStatus.bits.techFaultO2BranchDisconnect = 1U;
+        assert(lStatus.value == (1UL << 19));
+        lStatus.value = 0U; lStatus.bits.techFaultPowerCapDisconnect = 1U;
+        assert(lStatus.value == (1UL << 20));
+        lStatus.value = 0U; lStatus.bits.techFaultPeepValve = 1U;
+        assert(lStatus.value == (1UL << 21));
+        lStatus.value = 0U; lStatus.bits.techFaultTurbineShaft = 1U;
+        assert(lStatus.value == (1UL << 22));
+        lStatus.value = 0U; lStatus.bits.techFaultTurbineTempHigh = 1U;
+        assert(lStatus.value == (1UL << 23));
+        lStatus.value = 0U; lStatus.bits.techFaultTurbineTempOverhigh = 1U;
+        assert(lStatus.value == (1UL << 24));
+        lStatus.value = 0U; lStatus.bits.techFaultHepaFilterMissing = 1U;
+        assert(lStatus.value == (1UL << 25));
+        lStatus.value = 0U; lStatus.bits.techFaultReplaceHepaFilter = 1U;
+        assert(lStatus.value == (1UL << 26));
+        lStatus.value = 0U; lStatus.bits.techFaultAtmosphericCommErr = 1U;
+        assert(lStatus.value == (1UL << 27));
+        lStatus.value = 0U; lStatus.bits.techFaultHepaFilterPressureSensor = 1U;
+        assert(lStatus.value == (1UL << 28));
+        lStatus.value = 0U; lStatus.bits.techFaultMemoryError = 1U;
+        assert(lStatus.value == (1UL << 29));
+        lStatus.value = 0U; lStatus.bits.techFaultO2SourceLow = 1U;
+        assert(lStatus.value == (1UL << 30));
+    }
+    {
+        stMcmPowerAlarmStatus lStatus = {0};
+        assert(sizeof(lStatus) == 1U);
+        lStatus.value = 0U; lStatus.bits.powerFaultPcm3V3 = 1U;
+        assert(lStatus.value == (1UL << 0));
+        lStatus.value = 0U; lStatus.bits.powerFaultVdd24V = 1U;
+        assert(lStatus.value == (1UL << 1));
+        lStatus.value = 0U; lStatus.bits.powerFaultAvdd5V = 1U;
+        assert(lStatus.value == (1UL << 2));
+    }
+    {
+        stMcmCommAlarmStatus lStatus = {0};
+        assert(sizeof(lStatus) == 1U);
+        lStatus.value = 0U; lStatus.bits.commFaultMotorDisconnect = 1U;
+        assert(lStatus.value == (1UL << 0));
+        lStatus.value = 0U; lStatus.bits.commFaultPcmDisconnect = 1U;
+        assert(lStatus.value == (1UL << 1));
+    }
+    {
+        stMcmCalAlarmStatus lStatus = {0};
+        assert(sizeof(lStatus) == 1U);
+        lStatus.value = 0U; lStatus.bits.techAlarmCalPressureSensor = 1U;
+        assert(lStatus.value == (1UL << 0));
+        lStatus.value = 0U; lStatus.bits.techAlarmCalOxygenSensor = 1U;
+        assert(lStatus.value == (1UL << 1));
+        lStatus.value = 0U; lStatus.bits.techAlarmCalAirOxygenRatio = 1U;
+        assert(lStatus.value == (1UL << 2));
+        lStatus.value = 0U; lStatus.bits.techAlarmCalOxygenRatioValve = 1U;
+        assert(lStatus.value == (1UL << 3));
+        lStatus.value = 0U; lStatus.bits.techAlarmCalExhalationValve = 1U;
+        assert(lStatus.value == (1UL << 4));
+        lStatus.value = 0U; lStatus.bits.techAlarmCalProximalFlowSensor = 1U;
+        assert(lStatus.value == (1UL << 5));
+        lStatus.value = 0U; lStatus.bits.techAlarmCalGasSourcePressureSensor = 1U;
+        assert(lStatus.value == (1UL << 6));
+    }
+}
+
+/** Verify alarm wire bits, periodic full-state reporting and recovery reporting. */
 static void testPhysAlarms(void) {
     const ePhysAlarmType lTypes[] = {PHYS_ALARM_AIRWAY_PRESSURE_HIGH,
         PHYS_ALARM_AIRWAY_PRESSURE_LOW, PHYS_ALARM_EXHALED_VOLUME_HIGH,
@@ -48,19 +247,51 @@ static void testPhysAlarms(void) {
             uint16_t lLength = ProtocolCreateDirectData(lExpected, PROTOCOL_ADDR_VCM_TO_MCM,
                 false, PROTOCOL_TX_MID_PHYS_ALARM, (const uint8_t *)&lMask, sizeof(lMask));
             gTxSize = 0U;
-            ProtocolPhysAlarmDataProcess(0, 1990U);
+            ProtocolPhysAlarmDataProcess(0, 490U);
             ProtocolSchedulerProcess(0);
             assert(gTxSize == 0U);
-            ProtocolPhysAlarmDataProcess(0, 2000U);
+            ProtocolPhysAlarmDataProcess(0, 500U);
             ProtocolSchedulerProcess(0);
-            if (lMasks[lIndex]) {
-                assert(gTxSize == lLength && memcmp(gTx, lExpected, lLength) == 0);
-                assert(ProtocolCheckCRC(gTx));
-            } else { assert(gTxSize == 0U); }
+            assert(gTxSize == lLength && memcmp(gTx, lExpected, lLength) == 0);
+            assert(ProtocolCheckCRC(gTx));
             gTxSize = 0U;
-            ProtocolPhysAlarmDataProcess(0, 4000U);
+            ProtocolPhysAlarmDataProcess(0, 1000U);
             ProtocolSchedulerProcess(0);
-            assert(gTxSize == 0U);
+            assert(gTxSize == lLength && memcmp(gTx, lExpected, lLength) == 0);
+        }
+    }
+}
+
+/** Check all five module widths, high/low bits, repeat reporting and recovery. */
+static void testTechAlarms(void) {
+    const uint8_t lValues[] = {0x11, 0, 0, 1, 1, 0, 0, 0x40, 7, 3, 0x7f};
+    const uint8_t lSizes[] = {4, 4, 1, 1, 1};
+    ProtocolProcessInit(0);
+    for (unsigned lClear = 0U; lClear < 2U; lClear++) {
+        gTechStatus.phys.value = lClear ? 0U : 0x01000011U;
+        gTechStatus.tech.value = lClear ? 0U : 0x40000001U;
+        gTechStatus.power.value = lClear ? 0U : 7U;
+        gTechStatus.comm.value = lClear ? 0U : 3U;
+        gTechStatus.cal.value = lClear ? 0U : 0x7fU;
+        gTxSize = 0U;
+        ProtocolTechAlarmDataProcess(0, 490U);
+        ProtocolSchedulerProcess(0);
+        assert(gTxSize == 0U);
+        for (unsigned lRepeat = 1U; lRepeat <= 2U; lRepeat++) {
+            gTxSize = 0U;
+            ProtocolTechAlarmDataProcess(0, lRepeat * 500U);
+            ProtocolSchedulerProcess(0);
+            assert(gTxSize == 28U && gTx[2] == 0xAB && gTx[4] == 21U);
+            assert(ProtocolCheckCRC(gTx));
+            unsigned lOffset = 5U, lValue = 0U;
+            for (unsigned lModule = 0U; lModule < 5U; lModule++) {
+                assert(gTx[lOffset++] == lModule);
+                assert(gTx[lOffset++] == (uint8_t)((lSizes[lModule] << 3U) | 1U));
+                for (unsigned lByte = 0U; lByte < lSizes[lModule]; lByte++) {
+                    assert(gTx[lOffset++] == (lClear ? 0U : lValues[lValue]));
+                    lValue++;
+                }
+            }
         }
     }
 }
@@ -337,6 +568,14 @@ static void send(uint8_t mid, uint8_t id, uint32_t value, uint8_t size, uint8_t 
     feed(bytes, length); assert(ProtocolProcessRxData(0) == PROTOCOL_OK);
     protocolApplyReceivedSettings();
 }
+/** Model UART completions between CommTask ticks for simultaneous alarm frames. */
+static void processWithTxCompletion(void) {
+    ProtocolProcessMain(0);
+    for (unsigned lFrame = 0U; lFrame < 3U; lFrame++) {
+        ProtocolSchedulerProcess(0);
+    }
+}
+
 /** Exercise the full task processing path with continuous and burst heartbeats. */
 static void testHeartbeat(void) {
     uint8_t heartbeat[7];
@@ -348,47 +587,47 @@ static void testHeartbeat(void) {
     /* Every request receives exactly one response, without an ACK/retry storm. */
     for (unsigned i = 0; i < 1000; ++i) {
         memcpy(gRx, heartbeat, length); gRxSize = length;
-        ProtocolProcessMain(0);
+        processWithTxCompletion();
         assert(gHeartbeatTx == i + 1U);
     }
-    for (unsigned i = 0; i < 510; ++i) { ProtocolProcessMain(0); }
+    for (unsigned i = 0; i < 510; ++i) { processWithTxCompletion(); }
     assert(gHeartbeatTx == 1000U && !ProtocolIsMCMConnected());
     /* A burst cannot collapse into one reply. Busy transport must retain replies. */
     gUartBusy = true;
     for (unsigned i = 0; i < 8; ++i) { memcpy(gRx + i * 7, heartbeat, 7); }
     gRxSize = 56;
-    for (unsigned i = 0; i < 8; ++i) { ProtocolProcessMain(0); }
+    for (unsigned i = 0; i < 8; ++i) { processWithTxCompletion(); }
     assert(gHeartbeatTx == 1000U && ProtocolIsMCMConnected());
     gUartBusy = false;
-    for (unsigned i = 0; i < 8; ++i) { ProtocolProcessMain(0); }
+    for (unsigned i = 0; i < 8; ++i) { processWithTxCompletion(); }
     assert(gHeartbeatTx == 1008U);
     /* Fill the high-priority queue; keep pending responses until space is available. */
     gUartBusy = true;
     for (unsigned i = 0; i < 100; ++i) {
-        memcpy(gRx, heartbeat, 7); gRxSize = 7; ProtocolProcessMain(0);
+        memcpy(gRx, heartbeat, 7); gRxSize = 7; processWithTxCompletion();
     }
     protocolHeartbeatStatsGet(&stats);
     assert(stats.received == 1108U && stats.pending > 0U && stats.overflow == 0U);
     gUartBusy = false;
-    for (unsigned i = 0; i < 110; ++i) { ProtocolProcessMain(0); }
+    for (unsigned i = 0; i < 110; ++i) { processWithTxCompletion(); }
     protocolHeartbeatStatsGet(&stats);
     assert(stats.received == 1108U && stats.transmitted == 1108U && stats.pending == 0U);
     /* CRC-corrupt and fragmented requests cannot elicit an early reply. */
     heartbeat[6] ^= 1;
-    memcpy(gRx, heartbeat, 7); gRxSize = 7; ProtocolProcessMain(0);
+    memcpy(gRx, heartbeat, 7); gRxSize = 7; processWithTxCompletion();
     assert(gHeartbeatTx == 1108U);
     ProtocolProcessInit(0);
     heartbeat[6] ^= 1;
-    memcpy(gRx, heartbeat, 4); gRxSize = 4; ProtocolProcessMain(0);
+    memcpy(gRx, heartbeat, 4); gRxSize = 4; processWithTxCompletion();
     assert(gHeartbeatTx == 1108U);
-    memcpy(gRx, heartbeat + 4, 3); gRxSize = 3; ProtocolProcessMain(0);
+    memcpy(gRx, heartbeat + 4, 3); gRxSize = 3; processWithTxCompletion();
     assert(gHeartbeatTx == 1109U);
     /* A request with needAck retains generic echo behavior plus one heartbeat reply. */
     ProtocolCreateDirectData(heartbeat, PROTOCOL_ADDR_MCM_TO_VCM, true, 0x7F, NULL, 0);
     memcpy(gRx, heartbeat, 7); gRxSize = 7; ProtocolProcessMain(0);
     assert(gTxSize == 7 && memcmp(gTx, heartbeat, 7) == 0);
-    ProtocolProcessMain(0); assert(gHeartbeatTx == 1110U);
-    for (unsigned i = 0; i < 510; ++i) { ProtocolProcessMain(0); }
+    processWithTxCompletion(); assert(gHeartbeatTx == 1110U);
+    for (unsigned i = 0; i < 510; ++i) { processWithTxCompletion(); }
     assert(gHeartbeatTx == 1110U);
 }
 
@@ -489,7 +728,9 @@ int main(void) {
     crc = Crc16Compute(bytes + 2, length - 4); bytes[length-2] = crc; bytes[length-1] = crc >> 8;
     feed(bytes, length); assert(ProtocolProcessRxData(0) == PROTOCOL_OK);
     ProtocolSchedulerProcess(0); assert(gTxSize == length && memcmp(bytes, gTx, length) == 0);
+    testAlarmBitfields();
     testPhysAlarms();
+    testTechAlarms();
     testMeanPressure();
     testMinuteLeak();
     testComplianceDynamic();
@@ -530,7 +771,7 @@ def main():
         environment["PATH"] = str(Path(compiler).parent) + os.pathsep + environment["PATH"]
         subprocess.run(command, check=True, env=environment)
         subprocess.run([str(executable)], check=True, env=environment)
-    print("PASS: MCM alarm limits in local/host settings, partial updates and CRC rejection, physiological alarm wire bits/recovery/suppression, fragmented RX, CRC rejection, parameter/alarm caches, scaling, source switching, start/stop, waveform, ACK, 1110 heartbeat replies, bursts, TX backpressure and reconnect")
+    print("PASS: MCM alarm limits in local/host settings, partial updates and CRC rejection, physiological alarm wire bits/recovery/500ms full reports, fragmented RX, CRC rejection, parameter/alarm caches, scaling, source switching, start/stop, waveform, ACK, 1110 heartbeat replies, bursts, TX backpressure and reconnect")
 
 if __name__ == "__main__":
     main()

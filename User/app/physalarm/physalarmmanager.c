@@ -12,6 +12,7 @@
 #include <stddef.h>
 
 #include "physalarmvent.h"
+#include "techalarm.h"
 #include "rtos.h"
 
 /* Set enabled to false here to omit a detector from alarm processing. */
@@ -43,152 +44,152 @@ static stPhysAlarmRegistration gPhysAlarmRegistrations[PHYS_ALARM_COUNT] = {
     [PHYS_ALARM_PEEP_HIGH] = {
         .type = PHYS_ALARM_PEEP_HIGH,
         .enabled = true,
-        .detector = physAlarmVentPeepHighDetect,
+        .detector = techAlarmPeepHighDetect,
         .active = false,
     },
     [PHYS_ALARM_PEEP_LOW] = {
         .type = PHYS_ALARM_PEEP_LOW,
         .enabled = true,
-        .detector = physAlarmVentPeepLowDetect,
+        .detector = techAlarmPeepLowDetect,
         .active = false,
     },
     /* Keep placeholder detectors disabled until implemented. */
     [PHYS_ALARM_PIPELINE_BLOCKAGE] = {
         .type = PHYS_ALARM_PIPELINE_BLOCKAGE,
         .enabled = false,
-        .detector = physAlarmVentPipelineBlockageDetect,
+        .detector = techAlarmPipelineBlockageDetect,
         .active = false,
     },
     [PHYS_ALARM_INSP_BRANCH_BLOCKAGE] = {
         .type = PHYS_ALARM_INSP_BRANCH_BLOCKAGE,
         .enabled = false,
-        .detector = physAlarmVentInspBranchBlockageDetect,
+        .detector = techAlarmInspBranchBlockageDetect,
         .active = false,
     },
     [PHYS_ALARM_CPAP_TOO_HIGH] = {
         .type = PHYS_ALARM_CPAP_TOO_HIGH,
         .enabled = true,
-        .detector = physAlarmVentCpapTooHighDetect,
+        .detector = techAlarmCpapTooHighDetect,
         .active = false,
     },
     [PHYS_ALARM_PIPELINE_LEAK] = {
         .type = PHYS_ALARM_PIPELINE_LEAK,
         .enabled = false,
-        .detector = physAlarmVentPipelineLeakDetect,
+        .detector = techAlarmPipelineLeakDetect,
         .active = false,
     },
     [PHYS_ALARM_PIPELINE_DISCONNECT] = {
         .type = PHYS_ALARM_PIPELINE_DISCONNECT,
         .enabled = false,
-        .detector = physAlarmVentPipelineDisconnectDetect,
+        .detector = techAlarmPipelineDisconnectDetect,
         .active = false,
     },
     [PHYS_ALARM_PRESSURE_LIMIT] = {
         .type = PHYS_ALARM_PRESSURE_LIMIT,
         .enabled = false,
-        .detector = physAlarmVentPressureLimitDetect,
+        .detector = techAlarmPressureLimitDetect,
         .active = false,
     },
     [PHYS_ALARM_VOLUME_LIMIT] = {
         .type = PHYS_ALARM_VOLUME_LIMIT,
         .enabled = false,
-        .detector = physAlarmVentVolumeLimitDetect,
+        .detector = techAlarmVolumeLimitDetect,
         .active = false,
     },
     [PHYS_ALARM_INSP_PRESS_NOT_REACHED] = {
         .type = PHYS_ALARM_INSP_PRESS_NOT_REACHED,
         .enabled = false,
-        .detector = physAlarmVentInspPressNotReachedDetect,
+        .detector = techAlarmInspPressNotReachedDetect,
         .active = false,
     },
     [PHYS_ALARM_TIDAL_VOL_NOT_REACHED] = {
         .type = PHYS_ALARM_TIDAL_VOL_NOT_REACHED,
         .enabled = false,
-        .detector = physAlarmVentTidalVolNotReachedDetect,
+        .detector = techAlarmTidalVolNotReachedDetect,
         .active = false,
     },
     [PHYS_ALARM_SIGH_CYCLE_PRESS_LIMIT] = {
         .type = PHYS_ALARM_SIGH_CYCLE_PRESS_LIMIT,
         .enabled = false,
-        .detector = physAlarmVentSighCyclePressLimitDetect,
+        .detector = techAlarmSighCyclePressLimitDetect,
         .active = false,
     },
     [PHYS_ALARM_O2_SUPPLY_INSUFFICIENT] = {
         .type = PHYS_ALARM_O2_SUPPLY_INSUFFICIENT,
         .enabled = false,
-        .detector = physAlarmVentO2SupplyInsufficientDetect,
+        .detector = techAlarmO2SupplyInsufficientDetect,
         .active = false,
     },
     [PHYS_ALARM_INSP_TIME_TOO_LONG] = {
         .type = PHYS_ALARM_INSP_TIME_TOO_LONG,
         .enabled = false,
-        .detector = physAlarmVentInspTimeTooLongDetect,
+        .detector = techAlarmInspTimeTooLongDetect,
         .active = false,
     },
     [PHYS_ALARM_INHALED_GAS_TEMP_HIGH] = {
         .type = PHYS_ALARM_INHALED_GAS_TEMP_HIGH,
         .enabled = false,
-        .detector = physAlarmVentInhaledGasTempHighDetect,
+        .detector = techAlarmInhaledGasTempHighDetect,
         .active = false,
     },
     [PHYS_ALARM_AMV_TARGET_NOT_REACHED] = {
         .type = PHYS_ALARM_AMV_TARGET_NOT_REACHED,
         .enabled = false,
-        .detector = physAlarmVentAmvTargetNotReachedDetect,
+        .detector = techAlarmAmvTargetNotReachedDetect,
         .active = false,
     },
     [PHYS_ALARM_O2_FLOW_NOT_REACHED] = {
         .type = PHYS_ALARM_O2_FLOW_NOT_REACHED,
         .enabled = false,
-        .detector = physAlarmVentO2FlowNotReachedDetect,
+        .detector = techAlarmO2FlowNotReachedDetect,
         .active = false,
     },
     [PHYS_ALARM_PAT_FLOW_SENSOR_FAULT] = {
         .type = PHYS_ALARM_PAT_FLOW_SENSOR_FAULT,
         .enabled = false,
-        .detector = physAlarmVentPatFlowSensorFaultDetect,
+        .detector = techAlarmPatFlowSensorFaultDetect,
         .active = false,
     },
     [PHYS_ALARM_PAT_PRESS_SENSOR_FAULT] = {
         .type = PHYS_ALARM_PAT_PRESS_SENSOR_FAULT,
         .enabled = false,
-        .detector = physAlarmVentPatPressSensorFaultDetect,
+        .detector = techAlarmPatPressSensorFaultDetect,
         .active = false,
     },
     [PHYS_ALARM_MECH_PIPELINE_DISCONNECT] = {
         .type = PHYS_ALARM_MECH_PIPELINE_DISCONNECT,
         .enabled = false,
-        .detector = physAlarmVentMechPipelineDisconnectDetect,
+        .detector = techAlarmMechPipelineDisconnectDetect,
         .active = false,
     },
     [PHYS_ALARM_EXP_BRANCH_BLOCKAGE] = {
         .type = PHYS_ALARM_EXP_BRANCH_BLOCKAGE,
         .enabled = false,
-        .detector = physAlarmVentExpBranchBlockageDetect,
+        .detector = techAlarmExpBranchBlockageDetect,
         .active = false,
     },
     [PHYS_ALARM_MAX_INSP_NEG_PRESSURE] = {
         .type = PHYS_ALARM_MAX_INSP_NEG_PRESSURE,
         .enabled = false,
-        .detector = physAlarmVentMaxInspNegPressureDetect,
+        .detector = techAlarmMaxInspNegPressureDetect,
         .active = false,
     },
     [PHYS_ALARM_INSP_PRESSURE_NOT_RELEASED] = {
         .type = PHYS_ALARM_INSP_PRESSURE_NOT_RELEASED,
         .enabled = false,
-        .detector = physAlarmVentInspPressureNotReleasedDetect,
+        .detector = techAlarmInspPressureNotReleasedDetect,
         .active = false,
     },
     [PHYS_ALARM_O2_SOURCE_FAILURE] = {
         .type = PHYS_ALARM_O2_SOURCE_FAILURE,
         .enabled = false,
-        .detector = physAlarmVentO2SourceFailureDetect,
+        .detector = techAlarmO2SourceFailureDetect,
         .active = false,
     },
     [PHYS_ALARM_PROXIMAL_PRESS_TUBE_DISCONNECT] = {
         .type = PHYS_ALARM_PROXIMAL_PRESS_TUBE_DISCONNECT,
         .enabled = false,
-        .detector = physAlarmVentProximalPressTubeDisconnectDetect,
+        .detector = techAlarmProximalPressTubeDisconnectDetect,
         .active = false,
     },
 };
@@ -212,6 +213,7 @@ void physAlarmManagerInit(void)
         gPhysAlarmRegistrations[lIndex].active = false;
     }
     physAlarmVentInit();
+    techAlarmInit();
 }
 
 void physAlarmManagerProcess(uint32_t nowMs)
@@ -236,7 +238,7 @@ bool physAlarmManagerStateGet(ePhysAlarmType type)
 {
     bool lActive;
 
-    if (type >= PHYS_ALARM_COUNT) {
+    if ((uint32_t)type >= PHYS_ALARM_COUNT) {
         return false;
     }
     repRtosEnterCritical();

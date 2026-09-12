@@ -40,6 +40,7 @@ add_executable(ventcore
     User/app/physalarm/physalarmapnea.c
     User/app/physalarm/physalarmmanager.c
     User/app/physalarm/physalarmvent.c
+    User/app/physalarm/techalarm.c
     User/app/system/taskmanager.c
     User/app/ventalgo/expirationcontroller.c
     User/app/ventalgo/fio2controller.c

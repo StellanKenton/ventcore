@@ -12,7 +12,7 @@
 | `app/databus/` | 维护控制数据数组；SensorTask 保存当前及前一周期原始数据，VentTask 基于最新原始数据完成滤波和校准转换 |
 | `app/ventalgo/` | 实现吸气压力、吸气流量、公共 Release/PEEP 和 FiO₂ 控制器；各控制器只生成统一 `stActuatorRequest`，不直接写 BSP |
 | `app/ventlogic/` | Scheduler 为 PAC/VAC/PSV/PSV-ST 生成逐次 `stBreathPlan`，Phase Controller 执行计划，Trigger Engine 检测患者触发，Cycle Engine 完成 PSV 流量切换，Apnea Engine 调度 PSV-ST 备份呼吸，Monitor Engine 发布逐次 `stBreathResult`，Actuator Controller 统一仲裁并写入 BSP |
-| `app/physalarm/` | AlarmTask 调度生理报警检测器并发布状态；PEEP 高低报警在新吸气阶段按上一周期动态 PEEP 判断，恢复条件持续 200 ms 后解除 |
+| `app/physalarm/` | `physalarmmanager.*` 在 AlarmTask 统一注册、调度和发布报警；`physalarmvent.*` 检测 0xAD 报警；`techalarm.*` 承接 0xAB 检测和快照；`alarmbits.h` 定义旧协议六组枚举及 union 位域 |
 | `bsp/adc/adc.*` | 使用 ADC1 规则组扫描、连续转换和 DMA1 循环模式持续采集 14 路板级模拟量 |
 | `bsp/blower_vcm/blower_vcm.*` | 使用 UART4（板级 VCM UART5，PC12/PD2）和 DMA0 异步发送双控制帧、循环接收反馈；控制变化时立即发送并每 10 ms 保活重发，提供连接超时与通信统计 |
 | `bsp/bspdebug.*` | 注册 `bsp` RTT 调试命令；支持 ADC、阀门、风机控制，以及 `bsp blower stats` 通信诊断 |
@@ -125,3 +125,7 @@ CPAP/PSV 使用 `gVentCpapPsvSettings`，通过 `vt psv` 或 `breathSchedulerSta
 PSV-ST 的精简结构体使用 `apneaInspTimeMs` / `apneaRateBpm` 定义后备吸气时长及频率；后备压力共用 PEEP + pressureSupportCmh2o，上升时间共用 riseTimeMs 并限制到后备吸气时长。自主吸气最大时长固定为 2000 ms，压力上限取公共 pressureHigh，窒息等待时间取公共 apneaTimeHigh（秒）。旧协议独立后备压力、最大吸气时间及峰压字段不再写入 PSV-ST；CPAP/PSV 原绑定保留。`test_vti_compensation.py` 用真实 Scheduler/Phase/Trigger/Cycle/Apnea 覆盖 CPAP/PSV 两类触发、流量切换、最大吸气时间、窒息状态及 PSV-ST 后备计划和非法参数拒绝。此回归使用主机合成输入，未验证实机气路。
 
 每次吸气（包括启动等待后的第一口）均加载新的计划序号，启动等待呼气的计划不能复用于第一口吸气。否则吸气结束清除 capture 标志后，呼气控制器因序号未变停留在 PEEP，不再通知捕获完成，CPAP/PSV 第二次触发永久被挡住。`test_vti_compensation.py` 使用真实呼气控制器及相位/触发/流量切换引擎验证压力、流量两类各连续三口，无手动 capture 通知；修复前在呼气准备标志恢复处失败，修复后通过。
+
+报警接口仅供任务上下文调用：AlarmTask 初始化并更新检测状态，CommTask 通过临界区读取当前状态。内部 `ePhysAlarmType` 是统一检测器注册编号，不是线上 bit 编号。`alarmbits.h` 中各枚举值才是对应主 ID / SubId 的 bit 编号；位域遵循目标 ARM GCC 小端 ABI，发送按整数值显式小端编码。
+
+MCM 报警每 500 ms 全量发送，不做变化抑制，也不锁存已恢复的短时事件。`0xAD` 固定 4 字节；`0xAB` 每次包含 SubId 0..4，宽度依次为 4、4、1、1、1 字节，包括全零模块与校准模块。未实现项及保留位为 0。已实现的气道压力高/低、潮气量高/低分别对应 `0xAD` bit 0、1、4、5；PEEP 高/低、持续气道压过高对应 `0xAB/0` bit 0、1、4。氧气供应不足预留映射至 `0xAB/1` bit 30，`0xAB/0` bit 12 保持保留。PEEP/CPAP 检测迁移至 `techalarm.c`，原阈值和恢复时序保持一致。
