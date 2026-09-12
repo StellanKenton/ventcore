@@ -20,7 +20,7 @@ HARNESS = r'''
 #include "monitorengine.h"
 #include "controldata.h"
 #include "physalarmmanager.h"
-#include "techalarm.h"
+#include "techalarmmanager.h"
 #include "rtos.h"
 #include "log.h"
 static uint8_t gRx[2048], gTx[256];
@@ -33,7 +33,7 @@ static uint32_t gHeartbeatTx;
 static bool gAlarmStates[PHYS_ALARM_COUNT];
 bool physAlarmManagerStateGet(ePhysAlarmType type) { return gAlarmStates[type]; }
 static stMcmTechAlarmStatusSnapshot gTechStatus;
-void techAlarmSnapshotGet(stMcmTechAlarmStatusSnapshot *status) { *status = gTechStatus; }
+void techAlarmManagerSnapshotGet(stMcmTechAlarmStatusSnapshot *status) { *status = gTechStatus; }
 
 /** Verify union sizes and every documented field position. */
 static void testAlarmBitfields(void) {
@@ -235,8 +235,8 @@ static void testAlarmBitfields(void) {
 static void testPhysAlarms(void) {
     const ePhysAlarmType lTypes[] = {PHYS_ALARM_AIRWAY_PRESSURE_HIGH,
         PHYS_ALARM_AIRWAY_PRESSURE_LOW, PHYS_ALARM_EXHALED_VOLUME_HIGH,
-        PHYS_ALARM_EXHALED_VOLUME_LOW, PHYS_ALARM_PEEP_HIGH, PHYS_ALARM_CPAP_TOO_HIGH};
-    const uint32_t lMasks[] = {1U, 2U, 16U, 32U, 0U, 0U};
+        PHYS_ALARM_EXHALED_VOLUME_LOW};
+    const uint32_t lMasks[] = {1U, 2U, 16U, 32U};
     uint8_t lExpected[32];
     ProtocolProcessInit(0);
     for (unsigned lIndex = 0U; lIndex < sizeof(lTypes) / sizeof(lTypes[0]); lIndex++) {
@@ -760,7 +760,7 @@ def main():
         executable = Path(directory) / "protocol_test.exe"
         includes = ["user/app/protocol", "user/bsp/uart", "user/app/databus", "user/app/ventlogic",
                     "user/app/ventalgo", "user/module/log", "user/module/rtos", "user/tools/ringbuffer",
-                    "user/tools/controller", "user/app/physalarm"]
+                    "user/tools/controller", "user/app/physalarm", "user/app/techalarm"]
         sources = ["user/app/protocol/ProtoclOfMcm.c", "user/app/protocol/ProtoclOfTrasn.c", "user/app/protocol/ProtoclOfPackets.c",
                    "user/app/protocol/ProtoclOfProcess.c", "user/app/databus/settingdata.c",
                    "user/tools/ringbuffer/ringbuffer.c"]

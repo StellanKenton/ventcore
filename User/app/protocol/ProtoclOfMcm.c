@@ -16,7 +16,7 @@
 #include "monitorengine.h"
 #include "phasecontroller.h"
 #include "physalarmmanager.h"
-#include "techalarm.h"
+#include "techalarmmanager.h"
 #include "rtos.h"
 #include "log.h"
 #include <math.h>
@@ -2321,7 +2321,7 @@ void ProtocolTechAlarmDataProcess(uint8_t instance, uint32_t taskCounter) {
     if ((taskCounter % MCM_ALARM_REPORT_PERIOD_MS) != 0U) {
         return;
     }
-    techAlarmSnapshotGet(&lStatus);
+    techAlarmManagerSnapshotGet(&lStatus);
     lSubIds[TECH_ALARM_PHYS_MODULE_ID].m_value = lStatus.phys.value;
     lSubIds[TECH_ALARM_TECH_MODULE_ID].m_value = lStatus.tech.value;
     lSubIds[TECH_ALARM_POWER_MODULE_ID].m_value = lStatus.power.value;

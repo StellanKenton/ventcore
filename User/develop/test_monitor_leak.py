@@ -21,7 +21,7 @@ HARNESS = r'''
 #include "calibtrans.h"
 #include "rtos.h"
 #include "physalarmmanager.h"
-#include "techalarm.h"
+#include "techalarmmanager.h"
 
 static float gData[CONTROL_DATA_COUNT];
 static float gOffset;
@@ -179,69 +179,69 @@ static void peepAlarmNextBreath(float pressure) {
 static void peepAlarms(void) {
     unsigned int lCase;
     for (lCase = 0U; lCase < 2U; lCase++) {
-        ePhysAlarmType lType = lCase == 0U ? PHYS_ALARM_PEEP_HIGH : PHYS_ALARM_PEEP_LOW;
+        eTechAlarmType lType = lCase == 0U ? TECH_ALARM_PEEP_HIGH : TECH_ALARM_PEEP_LOW;
         float lBad = lCase == 0U ? 11.0F : 1.0F;
         float lEqual = lCase == 0U ? 10.0F : 2.0F;
         uint32_t lStart;
         reset();
-        physAlarmManagerInit();
+        techAlarmManagerInit();
         sample(PHASE_INSP, 30.0F, 25.0F);
-        physAlarmManagerProcess(gNow);
-        assert(!physAlarmManagerStateGet(lType)); /* No previous cycle. */
+        techAlarmManagerProcess(gNow);
+        assert(!techAlarmManagerStateGet(lType)); /* No previous cycle. */
         sample(PHASE_EXP, 0.0F, lBad);
         monitorEngineBreathComplete(gNow);
-        physAlarmManagerProcess(gNow);
-        assert(!physAlarmManagerStateGet(lType)); /* Expiration cannot trigger. */
+        techAlarmManagerProcess(gNow);
+        assert(!techAlarmManagerStateGet(lType)); /* Expiration cannot trigger. */
         gPlan.sequence++;
         sample(PHASE_INSP, 30.0F, 25.0F);
-        physAlarmManagerProcess(gNow);
-        assert(physAlarmManagerStateGet(lType));
+        techAlarmManagerProcess(gNow);
+        assert(techAlarmManagerStateGet(lType));
         stMcmTechAlarmStatusSnapshot lStatus;
-        techAlarmSnapshotGet(&lStatus);
+        techAlarmManagerSnapshotGet(&lStatus);
         assert(lStatus.phys.value == (lCase == 0U ? 1U : 2U));
         assert(lStatus.tech.value == 0U && lStatus.power.value == 0U);
         assert(lStatus.comm.value == 0U && lStatus.cal.value == 0U);
-        assert(!physAlarmManagerStateGet(lCase == 0U ? PHYS_ALARM_PEEP_LOW : PHYS_ALARM_PEEP_HIGH));
+        assert(!techAlarmManagerStateGet(lCase == 0U ? TECH_ALARM_PEEP_LOW : TECH_ALARM_PEEP_HIGH));
 
         peepAlarmNextBreath(5.0F);
         lStart = gNow;
-        physAlarmManagerProcess(lStart);
-        physAlarmManagerProcess(lStart + 199U);
-        assert(physAlarmManagerStateGet(lType));
+        techAlarmManagerProcess(lStart);
+        techAlarmManagerProcess(lStart + 199U);
+        assert(techAlarmManagerStateGet(lType));
         gNow += 199U;
         peepAlarmNextBreath(lEqual); /* Equality interrupts recovery. */
-        physAlarmManagerProcess(gNow);
+        techAlarmManagerProcess(gNow);
         gNow += 250U;
-        physAlarmManagerProcess(gNow);
-        assert(physAlarmManagerStateGet(lType));
+        techAlarmManagerProcess(gNow);
+        assert(techAlarmManagerStateGet(lType));
 
         peepAlarmNextBreath(5.0F);
         lStart = gNow;
-        physAlarmManagerProcess(lStart);
-        physAlarmManagerProcess(lStart + 199U);
-        assert(physAlarmManagerStateGet(lType));
-        physAlarmManagerProcess(lStart + 200U);
-        assert(!physAlarmManagerStateGet(lType));
+        techAlarmManagerProcess(lStart);
+        techAlarmManagerProcess(lStart + 199U);
+        assert(techAlarmManagerStateGet(lType));
+        techAlarmManagerProcess(lStart + 200U);
+        assert(!techAlarmManagerStateGet(lType));
         gNow += 200U;
         peepAlarmNextBreath(lEqual);
-        physAlarmManagerProcess(gNow);
-        assert(!physAlarmManagerStateGet(lType)); /* Equality cannot trigger. */
+        techAlarmManagerProcess(gNow);
+        assert(!techAlarmManagerStateGet(lType)); /* Equality cannot trigger. */
         peepAlarmNextBreath(lBad);
-        physAlarmManagerProcess(gNow);
-        assert(physAlarmManagerStateGet(lType));
+        techAlarmManagerProcess(gNow);
+        assert(techAlarmManagerStateGet(lType));
         peepAlarmNextBreath(5.0F);
         lStart = UINT32_MAX - 100U;
-        physAlarmManagerProcess(lStart);
-        physAlarmManagerProcess(lStart + 199U);
-        assert(physAlarmManagerStateGet(lType));
-        physAlarmManagerProcess(lStart + 200U);
-        assert(!physAlarmManagerStateGet(lType));
+        techAlarmManagerProcess(lStart);
+        techAlarmManagerProcess(lStart + 199U);
+        assert(techAlarmManagerStateGet(lType));
+        techAlarmManagerProcess(lStart + 200U);
+        assert(!techAlarmManagerStateGet(lType));
         peepAlarmNextBreath(lBad);
-        physAlarmManagerProcess(gNow);
-        assert(physAlarmManagerStateGet(lType));
+        techAlarmManagerProcess(gNow);
+        assert(techAlarmManagerStateGet(lType));
         sample(PHASE_IDLE, 0.0F, 0.0F);
-        physAlarmManagerProcess(gNow);
-        assert(!physAlarmManagerStateGet(lType));
+        techAlarmManagerProcess(gNow);
+        assert(!techAlarmManagerStateGet(lType));
     }
 }
 
@@ -249,18 +249,19 @@ static void peepAlarms(void) {
 static void cpapCheck(uint32_t nowMs, float insp, float patient, bool active) {
     gData[INSP_REAL_PRS] = insp;
     gData[PAT_REAL_PRS] = patient;
-    physAlarmManagerProcess(nowMs);
-    assert(physAlarmManagerStateGet(PHYS_ALARM_CPAP_TOO_HIGH) == active);
+    techAlarmManagerProcess(nowMs);
+    assert(techAlarmManagerStateGet(TECH_ALARM_CPAP_TOO_HIGH) == active);
     stMcmTechAlarmStatusSnapshot lStatus;
-    techAlarmSnapshotGet(&lStatus);
+    techAlarmManagerSnapshotGet(&lStatus);
     assert(((lStatus.phys.value & 0x10U) != 0U) == active);
     assert((lStatus.phys.value & 0x1000U) == 0U);
 }
 
 /** Exercise the enabled CPAP detector through the alarm manager. */
 static void cpapAlarms(void) {
+    stMcmTechAlarmStatusSnapshot lStatus;
     reset();
-    physAlarmManagerInit();
+    techAlarmManagerInit();
     gPhase = PHASE_INSP;
     cpapCheck(0U, 21.0F, 19.0F, false);
     cpapCheck(15000U, 21.0F, 19.0F, false);
@@ -298,7 +299,22 @@ static void cpapAlarms(void) {
     cpapCheck(UINT32_MAX - 10000U, 26.0F, 26.0F, false);
     cpapCheck(4998U, 26.0F, 26.0F, false);
     cpapCheck(4999U, 26.0F, 26.0F, true);
+    assert(!techAlarmManagerStateGet((eTechAlarmType)-1));
+    assert(!techAlarmManagerStateGet(TECH_ALARM_COUNT));
+    techAlarmManagerSnapshotGet(NULL);
     physAlarmManagerInit();
+    physAlarmManagerProcess(4999U);
+    assert(techAlarmManagerStateGet(TECH_ALARM_CPAP_TOO_HIGH));
+    techAlarmManagerSnapshotGet(&lStatus);
+    assert(lStatus.phys.value == (1UL << PHYSIO_FAULT_CPAP_TOO_HIGH));
+    assert(lStatus.tech.value == 0U && lStatus.power.value == 0U);
+    assert(lStatus.comm.value == 0U && lStatus.cal.value == 0U);
+    techAlarmManagerInit();
+    techAlarmManagerSnapshotGet(&lStatus);
+    assert(lStatus.phys.value == 0U);
+    for (uint32_t lType = 0U; lType < TECH_ALARM_COUNT; lType++) {
+        assert(!techAlarmManagerStateGet((eTechAlarmType)lType));
+    }
 }
 
 /** Verify whole-cycle averaging, publication timing and invalid-cycle handling. */
@@ -608,14 +624,19 @@ def main():
         harness = Path(directory) / "monitor_leak_test.c"
         harness.write_text(HARNESS, encoding="utf-8", newline="\n")
         executable = Path(directory) / "monitor_leak_test.exe"
-        includes = ["user/app/physalarm", "user/app/ventlogic", "user/app/ventalgo", "user/app/databus",
+        includes = ["user/app/physalarm", "user/app/techalarm", "user/app/ventlogic", "user/app/ventalgo", "user/app/databus",
                     "user/app/calibration", "user/module/rtos", "user/tools/controller"]
         command = [compiler, "-std=c11", "-Wall", "-Wextra", "-Werror",
                    *[f"-I{ROOT / path}" for path in includes], str(harness),
                    str(ROOT / "user/app/ventlogic/monitorengine.c"),
                    str(ROOT / "user/app/physalarm/physalarmvent.c"),
                    str(ROOT / "user/app/physalarm/physalarmmanager.c"),
-                   str(ROOT / "user/app/physalarm/techalarm.c"),
+                   str(ROOT / "user/app/techalarm/techalarmmanager.c"),
+                   str(ROOT / "user/app/techalarm/techphys.c"),
+                   str(ROOT / "user/app/techalarm/techdevice.c"),
+                   str(ROOT / "user/app/techalarm/techpower.c"),
+                   str(ROOT / "user/app/techalarm/techcomm.c"),
+                   str(ROOT / "user/app/techalarm/techcal.c"),
                    str(ROOT / "user/app/ventalgo/flowcontroller.c"),
                    str(ROOT / "user/tools/controller/pid.c"), "-o", str(executable)]
         environment = os.environ.copy()

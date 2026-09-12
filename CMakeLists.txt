@@ -40,7 +40,12 @@ add_executable(ventcore
     User/app/physalarm/physalarmapnea.c
     User/app/physalarm/physalarmmanager.c
     User/app/physalarm/physalarmvent.c
-    User/app/physalarm/techalarm.c
+    User/app/techalarm/techalarmmanager.c
+    User/app/techalarm/techphys.c
+    User/app/techalarm/techdevice.c
+    User/app/techalarm/techpower.c
+    User/app/techalarm/techcomm.c
+    User/app/techalarm/techcal.c
     User/app/system/taskmanager.c
     User/app/ventalgo/expirationcontroller.c
     User/app/ventalgo/fio2controller.c
@@ -95,6 +100,7 @@ target_include_directories(ventcore PRIVATE
     User/app/protocol
     User/bsp/uart
     User/app/physalarm
+    User/app/techalarm
     User/app/system
     User/app/ventalgo
     User/app/ventlogic

@@ -12,7 +12,8 @@
 | `app/databus/` | 维护控制数据数组；SensorTask 保存当前及前一周期原始数据，VentTask 基于最新原始数据完成滤波和校准转换 |
 | `app/ventalgo/` | 实现吸气压力、吸气流量、公共 Release/PEEP 和 FiO₂ 控制器；各控制器只生成统一 `stActuatorRequest`，不直接写 BSP |
 | `app/ventlogic/` | Scheduler 为 PAC/VAC/PSV/PSV-ST 生成逐次 `stBreathPlan`，Phase Controller 执行计划，Trigger Engine 检测患者触发，Cycle Engine 完成 PSV 流量切换，Apnea Engine 调度 PSV-ST 备份呼吸，Monitor Engine 发布逐次 `stBreathResult`，Actuator Controller 统一仲裁并写入 BSP |
-| `app/physalarm/` | `physalarmmanager.*` 在 AlarmTask 统一注册、调度和发布报警；`physalarmvent.*` 检测 0xAD 报警；`techalarm.*` 承接 0xAB 检测和快照；`alarmbits.h` 定义旧协议六组枚举及 union 位域 |
+| `app/physalarm/` | `physalarmmanager.*` 在 AlarmTask 注册、调度和发布 0xAD 生理报警；`physalarmvent.*` 实现检测；`alarmbits.h` 定义旧协议六组枚举及 union 位域 |
+| `app/techalarm/` | `techalarmmanager.*` 独立注册、调度、发布技术报警并生成 0xAB 快照；`techphys.*`、`techdevice.*`、`techpower.*`、`techcomm.*`、`techcal.*` 分别承接 SubId 0..4 检测 |
 | `bsp/adc/adc.*` | 使用 ADC1 规则组扫描、连续转换和 DMA1 循环模式持续采集 14 路板级模拟量 |
 | `bsp/blower_vcm/blower_vcm.*` | 使用 UART4（板级 VCM UART5，PC12/PD2）和 DMA0 异步发送双控制帧、循环接收反馈；控制变化时立即发送并每 10 ms 保活重发，提供连接超时与通信统计 |
 | `bsp/bspdebug.*` | 注册 `bsp` RTT 调试命令；支持 ADC、阀门、风机控制，以及 `bsp blower stats` 通信诊断 |
@@ -54,7 +55,7 @@ VAC 支持按 `gVentVacSettings.triggerType` 选择关闭、压力或流量吸�
 
 当前 GD32F470 板载 HXTAL 为 8 MHz，系统使用 `240M_PLL_8M_HXTAL` 配置；该配置决定 RTOS tick 和 APB 外设（包括 VCM UART 230400）的实际时基。
 
-PEEP 报警以当前呼吸计划的 `peepCmh2o` 为 refpeep。在新吸气阶段，`PHYS_ALARM_PEEP_HIGH` 按上一周期 `MONITOR_DYN_PEEP > refpeep + 5` 触发，`PHYS_ALARM_PEEP_LOW` 按 `< refpeep - 3` 触发，每个吸气计划只判断一次。AlarmTask 每 10 ms 检查恢复：动态 PEEP 严格低于高限或严格高于低限持续至少 200 ms 后解除对应报警；等于阈值会中断恢复计时。恢复不使用实时患者压力。无上一完整周期时不触发，停止通气或进入零点补偿阶段时清除 PEEP 报警和计时。检测器仅由 AlarmTask 调用，通过 RTOS 临界区读取 VentTask 的计划、阶段和监测快照，不用于 ISR。
+PEEP 报警以当前呼吸计划的 `peepCmh2o` 为 refpeep。在新吸气阶段，`TECH_ALARM_PEEP_HIGH` 按上一周期 `MONITOR_DYN_PEEP > refpeep + 5` 触发，`TECH_ALARM_PEEP_LOW` 按 `< refpeep - 3` 触发，每个吸气计划只判断一次。AlarmTask 每 10 ms 检查恢复：动态 PEEP 严格低于高限或严格高于低限持续至少 200 ms 后解除对应报警；等于阈值会中断恢复计时。恢复不使用实时患者压力。无上一完整周期时不触发，停止通气或进入零点补偿阶段时清除 PEEP 报警和计时。检测器仅由 AlarmTask 调用，通过 RTOS 临界区读取 VentTask 的计划、阶段和监测快照，不用于 ISR。
 
 泄漏估计按 `涡轮 → inpFlowSensor → 呼气阀排气支路接点 → midFlowSensor → lung` 的气路定义；呼出气体反向经过 midFlowSensor 后由呼气阀排出。仅 midFlowSensor 下游泄漏计入患者侧补偿，`inpFlow - midFlow` 包含呼气阀正常排气，不能直接作为暂停的近端流量目标。
 
@@ -80,7 +81,7 @@ VAC 供气段压力前馈使用 `Pff = PEEP + Vref*deliveryTarget/userTarget/30 
 
 VAC 吸气暂停继续使用近端流量反馈，不锁定患者压力。入口采用 Kp=0.003、Kd=0.00005、Ki=0 制动供气尾段；至少经过 120 ms，且近端流量下降到泄漏目标上方 2 L/min 以内后，开启 Ki=0.02 的积分补偿。此时按患者压力一次性选择稳定段参数：低于 30 cmH₂O 保留 Kp=0.003、Kd=0.00005；达到或超过 30 cmH₂O 使用 Kp=0.0003、Kd=0，减少高压力工况的反馈振荡。本次暂停内不反复切换增益。暂停风机指令每 6 ms 最多变化 40 个指令单位，绝对压力对应转速上限优先于变化率限制，限幅时撤回同方向积分增量。患者侧漏气才计入近端流量目标，呼气阀侧流量不能直接当作患者侧漏气目标。验证重点是暂停稳定后 patflow 相对泄漏补偿目标的偏差与振幅，不以原始过零次数作为验收标准。
 
-`PHYS_ALARM_CPAP_TOO_HIGH` 已启用：以当前呼吸计划 `peepCmh2o` 为基准，`INSP_REAL_PRS` 与 `PAT_REAL_PRS` 同时严格大于 PEEP + 15 cmH₂O 持续 15 s 触发；报警后两路同时严格小于 PEEP + 14.5 cmH₂O 持续 3 s 恢复。等于阈值或任一路不满足条件会中断对应计时，吸呼气切换不清计时。停机、零点补偿阶段清除状态；计划不可用时中断计时并保留报警状态。由 AlarmTask 在临界区获取计划及两路压力快照。`develop/test_monitor_leak.py` 包含阈值、计时边界、中断、阶段切换及 tick 回绕回归。
+`TECH_ALARM_CPAP_TOO_HIGH` 已启用：以当前呼吸计划 `peepCmh2o` 为基准，`INSP_REAL_PRS` 与 `PAT_REAL_PRS` 同时严格大于 PEEP + 15 cmH₂O 持续 15 s 触发；报警后两路同时严格小于 PEEP + 14.5 cmH₂O 持续 3 s 恢复。等于阈值或任一路不满足条件会中断对应计时，吸呼气切换不清计时。停机、零点补偿阶段清除状态；计划不可用时中断计时并保留报警状态。由 AlarmTask 在临界区获取计划及两路压力快照。`develop/test_monitor_leak.py` 包含阈值、计时边界、中断、阶段切换及 tick 回绕回归。
 
 `stVentPatientSettings.useHostSettings` 默认 0，使用本机固定设置；1 使用独立的 MCM 设置副本。两种情况下均接收并缓存参数；MCM 报警限（0xAC）不受此开关限制，在 VentTask 中按 scale 解码并写入当前报警设置，未下发的字段保留原值，切换参数源时重新应用已缓存的报警限。压力和呼出潮气量检测器直接读取这些设置；窒息时间同步至 PSV/PSV-ST 设置。通气命令 1 启动、0 停止。已绑定 PAC/VAC/CPAP-PSV/PSV-ST 的现有字段，其他模式仅缓存，由 Scheduler 拒绝启动。时间按 scale 解码为秒后转为毫秒。波形沿用压力 ×10、流量 ×10+2000、容量 mL 和毫秒时间戳；相位 1 吸气、2 呼气。CommTask 优先级 5、周期 10 ms、栈 1024 words，低于通气和传感器任务。
 
@@ -128,4 +129,6 @@ PSV-ST 的精简结构体使用 `apneaInspTimeMs` / `apneaRateBpm` 定义后备�
 
 报警接口仅供任务上下文调用：AlarmTask 初始化并更新检测状态，CommTask 通过临界区读取当前状态。内部 `ePhysAlarmType` 是统一检测器注册编号，不是线上 bit 编号。`alarmbits.h` 中各枚举值才是对应主 ID / SubId 的 bit 编号；位域遵循目标 ARM GCC 小端 ABI，发送按整数值显式小端编码。
 
-MCM 报警每 500 ms 全量发送，不做变化抑制，也不锁存已恢复的短时事件。`0xAD` 固定 4 字节；`0xAB` 每次包含 SubId 0..4，宽度依次为 4、4、1、1、1 字节，包括全零模块与校准模块。未实现项及保留位为 0。已实现的气道压力高/低、潮气量高/低分别对应 `0xAD` bit 0、1、4、5；PEEP 高/低、持续气道压过高对应 `0xAB/0` bit 0、1、4。氧气供应不足预留映射至 `0xAB/1` bit 30，`0xAB/0` bit 12 保持保留。PEEP/CPAP 检测迁移至 `techalarm.c`，原阈值和恢复时序保持一致。
+MCM 报警每 500 ms 全量发送，不做变化抑制，也不锁存已恢复的短时事件。`0xAD` 固定 4 字节；`0xAB` 每次包含 SubId 0..4，宽度依次为 4、4、1、1、1 字节，包括全零模块与校准模块。未实现项及保留位为 0。已实现的气道压力高/低、潮气量高/低分别对应 `0xAD` bit 0、1、4、5；PEEP 高/低、持续气道压过高对应 `0xAB/0` bit 0、1、4。氧气供应不足预留映射至 `0xAB/1` bit 30，`0xAB/0` bit 12 保持保留。PEEP/CPAP 检测迁移至 `app/techalarm/techphys.c`，原阈值和恢复时序保持一致。
+
+技术报警与生理报警由 AlarmTask 每 10 ms 使用同一 nowMs 分别调用 manager。`techAlarmManagerInit()` 在处理开始前初始化，`Process()` 及各检测器仅由 AlarmTask 调用，`StateGet()` / `SnapshotGet()` 允许其他任务通过临界区读取，不用于 ISR。注册表显式维护 enabled、检测函数和协议模块/位号；未知报警类型返回 false，空快照指针忽略。PEEP 高/低和 CPAP 默认启用，其余检测器仍为关闭的占位项，不根据现有硬件数据新增判断。氧气供应不足属于 `techdevice`，保持 SubId 1 bit 30。新增检测应在对应分组实现，并在 `techalarmmanager.c` 注册、设置启用标志及位号；宏和运行类型位于对应头文件。协议继续通过 `physalarm/alarmbits.h` 共享位图定义。

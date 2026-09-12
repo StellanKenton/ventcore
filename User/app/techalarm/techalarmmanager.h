@@ -1,0 +1,119 @@
+/************************************************************************************
+* @file     : techalarmmanager.h
+* @brief    : Technical alarm interface; task context only.
+* @details  : Current alarm states using the legacy MCM wire mapping.
+* @author   :
+* @date     : 2026-09-12
+* @version  : V1.0.0
+* @copyright: Copyright (c) 2050
+***********************************************************************************/
+#ifndef USER_APP_TECHALARM_TECHALARMMANAGER_H
+#define USER_APP_TECHALARM_TECHALARMMANAGER_H
+
+#include <stdbool.h>
+#include <stdint.h>
+#include "alarmbits.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+typedef enum {
+    TECH_ALARM_PEEP_HIGH = 0,
+    TECH_ALARM_PEEP_LOW,
+    TECH_ALARM_PIPELINE_BLOCKAGE,
+    TECH_ALARM_INSP_BRANCH_BLOCKAGE,
+    TECH_ALARM_CPAP_TOO_HIGH,
+    TECH_ALARM_PIPELINE_LEAK,
+    TECH_ALARM_PIPELINE_DISCONNECT,
+    TECH_ALARM_PRESSURE_LIMIT,
+    TECH_ALARM_VOLUME_LIMIT,
+    TECH_ALARM_INSP_PRESS_NOT_REACHED,
+    TECH_ALARM_TIDAL_VOL_NOT_REACHED,
+    TECH_ALARM_SIGH_CYCLE_PRESS_LIMIT,
+    TECH_ALARM_O2_SUPPLY_INSUFFICIENT,
+    TECH_ALARM_INSP_TIME_TOO_LONG,
+    TECH_ALARM_INHALED_GAS_TEMP_HIGH,
+    TECH_ALARM_AMV_TARGET_NOT_REACHED,
+    TECH_ALARM_O2_FLOW_NOT_REACHED,
+    TECH_ALARM_PAT_FLOW_SENSOR_FAULT,
+    TECH_ALARM_PAT_PRESS_SENSOR_FAULT,
+    TECH_ALARM_MECH_PIPELINE_DISCONNECT,
+    TECH_ALARM_EXP_BRANCH_BLOCKAGE,
+    TECH_ALARM_MAX_INSP_NEG_PRESSURE,
+    TECH_ALARM_INSP_PRESSURE_NOT_RELEASED,
+    TECH_ALARM_O2_SOURCE_FAILURE,
+    TECH_ALARM_PROXIMAL_PRESS_TUBE_DISCONNECT,
+    TECH_ALARM_DEVICE_INSP_PRESS_SENSOR,
+    TECH_ALARM_DEVICE_EXP_PRESS_SENSOR,
+    TECH_ALARM_DEVICE_PROXIMAL_PRESS_SENSOR,
+    TECH_ALARM_DEVICE_INSP_FLOW_SENSOR,
+    TECH_ALARM_DEVICE_O2_FLOW_SENSOR,
+    TECH_ALARM_DEVICE_AIR_FLOW_SENSOR_TYPE_ERR,
+    TECH_ALARM_DEVICE_TRI_O2_FLOW_SENSOR_TYPE_ERR,
+    TECH_ALARM_DEVICE_PROXIMAL_FLOW_SENSOR_DISCONNECT,
+    TECH_ALARM_DEVICE_PROXIMAL_FLOW_SENSOR_TYPE_ERR,
+    TECH_ALARM_DEVICE_PROXIMAL_FLOW_SENSOR_REVERSED,
+    TECH_ALARM_DEVICE_TURBINE_TEMP_SENSOR,
+    TECH_ALARM_DEVICE_TURBINE_HALL_SIGNAL_ERR,
+    TECH_ALARM_DEVICE_NEGATIVE_PRESS_SENSOR,
+    TECH_ALARM_DEVICE_O2_SENSOR,
+    TECH_ALARM_DEVICE_ATMOSPHERIC_PRESS_SENSOR,
+    TECH_ALARM_DEVICE_PRESS_SENSOR_ZERO_ERROR,
+    TECH_ALARM_DEVICE_SAFETY_VALVE,
+    TECH_ALARM_DEVICE_THREE_WAY_VALVE,
+    TECH_ALARM_DEVICE_TOTAL_INSP_MANIFOLD,
+    TECH_ALARM_DEVICE_O2_BRANCH_DISCONNECT,
+    TECH_ALARM_DEVICE_POWER_CAP_DISCONNECT,
+    TECH_ALARM_DEVICE_PEEP_VALVE,
+    TECH_ALARM_DEVICE_TURBINE_SHAFT,
+    TECH_ALARM_DEVICE_TURBINE_TEMP_HIGH,
+    TECH_ALARM_DEVICE_TURBINE_TEMP_OVERHIGH,
+    TECH_ALARM_DEVICE_HEPA_FILTER_MISSING,
+    TECH_ALARM_DEVICE_REPLACE_HEPA_FILTER,
+    TECH_ALARM_DEVICE_ATMOSPHERIC_COMM_ERR,
+    TECH_ALARM_DEVICE_HEPA_FILTER_PRESSURE_SENSOR,
+    TECH_ALARM_DEVICE_MEMORY_ERROR,
+    TECH_ALARM_POWER_PCM_3V3,
+    TECH_ALARM_POWER_VDD_24V,
+    TECH_ALARM_POWER_AVDD_5V,
+    TECH_ALARM_COMM_MOTOR_DISCONNECT,
+    TECH_ALARM_COMM_PCM_DISCONNECT,
+    TECH_ALARM_CALIBRATION_PRESSURE_SENSOR,
+    TECH_ALARM_CALIBRATION_OXYGEN_SENSOR,
+    TECH_ALARM_CALIBRATION_AIR_OXYGEN_RATIO,
+    TECH_ALARM_CALIBRATION_OXYGEN_RATIO_VALVE,
+    TECH_ALARM_CALIBRATION_EXHALATION_VALVE,
+    TECH_ALARM_CALIBRATION_PROXIMAL_FLOW_SENSOR,
+    TECH_ALARM_CALIBRATION_GAS_SOURCE_PRESSURE_SENSOR,
+    TECH_ALARM_COUNT,
+} eTechAlarmType;
+
+typedef bool (*pfTechAlarmDetector)(uint32_t nowMs);
+
+typedef struct {
+    bool enabled;
+    pfTechAlarmDetector detector;
+    eMcmTechAlarmModule module;
+    uint8_t bit;
+    bool active;
+} stTechAlarmRegistration;
+
+/** Initialize before processing starts; task context only. */
+void techAlarmManagerInit(void);
+
+/** Run enabled detectors from AlarmTask only. */
+void techAlarmManagerProcess(uint32_t nowMs);
+
+/** Read current state from task context; invalid types return false. */
+bool techAlarmManagerStateGet(eTechAlarmType type);
+
+/** Read current states in task context; NULL is ignored, events are not latched. */
+void techAlarmManagerSnapshotGet(stMcmTechAlarmStatusSnapshot *status);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif /* USER_APP_TECHALARM_TECHALARMMANAGER_H */
+/*************************************** End of file ********************************/
