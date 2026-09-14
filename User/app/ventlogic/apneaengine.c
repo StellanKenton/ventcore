@@ -67,7 +67,7 @@ void apneaEngineProcess(uint32_t nowMs)
 
     if (gApneaEngine.state == APNEA_ENGINE_MONITORING) {
         lDeadlineMs = lMode == VENT_MD_PSV_ST ?
-            (uint32_t)GetVentLimitSettings()->apneaTimeHigh * 1000U : lPlan.apneaTimeMs;
+            (uint32_t)GetVentLimitSettings()->apneaTimeAlarm * 1000U : lPlan.apneaTimeMs;
     } else if (gApneaEngine.state == APNEA_ENGINE_BACKUP) {
         lDeadlineMs = lPlan.backupBreathIntervalMs;
     } else {

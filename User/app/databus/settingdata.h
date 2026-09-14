@@ -79,7 +79,7 @@ typedef struct stVentLimitSettings {
     uint16_t o2PercentHigh;     // max 100
     uint16_t frequencyLow;      // min 1
     uint16_t frequencyHigh;     // max 160
-    uint16_t apneaTimeHigh;     // max 60
+    uint16_t apneaTimeAlarm;     // max 60
 }stVentLimitSettings;
 
 

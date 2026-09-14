@@ -703,9 +703,9 @@ int main(void) {
     assert(GetVentLimitSettings()->o2PercentLow == 20U);
     assert(GetVentLimitSettings()->frequencyHigh == 40U);
     assert(GetVentLimitSettings()->frequencyLow == 8U);
-    assert(GetVentLimitSettings()->apneaTimeHigh == 15U);
+    assert(GetVentLimitSettings()->apneaTimeAlarm == 15U);
     assert(GetVentCpapPsvSettings()->apneaAlarmTimeMs == 15000U);
-    assert(GetVentLimitSettings()->apneaTimeHigh == 15U);
+    assert(GetVentLimitSettings()->apneaTimeAlarm == 15U);
     assert(GetVentLimitSettings()->pressureHigh == 55.0f);
     /* Corrupt alarm frames must leave cached and applied limits intact. */
     length = frame(bytes, 0xAC, 1, 600, 2, 1); bytes[length - 1] ^= 1U;
@@ -719,7 +719,7 @@ int main(void) {
     assert(GetVentVacSettings()->tidalVolume == 650);
     assert(GetVentLimitSettings()->pressureHigh == 55.0f);
     assert(GetVentLimitSettings()->tidalVolumeHigh == 800U);
-    assert(GetVentLimitSettings()->apneaTimeHigh == 15U);
+    assert(GetVentLimitSettings()->apneaTimeAlarm == 15U);
     send(0xAC, 1, 600, 2, 1);
     assert(GetVentLimitSettings()->pressureHigh == 60.0f);
     send(0xAF, 0x17, 125, 2, 2); assert(GetVentVacSettings()->inspTimeMs == 1250);

@@ -296,7 +296,7 @@ static void breathSchedulerPsvBackupPlanApply(const stVentPsvStSettings *setting
     lPlan.minimumInspiratoryTimeMs = settings->apneaInspTimeMs;
     lPlan.maximumInspiratoryTimeMs = settings->apneaInspTimeMs;
     lPlan.minimumExpiratoryTimeMs = BREATH_PEEP_LOCK_TIME_MS;
-    lPlan.apneaTimeMs = (uint32_t)GetVentLimitSettings()->apneaTimeHigh * 1000U;
+    lPlan.apneaTimeMs = (uint32_t)GetVentLimitSettings()->apneaTimeAlarm * 1000U;
     lPlan.backupBreathIntervalMs =
         (uint32_t)(60000.0F / settings->apneaRateBpm);
     lPlan.timeTriggerEnabled = 0U;
@@ -477,7 +477,7 @@ int8_t breathSchedulerSettingsUpdate(eVentMode mode)
             !(lPsvStSettings.pressureSupportCmh2o > 0.0F &&
               lPsvStSettings.peepCmh2o + lPsvStSettings.pressureSupportCmh2o < lLimitSettings->pressureHigh) ||
             !(lLimitSettings->pressureHigh <= 100.0F) ||
-            (lLimitSettings->apneaTimeHigh == 0U) || (lLimitSettings->apneaTimeHigh > 60U) ||
+            (lLimitSettings->apneaTimeAlarm == 0U) || (lLimitSettings->apneaTimeAlarm > 60U) ||
             (lPsvStSettings.riseTimeMs > BREATH_PSV_MAX_INSPIRATORY_TIME_MS) ||
             !(lPsvStSettings.cycleOffPercent > 0.0F && lPsvStSettings.cycleOffPercent < 100.0F) ||
             ((unsigned int)lPsvStSettings.triggerType >= VENT_TRIGGER_COUNT) ||
@@ -498,7 +498,7 @@ int8_t breathSchedulerSettingsUpdate(eVentMode mode)
                                     lPsvStSettings.riseTimeMs,
                                     lPsvStSettings.cycleOffPercent,
                                     BREATH_PSV_MAX_INSPIRATORY_TIME_MS,
-                                    (uint32_t)lLimitSettings->apneaTimeHigh * 1000U,
+                                    (uint32_t)lLimitSettings->apneaTimeAlarm * 1000U,
                                     (uint32_t)(60000.0F /
                                                lPsvStSettings.apneaRateBpm),
                                     &lPlan);

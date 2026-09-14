@@ -180,8 +180,8 @@ void protocolApplyReceivedSettings(void) {
             lAlarm->frequencyLow = (float)lLimits->m_frTotalLow / ProtocolGetScale(lLimits->m_frTotalLow_scale);
         }
         if (lLimits->m_valid[10]) {
-            lAlarm->apneaTimeHigh = (float)lLimits->m_apneaTime / ProtocolGetScale(lLimits->m_apneaTime_scale);
-            lPsv->apneaAlarmTimeMs = (uint32_t)lAlarm->apneaTimeHigh * 1000U;
+            lAlarm->apneaTimeAlarm = (float)lLimits->m_apneaTime / ProtocolGetScale(lLimits->m_apneaTime_scale);
+            lPsv->apneaAlarmTimeMs = (uint32_t)lAlarm->apneaTimeAlarm * 1000U;
         }
     }
 

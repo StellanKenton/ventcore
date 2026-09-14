@@ -15,7 +15,7 @@ stVentLimitSettings gVentLimitSettings = {
     .o2PercentHigh = 100U,
     .frequencyLow = 1U,
     .frequencyHigh = 160U,
-    .apneaTimeHigh = 60U,
+    .apneaTimeAlarm = 60U,
 };
 
 stVentPatientSettings gVentPatientSettings = {
@@ -61,6 +61,9 @@ stVentCpapPsvSettings gVentCpapPsvSettings = {
     .riseTimeMs = 200U,
     .cycleOffPercent = 25.0f,
     .maxInspiratoryTimeMs = 2000U,
+    .apneaPressureCmh2o = 20.0f,
+    .apneaRateBpm = 15.0f,
+    .apneaInspTimeMs = 1300U,
     .apneaAlarmTimeMs = 10000U,
 };
 
@@ -88,7 +91,7 @@ static stVentLimitSettings gHostVentLimitSettings = {
     .o2PercentHigh = 100U,
     .frequencyLow = 1U,
     .frequencyHigh = 160U,
-    .apneaTimeHigh = 60U,
+    .apneaTimeAlarm = 60U,
 };
 static stVentPacSettings gHostVentPacSettings = {
     .oxygen = 21.0f,
