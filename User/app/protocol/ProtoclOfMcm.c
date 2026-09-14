@@ -583,6 +583,7 @@ void ProtocolUpdateRxVentSwitchCache(const ProtocolPacket_t* packet)
                 case 0x0A:
                     g_rxVentSwitchCache.m_ApneaVentSwitch = value;
                     g_rxVentSwitchCache.m_ApneaVentSwitch_scale = subId->m_scale;
+                    protocolReceivedSettingsMark();
                     break;
                 case 0x0B:  /* P0.1 (吸气压力阈值) */
                     g_rxVentSwitchCache.m_P01 = value;

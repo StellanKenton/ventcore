@@ -234,3 +234,15 @@ tick wrap, stop and invalid settings using production scheduler/phase/engines.
 from CPAP/PSV apnea timing (0x16/0x19). These tests do not operate hardware.
 Use `vt psvst` to start with the selected local/host settings, `vt status` for
 `VT_PSVST_SETTINGS` and the active breath, and `vt stop` to stop.
+
+SIMV regressions use the existing `test_vti_compensation.py` harness with the real
+scheduler, phase, cycle and apnea modules: adult/pediatric/neonatal windows,
+window boundaries, mandatory deadlines despite spontaneous breaths, short
+expiration, tick wrap, apnea entry/recovery/disable, settings validation and
+volume-feedback isolation. `test_trigger.py` covers pressure/flow/off for both
+SIMV modes; `test_protocol.py` covers SIMV rate, tidal volume and apnea switches.
+Run with `py -3 user/develop/<script>`. These are host tests, not bench validation.
+
+SIMV apnea selection additionally tests both pressure and volume backup in each
+SIMV mode, selected-target validation, ignored inactive targets, invalid enum
+values and host selection values 0/1/2 (off/pressure/volume).

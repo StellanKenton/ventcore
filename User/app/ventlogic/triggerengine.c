@@ -151,7 +151,8 @@ void triggerEngineProcess(uint32_t nowMs)
         ((lPlan.mode != VENT_MD_PAC) &&
          (lPlan.mode != VENT_MD_VAC) &&
          (lPlan.mode != VENT_MD_CPAP_PSV) &&
-         (lPlan.mode != VENT_MD_PSV_ST)) ||
+         (lPlan.mode != VENT_MD_PSV_ST) &&
+         (lPlan.mode != VENT_MD_P_SIMV) && (lPlan.mode != VENT_MD_V_SIMV)) ||
         (lPlan.allowedTriggerType == VENT_TRIGGER_OFF)) {
         triggerEngineIdleEnter(lPhase);
         return;

@@ -34,6 +34,7 @@ static void phaseControllerIdleEnter(void)
     gPhaseController.runState = PHASE_IDLE;
     gPhaseController.inspirationStartedMs = 0U;
     gPhaseController.expirationStartedMs = 0U;
+    gPhaseController.mandatoryDelayMs = 0U;
     gPhaseController.planValid = 0U;
     gPhaseController.breathStarted = 0U;
     gPhaseController.expirationCaptureComplete = 0U;
@@ -63,6 +64,8 @@ static int8_t phaseControllerInitialExpirationStart(uint32_t nowMs)
     if (phaseControllerPlanLoad(BREATH_TRIGGER_REASON_TIME) != PHASE_CONTROL_SUCCESS) {
         return PHASE_CONTROL_ERROR_STATE;
     }
+    gPhaseController.mandatoryReferenceMs = nowMs;
+    gPhaseController.mandatoryDelayMs = gPhaseController.activePlan.expiratoryTimeMs;
     gPhaseController.expirationStartedMs = nowMs;
     gPhaseController.expirationCaptureComplete = 0U;
     gPhaseController.runState = PHASE_EXP;
@@ -143,14 +146,37 @@ static int8_t phaseControllerInspirationStart(eBreathTriggerReason triggerReason
                                               uint32_t nowMs)
 {
     float lPatientPressure;
+    uint32_t lElapsedMs = nowMs - gPhaseController.mandatoryReferenceMs;
+    uint32_t lRemainingMs = lElapsedMs < gPhaseController.mandatoryDelayMs ?
+        gPhaseController.mandatoryDelayMs - lElapsedMs : 0U;
+    uint8_t lSupport = (uint8_t)(gPhaseController.activePlan.mandatoryIntervalMs != 0U &&
+        gPhaseController.activePlan.mode == breathSchedulerModeGet() &&
+        (triggerReason == BREATH_TRIGGER_REASON_PRESSURE || triggerReason == BREATH_TRIGGER_REASON_FLOW) &&
+        lRemainingMs > gPhaseController.activePlan.syncWindowMs);
 
     /* Publish the just-ended VTI before the scheduler builds this inspiration. */
     monitorEngineBreathComplete(nowMs);
     /* Every inspiration needs a new sequence, including the first patient breath.
      * Reusing the startup expiration plan leaves the expiration controller in
      * PEEP with capture cleared, permanently blocking the next trigger. */
-    if (phaseControllerPlanLoad(triggerReason) != PHASE_CONTROL_SUCCESS) {
+    if (lSupport != 0U) {
+        if (breathSchedulerSupportPlanGet(triggerReason, &gPhaseController.activePlan) != BREATH_CONTROL_SUCCESS) {
+            return PHASE_CONTROL_ERROR_STATE;
+        }
+        /* Reserve expiration before the mandatory deadline even for prolonged effort. */
+        if (gPhaseController.activePlan.maximumInspiratoryTimeMs > lRemainingMs - BREATH_PEEP_LOCK_TIME_MS) {
+            gPhaseController.activePlan.maximumInspiratoryTimeMs = lRemainingMs - BREATH_PEEP_LOCK_TIME_MS;
+        }
+        if (gPhaseController.activePlan.riseTimeMs > gPhaseController.activePlan.maximumInspiratoryTimeMs) {
+            gPhaseController.activePlan.riseTimeMs = gPhaseController.activePlan.maximumInspiratoryTimeMs;
+        }
+    } else if (phaseControllerPlanLoad(triggerReason) != PHASE_CONTROL_SUCCESS) {
         return PHASE_CONTROL_ERROR_STATE;
+    }
+    if ((gPhaseController.activePlan.mandatoryIntervalMs != 0U) && (lSupport == 0U)) {
+        gPhaseController.mandatoryReferenceMs = nowMs;
+        gPhaseController.mandatoryDelayMs = gPhaseController.activePlan.triggerReason == BREATH_TRIGGER_REASON_APNEA_BACKUP ?
+            gPhaseController.activePlan.backupBreathIntervalMs : gPhaseController.activePlan.mandatoryIntervalMs;
     }
 
     lPatientPressure = controlDataGet(PAT_REAL_PRS);
@@ -227,7 +253,8 @@ int8_t phaseControllerTrigger(eBreathTriggerReason triggerReason, uint32_t nowMs
      * They still obey the minimum expiration guard below. */
     if ((gPhaseController.expirationCaptureComplete == 0U) &&
         !((triggerReason == BREATH_TRIGGER_REASON_APNEA_BACKUP) &&
-          (gPhaseController.activePlan.mode == VENT_MD_PSV_ST))) {
+          ((gPhaseController.activePlan.mode == VENT_MD_PSV_ST) ||
+           (gPhaseController.activePlan.mandatoryIntervalMs != 0U)))) {
         return PHASE_CONTROL_ERROR_STATE;
     }
     if (((triggerReason == BREATH_TRIGGER_REASON_PRESSURE) &&
@@ -422,6 +449,17 @@ void phaseControllerProcess(uint32_t nowMs)
             lExpirationElapsedMs = nowMs - gPhaseController.expirationStartedMs;
             phaseControllerPressureFallProcess(lExpirationElapsedMs);
             (void)phaseControlSet(PHASE_REF_FLOW, 0.0F);
+            if (gPhaseController.activePlan.mandatoryIntervalMs != 0U) {
+                if (((nowMs - gPhaseController.mandatoryReferenceMs) >= gPhaseController.mandatoryDelayMs) &&
+                    (lExpirationElapsedMs >= gPhaseController.activePlan.minimumExpiratoryTimeMs)) {
+                    eBreathTriggerReason lReason = gPhaseController.activePlan.triggerReason == BREATH_TRIGGER_REASON_APNEA_BACKUP ?
+                        BREATH_TRIGGER_REASON_APNEA_BACKUP : BREATH_TRIGGER_REASON_TIME;
+                    if (phaseControllerInspirationStart(lReason, nowMs) != PHASE_CONTROL_SUCCESS) {
+                        phaseControllerIdleEnter();
+                    }
+                }
+                break;
+            }
             if ((gPhaseController.activePlan.timeTriggerEnabled != 0U) &&
                 (lExpirationElapsedMs >= gPhaseController.activePlan.expiratoryTimeMs)) {
                 if (phaseControllerInspirationStart(BREATH_TRIGGER_REASON_TIME, nowMs) !=

@@ -277,7 +277,7 @@ static void pressureControllerHoldReliefProcess(const stBreathPlan *plan, stActu
 
     lExcessPressure = lPatientPressure -
                       phaseControlGet(PHASE_REF_PRESSURE);
-    if (plan->mode == VENT_MD_PAC) {
+    if (plan->mode == VENT_MD_PAC || (plan->mode == VENT_MD_P_SIMV && plan->breathType == BREATH_TYPE_MANDATORY_PRESSURE)) {
         /* As in expiration capture, close before falling pressure crosses target. */
         gPressureHoldPressureSlope += PRESSURE_CONTROLLER_HOLD_SLOPE_FILTER_GAIN *
             (((lPatientPressure - gPressureHoldPreviousPressure) /
@@ -361,7 +361,7 @@ static int8_t pressureControllerHoldProcess(const stBreathPlan *plan,
     (void)phaseControlSet(PHASE_REF_PRESSURE,
                           plan->inspiratoryPressureCmh2o);
     /* Latch lower bandwidth in the PAC filling tail; reset on the next rise. */
-    if ((plan->mode == VENT_MD_PAC) && (gPressureHoldSettled == 0U) &&
+    if ((plan->mode == VENT_MD_PAC || (plan->mode == VENT_MD_P_SIMV && plan->breathType == BREATH_TYPE_MANDATORY_PRESSURE)) && (gPressureHoldSettled == 0U) &&
         (controlDataGet(PAT_REAL_FLOW) <= PRESSURE_CONTROLLER_SETTLED_FLOW_MAX) &&
         (controlDataGet(PAT_REAL_PRS) >= plan->inspiratoryPressureCmh2o -
          PRESSURE_CONTROLLER_SETTLED_PRESSURE_BAND) &&

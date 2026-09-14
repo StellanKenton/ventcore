@@ -93,7 +93,7 @@ static bool ventTestUnsignedParse(const char **arguments, uint16_t *value)
 /** Show the supported ventilation test commands. */
 static void ventTestUsageShow(void)
 {
-    LOG_I(gVentTestTag, "usage: vt mode <x> | run <0|1> | pac | vac | psv | psvst | stop | set <peep> <delta> | support <peep> <delta> | volume <peep> <ml> [pause_pct [ti_ms rate]] | trigger off | trigger pressure <cmh2o100> | trigger flow <lpm100> | peep | status");
+    LOG_I(gVentTestTag, "usage: vt mode <x> | run <0|1> | pac | vac | psv | psvst | psimv | vsimv | stop | set <peep> <delta> | support <peep> <delta> | volume <peep> <ml> [pause_pct [ti_ms rate]] | trigger off | trigger pressure <cmh2o100> | trigger flow <lpm100> | peep | status");
 }
 
 /** Report selected settings and the active breath separately. */
@@ -310,6 +310,14 @@ static eConsoleCommandResult ventTestConsoleCommand(const char *arguments)
                (*ventTestSkipSpaces(arguments) == '\0')) {
         lStatus = breathSchedulerStart(VENT_MD_VAC);
         LOG_I(gVentTestTag, "VAC start status=%d", (int)lStatus);
+    } else if (ventTestTokenMatch(&arguments, "psimv") &&
+               (*ventTestSkipSpaces(arguments) == '\0')) {
+        lStatus = breathSchedulerStart(VENT_MD_P_SIMV);
+        LOG_I(gVentTestTag, "P-SIMV start status=%d", (int)lStatus);
+    } else if (ventTestTokenMatch(&arguments, "vsimv") &&
+               (*ventTestSkipSpaces(arguments) == '\0')) {
+        lStatus = breathSchedulerStart(VENT_MD_V_SIMV);
+        LOG_I(gVentTestTag, "V-SIMV start status=%d", (int)lStatus);
     } else if (ventTestTokenMatch(&arguments, "psv") &&
                (*ventTestSkipSpaces(arguments) == '\0')) {
         lStatus = breathSchedulerStart(VENT_MD_CPAP_PSV);
@@ -467,6 +475,32 @@ static eConsoleCommandResult ventTestConsoleCommand(const char *arguments)
             if (lStatus != BREATH_CONTROL_SUCCESS) {
                 *lCpapPsvSettings = lPreviousCpapPsvSettings;
                 (void)breathSchedulerTestModeSet((uint8_t)lConfiguredMode);
+            }
+        } else if (lConfiguredMode == VENT_MD_P_SIMV) {
+            stVentPSimvSettings *lSettings = GetVentPSimvSettings();
+            stVentPSimvSettings lPrevious = *lSettings;
+            lSettings->triggerType = lTriggerType;
+            if (lTriggerType == VENT_TRIGGER_PRESSURE) {
+                lSettings->pressureTriggerCmh2o = -(float)lTriggerThreshold / 100.0F;
+            } else if (lTriggerType == VENT_TRIGGER_FLOW) {
+                lSettings->flowTriggerLpm = (float)lTriggerThreshold / 100.0F;
+            }
+            lStatus = breathSchedulerSettingsUpdate(lConfiguredMode);
+            if (lStatus != BREATH_CONTROL_SUCCESS) {
+                *lSettings = lPrevious;
+            }
+        } else if (lConfiguredMode == VENT_MD_V_SIMV) {
+            stVentVSimvSettings *lSettings = GetVentVSimvSettings();
+            stVentVSimvSettings lPrevious = *lSettings;
+            lSettings->triggerType = lTriggerType;
+            if (lTriggerType == VENT_TRIGGER_PRESSURE) {
+                lSettings->pressureTriggerCmh2o = -(float)lTriggerThreshold / 100.0F;
+            } else if (lTriggerType == VENT_TRIGGER_FLOW) {
+                lSettings->flowTriggerLpm = (float)lTriggerThreshold / 100.0F;
+            }
+            lStatus = breathSchedulerSettingsUpdate(lConfiguredMode);
+            if (lStatus != BREATH_CONTROL_SUCCESS) {
+                *lSettings = lPrevious;
             }
         } else if (lConfiguredMode == VENT_MD_PSV_ST) {
             lPsvStSettings = GetVentPsvStSettings();

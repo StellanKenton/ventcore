@@ -406,9 +406,10 @@ int main(void) {
     samples(5.0F, 0.0F, 20U);
     samples(1.0F, 10.0F, 20U);
     assert(gTriggers == 0U);
+    for (unsigned int mode = VENT_MD_VAC; mode <= VENT_MD_V_SIMV; mode++) {
     for (int i = 0; i < 3; i++) {
         setup(i == 0 ? VENT_TRIGGER_FLOW : i == 1 ? VENT_TRIGGER_PRESSURE : VENT_TRIGGER_OFF);
-        gPlan.mode = VENT_MD_VAC;
+        gPlan.mode = (eVentMode)mode;
         samples(5.0F, 0.0F, 20U);
         samples(1.0F, 10.0F, 2U);
         assert(gTriggers == 0U);
@@ -418,8 +419,9 @@ int main(void) {
             assert(gReason == (i == 0 ? BREATH_TRIGGER_REASON_FLOW : BREATH_TRIGGER_REASON_PRESSURE));
         }
     }
+    }
     setup(VENT_TRIGGER_FLOW);
-    gPlan.mode = VENT_MD_V_SIMV;
+    gPlan.mode = VENT_MD_PRVC;
     samples(5.0F, 0.0F, 20U);
     samples(1.0F, 10.0F, 20U);
     assert(gTriggers == 0U);

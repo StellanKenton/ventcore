@@ -25,6 +25,8 @@ extern "C" {
 #define BREATH_CONTROL_ERROR_STATE         (-4)
 #define BREATH_PEEP_LOCK_TIME_MS           192U
 #define BREATH_PRESSURE_CONTROL_HEADROOM      9.0F
+#define BREATH_SIMV_ADULT_WINDOW_MS         5000U
+#define BREATH_SIMV_CHILD_WINDOW_MS         1500U
 #define BREATH_PSV_MIN_INSPIRATORY_TIME_MS    200U
 #define BREATH_PSV_MAX_INSPIRATORY_TIME_MS   2000U
 #define BREATH_VOLUME_FLOW_RISE_AREA_LOSS_MS       41.45F
@@ -109,6 +111,8 @@ typedef struct stBreathPlan {
     uint32_t minimumExpiratoryTimeMs;
     uint32_t apneaTimeMs;
     uint32_t backupBreathIntervalMs;
+    uint32_t mandatoryIntervalMs; /* SIMV clock is independent of support breaths. */
+    uint32_t syncWindowMs;
     uint8_t timeTriggerEnabled;
 } stBreathPlan;
 
@@ -157,6 +161,9 @@ int8_t breathSchedulerSettingsUpdate(eVentMode mode);
 
 /** Select and copy the next breath plan for the supplied trigger reason. */
 int8_t breathSchedulerNextPlanGet(eBreathTriggerReason triggerReason, stBreathPlan *plan);
+
+/** Select a SIMV pressure-support breath while preserving the patient trigger reason. */
+int8_t breathSchedulerSupportPlanGet(eBreathTriggerReason triggerReason, stBreathPlan *plan);
 
 /** Apply live setting changes to the next-breath template. */
 void breathSchedulerProcess(void);

@@ -17,7 +17,7 @@ MCM 呼吸频率 `0x10/0x11/0x12`（总频率/机控/自主）由 `60000 / 完�
 | `bsp/uart/uart.*` | USART0 PA9 TX / PA10 RX，115200、8N1；中断收发，2048 字节 RX 缓存；公开 API 仅供任务调用 |
 | `app/databus/` | 维护控制数据数组；SensorTask 保存当前及前一周期原始数据，VentTask 基于最新原始数据完成滤波和校准转换 |
 | `app/ventalgo/` | 实现吸气压力、吸气流量、公共 Release/PEEP 和 FiO₂ 控制器；各控制器只生成统一 `stActuatorRequest`，不直接写 BSP |
-| `app/ventlogic/` | Scheduler 为 PAC/VAC/PSV/PSV-ST 生成逐次 `stBreathPlan`，Phase Controller 执行计划，Trigger Engine 检测患者触发，Cycle Engine 完成 PSV 流量切换，Apnea Engine 调度 PSV 窒息后备和 PSV-ST 周期机控呼吸，Monitor Engine 发布逐次 `stBreathResult`，Actuator Controller 统一仲裁并写入 BSP |
+| `app/ventlogic/` | Scheduler 为 PAC/VAC/PSV/PSV-ST/P-SIMV/V-SIMV 生成逐次 `stBreathPlan`，Phase Controller 执行计划，Trigger Engine 检测患者触发，Cycle Engine 完成 PSV 流量切换，Apnea Engine 调度 PSV 窒息后备和 PSV-ST 周期机控呼吸，Monitor Engine 发布逐次 `stBreathResult`，Actuator Controller 统一仲裁并写入 BSP |
 | `app/physalarm/` | `physalarmmanager.*` 在 AlarmTask 注册、调度和发布 0xAD 生理报警；`physalarmvent.*` 实现检测；`alarmbits.h` 定义旧协议六组枚举及 union 位域 |
 | `app/techalarm/` | `techalarmmanager.*` 独立注册、调度、发布技术报警并生成 0xAB 快照；`techphys.*`、`techdevice.*`、`techpower.*`、`techcomm.*`、`techcal.*` 分别承接 SubId 0..4 检测 |
 | `bsp/adc/adc.*` | 使用 ADC1 规则组扫描、连续转换和 DMA1 循环模式持续采集 14 路板级模拟量 |
@@ -150,3 +150,11 @@ PSV-S/T 使用 `gVentPsvStSettings.inspRateBpm` / `inspTimeMs` / `maxInspiratory
 ST 校验要求频率 1..160/min，机控和最大自主吸气时间均至少为最短吸气时间，并各自在周期内留出最短呼气时间；最大自主吸气时间不超过 10000 ms，上升时间不超过两类吸气时间。无效设置不替换已应用计划。运行中有效修改在下一呼吸计划生效。MCM `0x14` / `0x17` / `0x18` 分别写入 ST 频率 / 机控吸气时间 / 最大自主吸气时间；`0x16` / `0x19` 仅用于 CPAP/PSV 窒息后备参数。
 
 RTT 输入 `vt psvst` 启动 PSV-S/T，沿用当前 local/host 参数源，并输出 `VT_PSVST_SETTINGS`；`vt status` 查看设置和实际呼吸类型，`vt stop` 停止。当前本地默认 PEEP 5、支持压力 10 cmH₂O、15/min、机控吸气 1300 ms、最大自主吸气 2000 ms、上升 200 ms、流量切换 25%。`develop/test_vti_compensation.py` 覆盖 ST 周期边界、连续机控、压力/流量自主恢复、同 tick 优先级、流量切换、最大吸气、tick 回绕和参数拒绝；仅为主机逻辑回归，未做实机气路验证。
+
+P-SIMV / V-SIMV 通过 `GetVentPSimvSettings()` / `GetVentVSimvSettings()` 选择本地或主机参数，RTT 命令 `vt psimv` / `vt vsimv` 启动，`vt trigger` 支持两种模式。`SIMVRateBpm` 决定机控周期，P-SIMV 的 `inspiratoryPressureCmh2o` 是高于 PEEP 的压力差；V-SIMV 常规潮气量使用 `tidalVolumeMl`，吸气暂停使用 `inspPausePct`，容量补偿只学习常规容量机控呼吸，不学习压力支持或窒息后备。
+
+SIMV 触发窗位于机控到期点前：成人 5000 ms，小儿及婴幼儿 1500 ms，上限为设定机控呼气时长；结构体 `syncWindowMs` 保留兼容但不覆盖上述规则。窗内患者触发输送一次对应 AC 机控呼吸，并以实际吸气起点重启机控周期；未触发则到期补发，定时补发不等待呼气捕获，但保留最短呼气 192 ms。窗外触发使用压力支持，支持压力为零时维持 PEEP；支持呼吸不重置机控计时，最大吸气 2000 ms，并为机控到期点预留最短呼气时间。启动仍沿用调零后初始呼气流程；相位、触发和参数应用接口只在既有任务上下文使用，不用于 ISR。
+
+SIMV `apneaSwitch` 使用 `eVentApneaType`：`VENT_APNEA_OFF=0`（默认关闭）、`VENT_APNEA_PRESSURE=1`（`apneaPressureCmh2o` 生效）、`VENT_APNEA_VOLUME=2`（`apneaVolumeTidalMl` 生效）。P-SIMV 和 V-SIMV 均可选择任一后备类型，只校验所选后备目标；无患者触发达到公共 `apneaTimeAlarm` 时进入所选后备，普通定时机控不清除无自主呼吸计时。后备使用 `apneaPressureCmh2o` / `apneaVolumeTidalMl`、`apneaRateBpm`、`apneaInspTimeMs`，后备频率不得低于 SIMV 频率；患者触发恢复常规 SIMV，关闭后备后下一计划恢复常规机控。主机映射包括参数 0x15 SIMV 频率、0x0E 常规潮气量、0x0F 后备潮气量及开关组 0x0A 后备选择（0/1/2 对应上述枚举；主机需发送所选类型，不能仅用布尔值区分两种后备）。参数变化在下一呼吸应用，当前计划保持不变。
+
+`develop/test_vti_compensation.py` 增加真实 Scheduler/Phase/Cycle/Apnea 的 SIMV 回归，覆盖三类患者、窗口边界、短呼气全窗、窗外支持不延误机控、计时回绕、后备进入/恢复/关闭、参数拒绝与容量反馈隔离；`test_trigger.py` 验证两种模式压力/流量触发及关闭；`test_protocol.py` 验证 SIMV 参数和后备开关映射。主机回归不代表已完成模拟肺或实机气路验证。

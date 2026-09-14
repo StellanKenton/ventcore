@@ -38,9 +38,15 @@ void apneaEngineProcess(uint32_t nowMs)
     uint32_t lDeadlineMs;
 
     if ((breathSchedulerRunningGet() == 0U) ||
-        ((lMode != VENT_MD_CPAP_PSV) && (lMode != VENT_MD_PSV_ST)) ||
+        ((lMode != VENT_MD_CPAP_PSV) && (lMode != VENT_MD_PSV_ST) &&
+         (lMode != VENT_MD_P_SIMV) && (lMode != VENT_MD_V_SIMV)) ||
         ((lPhase != PHASE_INSP) && (lPhase != PHASE_EXP)) ||
         (phaseControllerActivePlanGet(&lPlan) != PHASE_CONTROL_SUCCESS)) {
+        apneaEngineIdleEnter();
+        return;
+    }
+
+    if ((lPlan.mandatoryIntervalMs != 0U) && (lPlan.apneaTimeMs == 0U)) {
         apneaEngineIdleEnter();
         return;
     }
@@ -63,7 +69,11 @@ void apneaEngineProcess(uint32_t nowMs)
             gApneaEngine.state = lMode == VENT_MD_PSV_ST ?
                                  APNEA_ENGINE_TIMED : APNEA_ENGINE_BACKUP;
         }
-        gApneaEngine.referenceMs = nowMs;
+        /* SIMV timed mandatory breaths do not prove patient respiratory effort. */
+        if ((lPlan.mandatoryIntervalMs == 0U) ||
+            (lPlan.triggerReason != BREATH_TRIGGER_REASON_TIME)) {
+            gApneaEngine.referenceMs = nowMs;
+        }
     }
     gApneaEngine.previousPhase = lPhase;
 
@@ -96,7 +106,7 @@ void apneaEngineProcess(uint32_t nowMs)
 
     gApneaEngine.state = APNEA_ENGINE_ALARM;
     if ((lPhase == PHASE_EXP) &&
-        (phaseControllerExpirationReadyGet() != 0U) &&
+        ((phaseControllerExpirationReadyGet() != 0U) || (lPlan.mandatoryIntervalMs != 0U)) &&
         (phaseControllerTrigger(BREATH_TRIGGER_REASON_APNEA_BACKUP, nowMs) ==
          PHASE_CONTROL_SUCCESS)) {
         gApneaEngine.state = APNEA_ENGINE_BACKUP;

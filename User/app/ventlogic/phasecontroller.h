@@ -53,6 +53,8 @@ typedef struct stPhaseController {
     uint32_t inspirationStartedMs;
     uint32_t expirationStartedMs;
     uint32_t runSequence;
+    uint32_t mandatoryReferenceMs;
+    uint32_t mandatoryDelayMs;
     uint32_t compensationStartedMs;
     uint32_t compensationQuietStartedMs;
     float compensationFlowSum;

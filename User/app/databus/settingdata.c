@@ -79,6 +79,54 @@ stVentPsvStSettings gVentPsvStSettings = {
     .maxInspiratoryTimeMs = 2000U,
 };
 
+
+
+stVentPSimvSettings gVentPSimvSettings = {
+    .oxygenPercent = 21.0F, .peepCmh2o = 5.0F, .SIMVRateBpm = 10.0F,
+    .inspiratoryTimeMs = 1000U, .inspiratoryPressureCmh2o = 20.0F,
+    .pressureRiseTimeMs = 200U, .triggerType = VENT_TRIGGER_PRESSURE,
+    .pressureTriggerCmh2o = -2.0F, .flowTriggerLpm = 3.0F,
+    .pressureSupportCmh2o = 10.0F, .supportRiseTimeMs = 200U,
+    .cycleOffPercent = 25.0F, .apneaSwitch = VENT_APNEA_OFF,
+    .apneaPressureCmh2o = 20.0F, .apneaVolumeTidalMl = 500.0F,
+    .apneaRateBpm = 15.0F, .apneaInspTimeMs = 1000U,
+};
+
+stVentVSimvSettings gVentVSimvSettings = {
+    .oxygenPercent = 21.0F, .peepCmh2o = 5.0F, .SIMVRateBpm = 10.0F,
+    .inspiratoryTimeMs = 1000U, .inspiratoryPressureCmh2o = 20.0F,
+    .pressureRiseTimeMs = 200U, .triggerType = VENT_TRIGGER_PRESSURE,
+    .pressureTriggerCmh2o = -2.0F, .flowTriggerLpm = 3.0F,
+    .pressureSupportCmh2o = 10.0F, .supportRiseTimeMs = 200U,
+    .cycleOffPercent = 25.0F, .apneaSwitch = VENT_APNEA_OFF,
+    .apneaPressureCmh2o = 20.0F, .apneaVolumeTidalMl = 500.0F,
+    .apneaRateBpm = 15.0F, .apneaInspTimeMs = 1000U,
+    .tidalVolumeMl = 500.0F, .inspPausePct = 0.0F,
+};
+
+static stVentPSimvSettings gHostVentPSimvSettings = {
+    .oxygenPercent = 21.0F, .peepCmh2o = 5.0F, .SIMVRateBpm = 10.0F,
+    .inspiratoryTimeMs = 1000U, .inspiratoryPressureCmh2o = 20.0F,
+    .pressureRiseTimeMs = 200U, .triggerType = VENT_TRIGGER_PRESSURE,
+    .pressureTriggerCmh2o = -2.0F, .flowTriggerLpm = 3.0F,
+    .pressureSupportCmh2o = 10.0F, .supportRiseTimeMs = 200U,
+    .cycleOffPercent = 25.0F, .apneaSwitch = VENT_APNEA_OFF,
+    .apneaPressureCmh2o = 20.0F, .apneaVolumeTidalMl = 500.0F,
+    .apneaRateBpm = 15.0F, .apneaInspTimeMs = 1000U,
+};
+
+static stVentVSimvSettings gHostVentVSimvSettings = {
+    .oxygenPercent = 21.0F, .peepCmh2o = 5.0F, .SIMVRateBpm = 10.0F,
+    .inspiratoryTimeMs = 1000U, .inspiratoryPressureCmh2o = 20.0F,
+    .pressureRiseTimeMs = 200U, .triggerType = VENT_TRIGGER_PRESSURE,
+    .pressureTriggerCmh2o = -2.0F, .flowTriggerLpm = 3.0F,
+    .pressureSupportCmh2o = 10.0F, .supportRiseTimeMs = 200U,
+    .cycleOffPercent = 25.0F, .apneaSwitch = VENT_APNEA_OFF,
+    .apneaPressureCmh2o = 20.0F, .apneaVolumeTidalMl = 500.0F,
+    .apneaRateBpm = 15.0F, .apneaInspTimeMs = 1000U,
+    .tidalVolumeMl = 500.0F, .inspPausePct = 0.0F,
+};
+
 static stVentLimitSettings gHostVentLimitSettings = {
     .pressureLow = 1.0f,
     .pressureHigh = 100.0f,
@@ -172,5 +220,15 @@ stVentPsvStSettings *GetVentPsvStSettings(void)
     return gVentPatientSettings.useHostSettings == 1U ? &gHostVentPsvStSettings : &gVentPsvStSettings;
 }
 
+
+/** Select local or host P-SIMV settings. */
+stVentPSimvSettings *GetVentPSimvSettings(void) {
+    return gVentPatientSettings.useHostSettings == 1U ? &gHostVentPSimvSettings : &gVentPSimvSettings;
+}
+
+/** Select local or host V-SIMV settings. */
+stVentVSimvSettings *GetVentVSimvSettings(void) {
+    return gVentPatientSettings.useHostSettings == 1U ? &gHostVentVSimvSettings : &gVentVSimvSettings;
+}
 
 /*************************************** End of file ********************************/

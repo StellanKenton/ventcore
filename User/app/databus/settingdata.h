@@ -148,43 +148,58 @@ typedef struct stVentPsvStSettings {
     uint32_t maxInspiratoryTimeMs; /* Spontaneous inspiration safety limit. */
 } stVentPsvStSettings;
 
+/* SIMV apnea backup selection, independent of the mandatory ventilation mode. */
+typedef enum {
+    VENT_APNEA_OFF = 0,
+    VENT_APNEA_PRESSURE = 1,
+    VENT_APNEA_VOLUME = 2,
+    VENT_APNEA_COUNT
+} eVentApneaType;
+
 /* Pressure SIMV with spontaneous pressure support. */
 typedef struct stVentPSimvSettings {
     float oxygenPercent;
     float peepCmh2o;
-    float pressureLimitCmh2o;
-    float respiratoryRateBpm;
+    float SIMVRateBpm;
     uint32_t inspiratoryTimeMs;
     float inspiratoryPressureCmh2o;
     uint32_t pressureRiseTimeMs;
     eVentTriggerType triggerType;
     float pressureTriggerCmh2o;
     float flowTriggerLpm;
-    uint32_t syncWindowMs;
+    uint32_t syncWindowMs; /* Reserved: effective window is derived from patient type. */
     float pressureSupportCmh2o;
     uint32_t supportRiseTimeMs;
     float cycleOffPercent;
-    uint32_t maxSpontaneousInspiratoryTimeMs;
+    eVentApneaType apneaSwitch; /* Select disabled, pressure or volume backup. */
+    float apneaPressureCmh2o; /* Backup pressure above PEEP. */
+    float apneaVolumeTidalMl; /* Backup tidal volume. */
+    float apneaRateBpm;
+    uint32_t apneaInspTimeMs;
 } stVentPSimvSettings;
 
 /* Volume SIMV with spontaneous pressure support. */
 typedef struct stVentVSimvSettings {
+    float tidalVolumeMl; /* Mandatory tidal volume, independent of apnea backup. */
     float oxygenPercent;
     float peepCmh2o;
-    float pressureLimitCmh2o;
-    float respiratoryRateBpm;
+    float SIMVRateBpm;
     uint32_t inspiratoryTimeMs;
-    float tidalVolumeMl;
-    float inspiratoryFlowLpm;
-    eVentFlowPattern flowPattern;
+    float inspiratoryPressureCmh2o;
+    uint32_t pressureRiseTimeMs;
     eVentTriggerType triggerType;
     float pressureTriggerCmh2o;
     float flowTriggerLpm;
-    uint32_t syncWindowMs;
+    uint32_t syncWindowMs; /* Reserved: effective window is derived from patient type. */
     float pressureSupportCmh2o;
     uint32_t supportRiseTimeMs;
     float cycleOffPercent;
-    uint32_t maxSpontaneousInspiratoryTimeMs;
+    eVentApneaType apneaSwitch; /* Select disabled, pressure or volume backup. */
+    float apneaPressureCmh2o; /* Backup pressure above PEEP. */
+    float apneaVolumeTidalMl; /* Backup tidal volume. */
+    float apneaRateBpm;
+    uint32_t apneaInspTimeMs;
+    float inspPausePct;
 } stVentVSimvSettings;
 
 /* Pressure-regulated volume control. */
@@ -405,6 +420,8 @@ stVentPacSettings *GetVentPacSettings(void);
 stVentVacSettings *GetVentVacSettings(void);
 stVentCpapPsvSettings *GetVentCpapPsvSettings(void);
 stVentPsvStSettings *GetVentPsvStSettings(void);
+stVentPSimvSettings *GetVentPSimvSettings(void);
+stVentVSimvSettings *GetVentVSimvSettings(void);
 
 #ifdef __cplusplus
 }

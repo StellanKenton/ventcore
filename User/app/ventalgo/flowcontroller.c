@@ -99,7 +99,7 @@ static eFlowControllerState flowControllerActiveStateGet(const stBreathPlan *pla
                                       FLOW_CONTROLLER_FLOW_TARGET_MIN,
                                       FLOW_CONTROLLER_FLOW_TARGET_MAX);
     if (phaseControllerVolumePauseActiveGet() != 0U) {
-        *flowReference = (plan->mode == VENT_MD_VAC) ?
+        *flowReference = (plan->breathType == BREATH_TYPE_MANDATORY_VOLUME) ?
                          flowControllerClamp(
                              monitorEngineGet(MONITOR_LEAK_FLOW),
                              FLOW_CONTROLLER_FLOW_TARGET_MIN,
@@ -191,7 +191,7 @@ static int8_t flowControllerClosedLoopProcess(const stBreathPlan *plan,
             FLOW_CONTROLLER_FEEDFORWARD_PRESSURE_ALPHA *
             (lPatientPressure - gFlowFeedforwardPressure);
     }
-    if ((plan->mode == VENT_MD_VAC) && (state != FLOW_CONTROLLER_INSP_PAUSE)) {
+    if ((plan->breathType == BREATH_TYPE_MANDATORY_VOLUME) && (state != FLOW_CONTROLLER_INSP_PAUSE)) {
         lVolumeReference = phaseControlGet(PHASE_REF_VOLUME);
         if (!(plan->targetTidalVolumeMl > 0.0F && plan->targetTidalVolumeMl <= FLT_MAX) ||
             !(plan->deliveryTargetMl > 0.0F && plan->deliveryTargetMl <= FLT_MAX) ||
