@@ -470,6 +470,10 @@ static void minuteLeak(void) {
     assert((lResult.validMask & BREATH_RESULT_VALID_MINUTE_LEAK) != 0U);
     assert(fabsf(lResult.minuteLeakLpm - 8.0F) < 0.001F);
     assert(fabsf(lResult.minuteTotalLpm - 2.0F) < 0.001F);
+    assert((lResult.validMask & BREATH_RESULT_VALID_MVI) != 0U);
+    assert((lResult.validMask & BREATH_RESULT_VALID_MVE) != 0U);
+    assert(fabsf(lResult.minuteInspiratoryLpm - 10.0F) < 0.001F);
+    assert(fabsf(monitorEngineGet(MONITOR_HMI_MV_INSP) - 10.0F) < 0.001F);
     assert(fabsf(lResult.leakPercent - 80.0F) < 0.001F);
     assert((lResult.validMask & BREATH_RESULT_VALID_LEAK_PERCENT) != 0U);
     assert(fabsf(monitorEngineGet(MONITOR_HMI_LEAK_PERCENT) - 80.0F) < 0.001F);
@@ -600,7 +604,66 @@ static void compliance(void) {
     }
 }
 
+/** Verify expiratory peak magnitude, snapshot hold, invalid cycles and reset. */
+static void peakExpiratoryFlow(void) {
+    stBreathResult lResult;
+    reset();
+    sample(PHASE_INSP, -80.0F, 25.0F);
+    sample(PHASE_INSP, 60.0F, 25.0F);
+    sample(PHASE_EXP, -10.0F, 5.0F);
+    sample(PHASE_EXP, -32.5F, 5.0F);
+    sample(PHASE_EXP, -20.0F, 5.0F);
+    sample(PHASE_EXP, 100.0F, 5.0F);
+    assert(monitorEngineGet(MONITOR_HMI_PEAK_EXP_FLOW) == 0.0F);
+    monitorEngineBreathComplete(gNow);
+    assert(monitorEngineBreathResultGet(&lResult) == MONITOR_ENGINE_SUCCESS);
+    assert((lResult.validMask & BREATH_RESULT_VALID_PEAK_EXP_FLOW) != 0U);
+    assert(lResult.peakExpiratoryFlowLpm == 32.5F);
+    assert(monitorEngineGet(MONITOR_HMI_PEAK_EXP_FLOW) == 32.5F);
+    for (unsigned int lCase = 0U; lCase < 3U; lCase++) {
+        gPlan.sequence++;
+        sample(PHASE_INSP, 10.0F, 25.0F);
+        if (lCase == 0U) { assert(monitorEngineGet(MONITOR_HMI_PEAK_EXP_FLOW) == 32.5F); }
+        sample(PHASE_EXP, lCase == 0U ? 0.0F : -12.0F, 5.0F);
+        if (lCase != 0U) { sample(PHASE_EXP, lCase == 1U ? NAN : INFINITY, 5.0F); }
+        monitorEngineBreathComplete(gNow);
+        assert(monitorEngineBreathResultGet(&lResult) == MONITOR_ENGINE_SUCCESS);
+        assert(((lResult.validMask & BREATH_RESULT_VALID_PEAK_EXP_FLOW) != 0U) == (lCase == 0U));
+        assert(lResult.peakExpiratoryFlowLpm == 0.0F);
+        assert(monitorEngineGet(MONITOR_HMI_PEAK_EXP_FLOW) == 0.0F);
+    }
+    sample(PHASE_IDLE, 0.0F, 0.0F);
+    assert(monitorEngineGet(MONITOR_HMI_PEAK_EXP_FLOW) == 0.0F);
+    assert(monitorEngineBreathResultGet(&lResult) == MONITOR_ENGINE_ERROR_STATE);
+}
+
+/** Verify zero flow, invalid flow, zero duration and tick wrap. */
+static void minuteVolumeBoundaries(void) {
+    stBreathResult lResult;
+    for (unsigned int lCase = 0U; lCase < 4U; lCase++) {
+        reset();
+        if (lCase == 3U) { gNow = UINT32_MAX - 8U; }
+        sample(PHASE_INSP, lCase == 1U ? NAN : (lCase == 3U ? 30.0F : 0.0F), 25.0F);
+        sample(PHASE_EXP, lCase == 3U ? -20.0F : 0.0F, 5.0F);
+        monitorEngineBreathComplete(lCase == 2U ? 6U : gNow);
+        assert(monitorEngineBreathResultGet(&lResult) == MONITOR_ENGINE_SUCCESS);
+        if ((lCase == 1U) || (lCase == 2U)) {
+            assert((lResult.validMask & (BREATH_RESULT_VALID_MVI | BREATH_RESULT_VALID_MVE)) == 0U);
+        } else {
+            assert((lResult.validMask & (BREATH_RESULT_VALID_MVI | BREATH_RESULT_VALID_MVE)) ==
+                   (BREATH_RESULT_VALID_MVI | BREATH_RESULT_VALID_MVE));
+            assert(fabsf(lResult.minuteInspiratoryLpm - (lCase == 3U ? 30.0F : 0.0F)) < 0.001F);
+            assert(fabsf(lResult.minuteTotalLpm - (lCase == 3U ? 20.0F : 0.0F)) < 0.001F);
+        }
+        sample(PHASE_IDLE, 0.0F, 0.0F);
+        assert(monitorEngineGet(MONITOR_HMI_MV_INSP) == 0.0F);
+        assert(monitorEngineGet(MONITOR_HMI_MV_TOTAL) == 0.0F);
+    }
+}
+
 int main(void) {
+    peakExpiratoryFlow();
+    minuteVolumeBoundaries();
     compliance();
     resistance();
     leakPercent();

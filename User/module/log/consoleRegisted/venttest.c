@@ -99,11 +99,13 @@ static void ventTestUsageShow(void)
 /** Report selected settings and the active breath separately. */
 static void ventTestSettingsShow(void) {
     stVentCpapPsvSettings lSettings;
+    stVentPsvStSettings lStSettings;
     stBreathPlan lPlan;
     uint8_t lHost;
     int8_t lStatus;
     repRtosEnterCritical();
     lSettings = *GetVentCpapPsvSettings();
+    lStSettings = *GetVentPsvStSettings();
     lHost = GetVentPatientSettings()->useHostSettings;
     lStatus = phaseControllerActivePlanGet(&lPlan);
     repRtosExitCritical();
@@ -111,6 +113,14 @@ static void ventTestSettingsShow(void) {
           (unsigned int)lHost, (long)ventTestCenti(lSettings.peepCmh2o),
           (long)ventTestCenti(lSettings.pressureSupportCmh2o),
           (long)ventTestCenti(lSettings.apneaPressureCmh2o));
+    LOG_R("VT_PSVST_SETTINGS,host=%u,peep100=%ld,support100=%ld,rate100=%ld,ti_ms=%lu,max_ti_ms=%lu,rise_ms=%lu,cycle100=%ld",
+          (unsigned int)lHost, (long)ventTestCenti(lStSettings.peepCmh2o),
+          (long)ventTestCenti(lStSettings.pressureSupportCmh2o),
+          (long)ventTestCenti(lStSettings.inspRateBpm),
+          (unsigned long)lStSettings.inspTimeMs,
+          (unsigned long)lStSettings.maxInspiratoryTimeMs,
+          (unsigned long)lStSettings.riseTimeMs,
+          (long)ventTestCenti(lStSettings.cycleOffPercent));
     if (lStatus == PHASE_CONTROL_SUCCESS) {
         LOG_R("VT_ACTIVE_PLAN,mode=%u,type=%u,trigger=%u,sequence=%lu,peep100=%ld,target100=%ld,low100=%ld",
               (unsigned int)lPlan.mode, (unsigned int)lPlan.breathType,
@@ -308,6 +318,7 @@ static eConsoleCommandResult ventTestConsoleCommand(const char *arguments)
                (*ventTestSkipSpaces(arguments) == '\0')) {
         lStatus = breathSchedulerStart(VENT_MD_PSV_ST);
         LOG_I(gVentTestTag, "PSV-ST start status=%d", (int)lStatus);
+        ventTestSettingsShow();
     } else if (ventTestTokenMatch(&arguments, "stop") &&
                (*ventTestSkipSpaces(arguments) == '\0')) {
         lStatus = breathSchedulerTestRunSet(0U);

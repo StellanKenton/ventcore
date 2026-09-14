@@ -565,9 +565,124 @@ static void testPsv(void) {
     near(lPlan.inspiratoryPressureCmh2o, 15.0F);
     assert(lPlan.maximumInspiratoryTimeMs == 1300U && lPlan.backupBreathIntervalMs == 4000U);
     assert(lPlan.riseTimeMs + lPlan.holdTimeMs == 1300U);
-    GetVentPsvStSettings()->apneaRateBpm = 0.0F;
+    GetVentPsvStSettings()->inspRateBpm = 0.0F;
     assert(breathSchedulerSettingsUpdate(VENT_MD_PSV_ST) == BREATH_CONTROL_ERROR_SETTINGS);
-    GetVentPsvStSettings()->apneaRateBpm = 15.0F;
+    GetVentPsvStSettings()->inspRateBpm = 15.0F;
+}
+
+/** Exercise ST startup, timed cycles, patient recovery and wrap-safe deadlines. */
+static void testPsvSt(void) {
+    stBreathPlan lPlan;
+    stVentPsvStSettings lSaved = *GetVentPsvStSettings();
+    for (unsigned int lCase = 0U; lCase < 3U; lCase++) {
+        reset();
+        triggerEngineInit();
+        cycleEngineInit();
+        apneaEngineInit();
+        *GetVentPsvStSettings() = lSaved;
+        GetVentPsvStSettings()->triggerType = lCase == 0U ? VENT_TRIGGER_PRESSURE : VENT_TRIGGER_FLOW;
+        /* Normal ST timing must work with the separate apnea timeout disabled. */
+        GetVentLimitSettings()->apneaTimeAlarm = 0U;
+        assert(breathSchedulerStart(VENT_MD_PSV_ST) == BREATH_CONTROL_SUCCESS);
+        gData[INSP_REAL_FLOW] = 0.0F;
+        gData[PAT_REAL_FLOW] = 0.0F;
+        gData[PAT_REAL_PRS] = 0.0F;
+        gNow = lCase == 2U ? UINT32_MAX - 2000U : 0U;
+        for (unsigned int lIndex = 0U; lIndex < 400U; lIndex++, gNow += 6U) {
+            phaseControllerProcess(gNow);
+            apneaEngineProcess(gNow);
+            if (phaseControllerStateGet() == PHASE_EXP) { break; }
+        }
+        assert(phaseControllerStateGet() == PHASE_EXP);
+        uint32_t lReference = gNow;
+        /* No expiration capture: a machine breath still starts on its deadline. */
+        for (unsigned int lBreath = 0U; lBreath < 2U; lBreath++) {
+            gNow = lReference + 3999U;
+            apneaEngineProcess(gNow);
+            assert(phaseControllerStateGet() == PHASE_EXP);
+            apneaEngineProcess(++gNow);
+            assert(phaseControllerStateGet() == PHASE_INSP);
+            assert(apneaEngineStateGet() == APNEA_ENGINE_TIMED);
+            assert(!physAlarmApneaDetect(gNow));
+            assert(phaseControllerActivePlanGet(&lPlan) == PHASE_CONTROL_SUCCESS);
+            assert(lPlan.breathType == BREATH_TYPE_MANDATORY_PRESSURE);
+            assert(lPlan.cycleType == BREATH_CYCLE_TYPE_TIME);
+            assert(lPlan.maximumInspiratoryTimeMs == 1300U);
+            assert(lPlan.riseTimeMs == 200U && lPlan.holdTimeMs == 1100U);
+            near(lPlan.inspiratoryPressureCmh2o, 15.0F);
+            lReference = gNow;
+            gData[PAT_REAL_FLOW] = 0.0F;
+            cycleEngineProcess(gNow + 600U);
+            assert(phaseControllerStateGet() == PHASE_INSP);
+            phaseControllerProcess(gNow + 1299U);
+            assert(phaseControllerStateGet() == PHASE_INSP);
+            gNow += 1300U;
+            phaseControllerProcess(gNow);
+            apneaEngineProcess(gNow);
+            assert(phaseControllerStateGet() == PHASE_EXP);
+        }
+        /* A real patient trigger wins over a timed deadline on the same tick. */
+        assert(phaseControllerExpirationCaptureNotify() == PHASE_CONTROL_SUCCESS);
+        gData[PAT_REAL_PRS] = 5.0F;
+        gData[PAT_REAL_FLOW] = 0.0F;
+        for (unsigned int lIndex = 0U; lIndex < 50U; lIndex++, gNow += 6U) {
+            triggerEngineProcess(gNow);
+        }
+        gNow = lReference + 3988U;
+        gData[PAT_REAL_PRS] = 2.5F;
+        gData[PAT_REAL_FLOW] = 4.0F;
+        for (unsigned int lIndex = 0U; lIndex < 3U; lIndex++, gNow += 6U) {
+            triggerEngineProcess(gNow);
+            apneaEngineProcess(gNow);
+        }
+        gNow -= 6U;
+        assert(phaseControllerStateGet() == PHASE_INSP);
+        assert(phaseControllerActivePlanGet(&lPlan) == PHASE_CONTROL_SUCCESS);
+        assert(lPlan.breathType == BREATH_TYPE_SPONTANEOUS_PRESSURE_SUPPORT);
+        assert(lPlan.triggerReason == (lCase == 0U ? BREATH_TRIGGER_REASON_PRESSURE : BREATH_TRIGGER_REASON_FLOW));
+        assert(lPlan.maximumInspiratoryTimeMs == 2000U);
+        assert(apneaEngineStateGet() == APNEA_ENGINE_MONITORING);
+        lReference = gNow;
+        gData[PAT_REAL_FLOW] = 40.0F;
+        cycleEngineProcess(gNow);
+        gData[PAT_REAL_FLOW] = 9.0F;
+        cycleEngineProcess(gNow + 100U);
+        assert(phaseControllerStateGet() == PHASE_INSP);
+        if (lCase == 2U) {
+            gNow += 2000U;
+            cycleEngineProcess(gNow);
+            assert(phaseControllerCycleReasonGet() == BREATH_CYCLE_REASON_MAX_INSPIRATORY_TIME);
+        } else {
+            gNow += 300U;
+            for (unsigned int lIndex = 0U; lIndex < 3U; lIndex++, gNow += 6U) {
+                cycleEngineProcess(gNow);
+            }
+            assert(phaseControllerCycleReasonGet() == BREATH_CYCLE_REASON_FLOW);
+        }
+        apneaEngineProcess(gNow);
+        assert(phaseControllerStateGet() == PHASE_EXP);
+        apneaEngineProcess(lReference + 3999U);
+        assert(phaseControllerStateGet() == PHASE_EXP);
+        apneaEngineProcess(lReference + 4000U);
+        assert(phaseControllerStateGet() == PHASE_INSP);
+        assert(!physAlarmApneaDetect(gNow));
+        assert(breathSchedulerStop() == BREATH_CONTROL_SUCCESS);
+        apneaEngineProcess(gNow);
+        assert(apneaEngineStateGet() == APNEA_ENGINE_IDLE);
+    }
+    /* Reject nonfinite timing and combinations that consume minimum expiration. */
+    for (unsigned int lCase = 0U; lCase < 6U; lCase++) {
+        *GetVentPsvStSettings() = lSaved;
+        if (lCase == 0U) { GetVentPsvStSettings()->inspRateBpm = NAN; }
+        if (lCase == 1U) { GetVentPsvStSettings()->inspTimeMs = 4000U; }
+        if (lCase == 2U) { GetVentPsvStSettings()->maxInspiratoryTimeMs = 4000U; }
+        if (lCase == 3U) { GetVentPsvStSettings()->maxInspiratoryTimeMs = 0U; }
+        if (lCase == 4U) { GetVentPsvStSettings()->riseTimeMs = 1500U; }
+        if (lCase == 5U) { GetVentPsvStSettings()->cycleOffPercent = NAN; }
+        assert(breathSchedulerSettingsUpdate(VENT_MD_PSV_ST) == BREATH_CONTROL_ERROR_SETTINGS);
+    }
+    *GetVentPsvStSettings() = lSaved;
+    GetVentLimitSettings()->apneaTimeAlarm = 60U;
 }
 
 /** Run repeated PSV breaths with real expiration readiness, without forced capture. */
@@ -621,6 +736,7 @@ static void testPsvRepeat(void) {
 }
 
 int main(void) {
+    testPsvSt();
     testPsvRepeat();
     testPsv();
     testVacTrigger();

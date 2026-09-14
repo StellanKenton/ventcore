@@ -300,6 +300,7 @@ static void monitorEngineBreathResultPublish(uint32_t nowMs)
     lResult.plateauPressureCmh2o = gMonitorData[MONITOR_PLATEAU_PRS];
     lResult.peepCmh2o = lPeepPressure;
     lResult.peakInspiratoryFlowLpm = gMonitorEngine.peakInspiratoryFlowLpm;
+    lResult.peakExpiratoryFlowLpm = gMonitorEngine.peakExpiratoryFlowLpm;
     lResult.cycleReason = gMonitorEngine.cycleReason;
     lResult.inspiratoryTimeMs = gMonitorEngine.inspiratoryTimeMs;
     lResult.cycleTimeMs = nowMs - gMonitorEngine.breathStartedMs;
@@ -342,10 +343,26 @@ static void monitorEngineBreathResultPublish(uint32_t nowMs)
     if (monitorEngineFinite(lResult.peakInspiratoryFlowLpm) != 0U) {
         lResult.validMask |= BREATH_RESULT_VALID_PEAK_INSP_FLOW;
     }
+    /* Reject incomplete flow measurements even if a partial peak is finite. */
+    if ((gMonitorEngine.volumeInvalid == 0U) &&
+        (monitorEngineFinite(lResult.peakExpiratoryFlowLpm) != 0U)) {
+        lResult.validMask |= BREATH_RESULT_VALID_PEAK_EXP_FLOW;
+    } else {
+        lResult.peakExpiratoryFlowLpm = 0.0F;
+    }
     if (gMonitorEngine.volumeLimited != 0U) {
         lResult.validMask |= BREATH_RESULT_VOLUME_LIMITED;
     }
-    /* VTe in mL and cycle time in ms give total expiratory L/min. */
+    /* Completed tidal volume in mL times 60 / cycle ms gives L/min. */
+    if (((lResult.validMask & BREATH_RESULT_VALID_VTI) != 0U) &&
+        (lResult.vtiMl >= 0.0F) && (lResult.cycleTimeMs > 0U)) {
+        lResult.minuteInspiratoryLpm = lResult.vtiMl * (60.0F / (float)lResult.cycleTimeMs);
+        if (monitorEngineFinite(lResult.minuteInspiratoryLpm) != 0U) {
+            lResult.validMask |= BREATH_RESULT_VALID_MVI;
+        } else {
+            lResult.minuteInspiratoryLpm = 0.0F;
+        }
+    }
     if (((lResult.validMask & BREATH_RESULT_VALID_VTE) != 0U) &&
         (gMonitorEngine.volumeInvalid == 0U) &&
         (lResult.vteMl >= 0.0F) && (lResult.cycleTimeMs > 0U)) {
@@ -359,6 +376,8 @@ static void monitorEngineBreathResultPublish(uint32_t nowMs)
         }
         if (monitorEngineFinite(lResult.minuteTotalLpm) == 0U) {
             lResult.minuteTotalLpm = 0.0F;
+        } else {
+            lResult.validMask |= BREATH_RESULT_VALID_MVE;
         }
     }
     /* Use the requested L/min formulas; expiration uses peak flow magnitude. */
@@ -422,6 +441,7 @@ static void monitorEngineBreathResultPublish(uint32_t nowMs)
     gMonitorData[MONITOR_HMI_PRS_MEAN] = lResult.meanPressureCmh2o;
     gMonitorData[MONITOR_HMI_MV_LEAK] = lResult.minuteLeakLpm;
     gMonitorData[MONITOR_HMI_MV_TOTAL] = lResult.minuteTotalLpm;
+    gMonitorData[MONITOR_HMI_MV_INSP] = lResult.minuteInspiratoryLpm;
     gMonitorData[MONITOR_HMI_LEAK_PERCENT] = lResult.leakPercent;
     gMonitorData[MONITOR_HMI_TIDA_VOL_EXP] = lResult.vteMl;
     gMonitorData[MONITOR_HMI_PPEAK] = lResult.ppeakCmh2o;
@@ -432,6 +452,7 @@ static void monitorEngineBreathResultPublish(uint32_t nowMs)
             (float)((lResult.validMask & BREATH_RESULT_VALID_PEEP) != 0U);
     }
     gMonitorData[MONITOR_HMI_PEAK_INSP_FLOW] = lResult.peakInspiratoryFlowLpm;
+    gMonitorData[MONITOR_HMI_PEAK_EXP_FLOW] = lResult.peakExpiratoryFlowLpm;
     gMonitorData[MONITOR_HMI_INSP_TIME_MS] = (float)lResult.inspiratoryTimeMs;
     gMonitorData[MONITOR_HMI_CYCLE_TIME_MS] = (float)lResult.cycleTimeMs;
     gMonitorLatestBreathResult = lResult;

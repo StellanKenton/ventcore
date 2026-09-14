@@ -330,7 +330,9 @@ ePhaseControllerState phaseControllerStateGet(void) { return PHASE_INSP; }
 float controlDataGet(ControlData_Index_EnumDef index) { return index == PAT_REAL_PRS ? 12.3f : -25.0f; }
 static float gPeepValid;
 static float gPeep;
+static float gCycleTimeMs = 456.0F;
 float monitorEngineGet(eMonitorDataType type) {
+    if (type == MONITOR_HMI_CYCLE_TIME_MS) { return gCycleTimeMs; }
     if (type == MONITOR_HMI_PEEP_VALID) { return gPeepValid; }
     if (type == MONITOR_HMI_PEEP) { return gPeep; }
     return 456.0f;
@@ -425,6 +427,102 @@ static void testMinuteLeak(void) {
     ProtocolDetectDataPreProcess(0, 150U);
     ProtocolSchedulerProcess(0);
     assert(gTxSize == 0U);
+    gRunning = 0U;
+}
+
+/** Verify completed expiratory peak flow reaches the wire with decimal scaling. */
+static void testPeakExpiratoryFlow(void) {
+    uint8_t lExpected[32];
+    gRunning = 1U;
+    ProtocolProcessInit(0);
+    for (uint32_t lIndex = 1U; lIndex <= 2U; lIndex++) {
+        gBreathResult = (stBreathResult){.sequence = lIndex,
+            .peakExpiratoryFlowLpm = lIndex == 1U ? 12.5F : 0.0F,
+            .validMask = BREATH_RESULT_VALID_COMPLETE | BREATH_RESULT_VALID_PEAK_EXP_FLOW};
+        SubIDCache_t lItem = {.m_id = 0x0FU,
+            .m_value = (uint16_t)(int16_t)(gBreathResult.peakExpiratoryFlowLpm * 10.0F),
+            .m_size = E_EXPFLOW_SIZE, .m_scale = E_EXPFLOW_SCALE};
+        uint16_t lLength = ProtocolCreateSubIdData(lExpected, PROTOCOL_ADDR_VCM_TO_MCM,
+            false, PROTOCOL_TX_MID_MONITOR_PARAMS, (const uint8_t *)&lItem, 1U);
+        ProtocolDetectDataPreProcess(0, 50U);
+        ProtocolSchedulerProcess(0);
+        assert(gTxSize == lLength && memcmp(gTx, lExpected, lLength) == 0);
+        assert(ProtocolCheckCRC(gTx));
+        gTxSize = 0U;
+        ProtocolDetectDataPreProcess(0, 100U);
+        ProtocolSchedulerProcess(0);
+        assert(gTxSize == 0U);
+    }
+    gBreathResult.sequence++;
+    gBreathResult.validMask = BREATH_RESULT_VALID_COMPLETE;
+    ProtocolDetectDataPreProcess(0, 150U);
+    ProtocolSchedulerProcess(0);
+    assert(gTxSize == 0U);
+    gRunning = 0U;
+}
+
+/** Verify both minute volumes, decimal scaling, saturation and validity on wire. */
+static void testMinuteVolumes(void) {
+    uint8_t lExpected[32];
+    gRunning = 1U;
+    ProtocolProcessInit(0);
+    for (uint32_t lIndex = 1U; lIndex <= 3U; lIndex++) {
+        gBreathResult = (stBreathResult){.sequence = 100U + lIndex,
+            .minuteInspiratoryLpm = lIndex == 1U ? 12.5F : (lIndex == 2U ? 0.0F : 7000.0F),
+            .minuteTotalLpm = lIndex == 1U ? 10.2F : 0.0F,
+            .validMask = BREATH_RESULT_VALID_COMPLETE | BREATH_RESULT_VALID_MVI | BREATH_RESULT_VALID_MVE};
+        SubIDCache_t lItems[2] = {
+            {.m_id = 0x08U, .m_value = lIndex == 1U ? 125U : (lIndex == 2U ? 0U : UINT16_MAX),
+             .m_size = E_MVI_SIZE, .m_scale = E_MVI_SCALE},
+            {.m_id = 0x09U, .m_value = lIndex == 1U ? 102U : 0U,
+             .m_size = E_MVE_SIZE, .m_scale = E_MVE_SCALE}};
+        uint16_t lLength = ProtocolCreateSubIdData(lExpected, PROTOCOL_ADDR_VCM_TO_MCM,
+            false, PROTOCOL_TX_MID_MONITOR_PARAMS, (const uint8_t *)lItems, 2U);
+        ProtocolDetectDataPreProcess(0, 50U);
+        ProtocolSchedulerProcess(0);
+        assert(gTxSize == lLength && memcmp(gTx, lExpected, lLength) == 0);
+        assert(ProtocolCheckCRC(gTx));
+        gTxSize = 0U;
+        ProtocolDetectDataPreProcess(0, 100U);
+        ProtocolSchedulerProcess(0);
+        assert(gTxSize == 0U);
+    }
+    gBreathResult.sequence++;
+    gBreathResult.validMask = BREATH_RESULT_VALID_COMPLETE;
+    ProtocolDetectDataPreProcess(0, 150U);
+    ProtocolSchedulerProcess(0);
+    assert(gTxSize == 0U);
+    gRunning = 0U;
+}
+
+/** Verify half-up frequency rounding for total, mandatory and spontaneous rates. */
+static void testFrequencyRounding(void) {
+    const float lRates[] = {14.49F, 14.5F, 14.51F, 15.0F, 254.6F, 300.0F};
+    const uint8_t lRounded[] = {14U, 15U, 15U, 15U, 255U, 255U};
+    uint8_t lExpected[32];
+    gRunning = 1U;
+    ProtocolProcessInit(0);
+    for (uint32_t lType = 0U; lType < 2U; lType++) {
+        for (uint32_t lIndex = 0U; lIndex < 6U; lIndex++) {
+            gCycleTimeMs = 60000.0F / lRates[lIndex];
+            gBreathResult = (stBreathResult){.sequence = 200U + lType * 6U + lIndex,
+                .breathType = lType == 0U ? BREATH_TYPE_MANDATORY_PRESSURE : BREATH_TYPE_SPONTANEOUS_PRESSURE_SUPPORT,
+                .validMask = BREATH_RESULT_VALID_COMPLETE | BREATH_RESULT_VALID_CYCLE_TIME};
+            SubIDCache_t lItems[2] = {
+                {.m_id = 0x10U, .m_value = lRounded[lIndex], .m_size = E_FRTOTAL_SIZE, .m_scale = E_FRTOTAL_SCALE},
+                {.m_id = lType == 0U ? 0x11U : 0x12U, .m_value = lRounded[lIndex],
+                 .m_size = lType == 0U ? E_FRMAND_SIZE : E_FRSPN_SIZE,
+                 .m_scale = lType == 0U ? E_FRMAND_SCALE : E_FRSPN_SCALE}};
+            uint16_t lLength = ProtocolCreateSubIdData(lExpected, PROTOCOL_ADDR_VCM_TO_MCM,
+                false, PROTOCOL_TX_MID_MONITOR_PARAMS, (const uint8_t *)lItems, 2U);
+            ProtocolDetectDataPreProcess(0, 50U);
+            ProtocolSchedulerProcess(0);
+            assert(gTxSize == lLength && memcmp(gTx, lExpected, lLength) == 0);
+            assert(ProtocolCheckCRC(gTx));
+            gTxSize = 0U;
+        }
+    }
+    gCycleTimeMs = 456.0F;
     gRunning = 0U;
 }
 
@@ -727,6 +825,17 @@ int main(void) {
     assert(GetVentCpapPsvSettings()->apneaRateBpm == 18.0f);
     assert(GetVentCpapPsvSettings()->apneaInspTimeMs == 1250U);
     send(0xAF, 0x17, 125, 2, 2); assert(GetVentVacSettings()->inspTimeMs == 1250);
+    send(0xAF, 0x14, 20, 1, 0);
+    send(0xAF, 0x18, 18, 2, 1);
+    assert(GetVentPsvStSettings()->inspRateBpm == 20.0f);
+    assert(GetVentPsvStSettings()->inspTimeMs == 1250U);
+    assert(GetVentPsvStSettings()->maxInspiratoryTimeMs == 1800U);
+    send(0xAF, 0x16, 12, 1, 0);
+    send(0xAF, 0x19, 15, 2, 1);
+    assert(GetVentPsvStSettings()->inspRateBpm == 20.0f);
+    assert(GetVentPsvStSettings()->inspTimeMs == 1250U);
+    assert(GetVentCpapPsvSettings()->apneaRateBpm == 12.0f);
+    assert(GetVentCpapPsvSettings()->apneaInspTimeMs == 1500U);
     send(0xAF, 0x12, (uint16_t)-20, 2, 1); assert(GetVentVacSettings()->pressureTriggerCmh2o == -2.0f);
     send(0xAE, 0, 1, 1, 0); assert(gRunning && gMode == VENT_MD_VAC);
     gTxSize = 0; ProtocolWaveDataProcess(0, 20); ProtocolSchedulerProcess(0);
@@ -769,6 +878,9 @@ int main(void) {
     testTechAlarms();
     testMeanPressure();
     testMinuteLeak();
+    testPeakExpiratoryFlow();
+    testMinuteVolumes();
+    testFrequencyRounding();
     testComplianceDynamic();
     testComplianceStatic();
     testResistanceInspiratory();

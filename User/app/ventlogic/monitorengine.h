@@ -49,6 +49,9 @@ extern "C" {
 #define BREATH_RESULT_VALID_RES_EXP             (1UL << 14)
 #define BREATH_RESULT_VALID_C_DYNC              (1UL << 15)
 #define BREATH_RESULT_VALID_C_STAT              (1UL << 16)
+#define BREATH_RESULT_VALID_MVI                 (1UL << 17)
+#define BREATH_RESULT_VALID_MVE                 (1UL << 18)
+#define BREATH_RESULT_VALID_PEAK_EXP_FLOW       (1UL << 19)
 
 typedef enum {
     MONITOR_DATA_NONE = 0,
@@ -85,6 +88,8 @@ typedef enum {
     MONITOR_HMI_C_DYNC,
     MONITOR_HMI_C_STAT,
     MONITOR_HMI_PEEP_VALID,
+    MONITOR_HMI_MV_INSP,
+    MONITOR_HMI_PEAK_EXP_FLOW,
     MONITOR_DATA_COUNT,
 } eMonitorDataType;
 
@@ -105,7 +110,8 @@ typedef struct stBreathResult {
     float plateauPressureCmh2o;
     float meanPressureCmh2o;
     float minuteLeakLpm;
-    float minuteTotalLpm;
+    float minuteTotalLpm; /* Total expiratory ventilation in L/min. */
+    float minuteInspiratoryLpm;
     float leakPercent;
     float resistanceInspiratory;
     float resistanceExpiratory;
@@ -113,6 +119,7 @@ typedef struct stBreathResult {
     float complianceStatic;
     float peepCmh2o;
     float peakInspiratoryFlowLpm;
+    float peakExpiratoryFlowLpm; /* Nonnegative expiratory peak magnitude in L/min. */
     eBreathCycleReason cycleReason;
     uint32_t inspiratoryTimeMs;
     uint32_t cycleTimeMs;

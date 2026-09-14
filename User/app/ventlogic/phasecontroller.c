@@ -220,8 +220,14 @@ int8_t phaseControllerTrigger(eBreathTriggerReason triggerReason, uint32_t nowMs
         return PHASE_CONTROL_ERROR_PARAM;
     }
     if ((gPhaseController.planValid == 0U) ||
-        (gPhaseController.runState != PHASE_EXP) ||
-        (gPhaseController.expirationCaptureComplete == 0U)) {
+        (gPhaseController.runState != PHASE_EXP)) {
+        return PHASE_CONTROL_ERROR_STATE;
+    }
+    /* Timed ST breaths must not wait indefinitely for patient-trigger readiness.
+     * They still obey the minimum expiration guard below. */
+    if ((gPhaseController.expirationCaptureComplete == 0U) &&
+        !((triggerReason == BREATH_TRIGGER_REASON_APNEA_BACKUP) &&
+          (gPhaseController.activePlan.mode == VENT_MD_PSV_ST))) {
         return PHASE_CONTROL_ERROR_STATE;
     }
     if (((triggerReason == BREATH_TRIGGER_REASON_PRESSURE) &&

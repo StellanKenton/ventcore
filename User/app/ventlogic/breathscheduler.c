@@ -462,17 +462,21 @@ int8_t breathSchedulerSettingsUpdate(eVentMode mode)
     } else {
         lPsvStSettings = *GetVentPsvStSettings();
         /* Reject invalid values before division, conversion or plan publication. */
-        if (!(lPsvStSettings.apneaRateBpm >= 1.0F && lPsvStSettings.apneaRateBpm <= 160.0F) ||
-            (lPsvStSettings.apneaInspTimeMs < BREATH_PSV_MIN_INSPIRATORY_TIME_MS) ||
-            ((float)lPsvStSettings.apneaInspTimeMs + BREATH_PEEP_LOCK_TIME_MS >
-             60000.0F / lPsvStSettings.apneaRateBpm) ||
+        if (!(lPsvStSettings.inspRateBpm >= 1.0F && lPsvStSettings.inspRateBpm <= 160.0F) ||
+            (lPsvStSettings.inspTimeMs < BREATH_PSV_MIN_INSPIRATORY_TIME_MS) ||
+            ((float)lPsvStSettings.inspTimeMs + BREATH_PEEP_LOCK_TIME_MS >
+             60000.0F / lPsvStSettings.inspRateBpm) ||
             !(lPsvStSettings.oxygenPercent >= 21.0F && lPsvStSettings.oxygenPercent <= 100.0F) ||
             !(lPsvStSettings.peepCmh2o >= 0.0F && lPsvStSettings.peepCmh2o <= 100.0F) ||
             !(lPsvStSettings.pressureSupportCmh2o > 0.0F &&
               lPsvStSettings.peepCmh2o + lPsvStSettings.pressureSupportCmh2o < lLimitSettings->pressureHigh) ||
             !(lLimitSettings->pressureHigh <= 100.0F) ||
-            (lLimitSettings->apneaTimeAlarm == 0U) || (lLimitSettings->apneaTimeAlarm > 60U) ||
-            (lPsvStSettings.riseTimeMs > BREATH_PSV_MAX_INSPIRATORY_TIME_MS) ||
+            (lPsvStSettings.maxInspiratoryTimeMs < BREATH_PSV_MIN_INSPIRATORY_TIME_MS) ||
+            (lPsvStSettings.maxInspiratoryTimeMs > 10000U) ||
+            ((float)lPsvStSettings.maxInspiratoryTimeMs + BREATH_PEEP_LOCK_TIME_MS >
+             60000.0F / lPsvStSettings.inspRateBpm) ||
+            (lPsvStSettings.riseTimeMs > lPsvStSettings.maxInspiratoryTimeMs) ||
+            (lPsvStSettings.riseTimeMs > lPsvStSettings.inspTimeMs) ||
             !(lPsvStSettings.cycleOffPercent > 0.0F && lPsvStSettings.cycleOffPercent < 100.0F) ||
             ((unsigned int)lPsvStSettings.triggerType >= VENT_TRIGGER_COUNT) ||
             ((lPsvStSettings.triggerType == VENT_TRIGGER_PRESSURE) &&
@@ -491,13 +495,13 @@ int8_t breathSchedulerSettingsUpdate(eVentMode mode)
                                     lPsvStSettings.pressureSupportCmh2o,
                                     lPsvStSettings.riseTimeMs,
                                     lPsvStSettings.cycleOffPercent,
-                                    BREATH_PSV_MAX_INSPIRATORY_TIME_MS,
-                                    (uint32_t)lLimitSettings->apneaTimeAlarm * 1000U,
+                                    lPsvStSettings.maxInspiratoryTimeMs,
+                                    0U, /* ST timing is independent of apnea alarms. */
                                     (uint32_t)(60000.0F /
-                                               lPsvStSettings.apneaRateBpm),
+                                               lPsvStSettings.inspRateBpm),
                                     &lPlan);
         breathSchedulerPsvBackupPlanApply(&lPlan, lPsvStSettings.pressureSupportCmh2o,
-                                          lPsvStSettings.apneaInspTimeMs, &lBackupPlan);
+                                          lPsvStSettings.inspTimeMs, &lBackupPlan);
         lBackupPlanValid = true;
     }
     lPlan.limitSettings = lLimitSettings;

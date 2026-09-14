@@ -143,8 +143,9 @@ typedef struct stVentPsvStSettings {
     float pressureSupportCmh2o;
     uint32_t riseTimeMs;
     float cycleOffPercent;
-    uint32_t apneaInspTimeMs; /* Timed backup inspiration duration. */
-    float apneaRateBpm;       /* Backup frequency after the apnea alarm timeout. */
+    float inspRateBpm;       /* Maximum breath interval is 60000 / rate. */
+    uint32_t inspTimeMs;     /* Timed mandatory inspiration duration. */
+    uint32_t maxInspiratoryTimeMs; /* Spontaneous inspiration safety limit. */
 } stVentPsvStSettings;
 
 /* Pressure SIMV with spontaneous pressure support. */

@@ -60,11 +60,27 @@ void apneaEngineProcess(uint32_t nowMs)
             (lPlan.triggerReason == BREATH_TRIGGER_REASON_FLOW)) {
             gApneaEngine.state = APNEA_ENGINE_MONITORING;
         } else if (lPlan.triggerReason == BREATH_TRIGGER_REASON_APNEA_BACKUP) {
-            gApneaEngine.state = APNEA_ENGINE_BACKUP;
+            gApneaEngine.state = lMode == VENT_MD_PSV_ST ?
+                                 APNEA_ENGINE_TIMED : APNEA_ENGINE_BACKUP;
         }
         gApneaEngine.referenceMs = nowMs;
     }
     gApneaEngine.previousPhase = lPhase;
+
+    /* ST restarts its maximum cycle interval at every actual inspiration.
+     * Trigger Engine runs first, so a confirmed patient effort wins this tick. */
+    if (lMode == VENT_MD_PSV_ST) {
+        if ((lPlan.backupBreathIntervalMs != 0U) &&
+            ((nowMs - gApneaEngine.referenceMs) >= lPlan.backupBreathIntervalMs) &&
+            (lPhase == PHASE_EXP) &&
+            (phaseControllerTrigger(BREATH_TRIGGER_REASON_APNEA_BACKUP, nowMs) ==
+             PHASE_CONTROL_SUCCESS)) {
+            gApneaEngine.state = APNEA_ENGINE_TIMED;
+            gApneaEngine.referenceMs = nowMs;
+            gApneaEngine.previousPhase = phaseControllerStateGet();
+        }
+        return;
+    }
 
     if (gApneaEngine.state == APNEA_ENGINE_MONITORING) {
         lDeadlineMs = (uint32_t)GetVentLimitSettings()->apneaTimeAlarm * 1000U;

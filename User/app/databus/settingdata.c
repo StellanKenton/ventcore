@@ -74,8 +74,9 @@ stVentPsvStSettings gVentPsvStSettings = {
     .pressureSupportCmh2o = 10.0f,
     .riseTimeMs = 200U,
     .cycleOffPercent = 25.0f,
-    .apneaInspTimeMs = 1300U,
-    .apneaRateBpm = 15.0f,
+    .inspRateBpm = 15.0f,
+    .inspTimeMs = 1300U,
+    .maxInspiratoryTimeMs = 2000U,
 };
 
 static stVentLimitSettings gHostVentLimitSettings = {
@@ -136,8 +137,9 @@ static stVentPsvStSettings gHostVentPsvStSettings = {
     .pressureSupportCmh2o = 10.0f,
     .riseTimeMs = 200U,
     .cycleOffPercent = 25.0f,
-    .apneaInspTimeMs = 1300U,
-    .apneaRateBpm = 15.0f,
+    .inspRateBpm = 15.0f,
+    .inspTimeMs = 1300U,
+    .maxInspiratoryTimeMs = 2000U,
 };
 
 stVentLimitSettings *GetVentLimitSettings(void)

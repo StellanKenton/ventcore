@@ -19,6 +19,7 @@ typedef enum {
     APNEA_ENGINE_MONITORING,
     APNEA_ENGINE_ALARM,
     APNEA_ENGINE_BACKUP,
+    APNEA_ENGINE_TIMED, /* Normal ST mandatory ventilation, not an apnea alarm. */
 } eApneaEngineState;
 
 typedef struct stApneaEngine {

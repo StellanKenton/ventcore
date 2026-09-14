@@ -247,13 +247,13 @@ void triggerEngineProcess(uint32_t nowMs)
     }
     if ((gTriggerEngine.confirmSamples >= TRIGGER_ENGINE_CONFIRM_SAMPLES) &&
         (phaseControllerTrigger(lTriggerReason, nowMs) == PHASE_CONTROL_SUCCESS)) {
-        LOG_I("trigger", "reason=%u p100=%ld pb100=%ld q100=%ld qb100=%ld threshold100=%ld",
-              (unsigned int)lTriggerReason,
-              (long)(lPatientPressure * 100.0F),
-              (long)(gTriggerEngine.pressureBaselineCmh2o * 100.0F),
-              (long)(lProximalFlow * 100.0F),
-              (long)(gTriggerEngine.flowBaselineLpm * 100.0F),
-              (long)(lTriggerThreshold * 100.0F));
+        // LOG_I("trigger", "reason=%u p100=%ld pb100=%ld q100=%ld qb100=%ld threshold100=%ld",
+        //       (unsigned int)lTriggerReason,
+        //       (long)(lPatientPressure * 100.0F),
+        //       (long)(gTriggerEngine.pressureBaselineCmh2o * 100.0F),
+        //       (long)(lProximalFlow * 100.0F),
+        //       (long)(gTriggerEngine.flowBaselineLpm * 100.0F),
+        //       (long)(lTriggerThreshold * 100.0F));
         triggerEngineIdleEnter(phaseControllerStateGet());
     }
 }

@@ -1,5 +1,17 @@
 # Device Tool
 
+`test_protocol.py` also verifies half-up rounding of total/mandatory/spontaneous
+frequency at 14.49, 14.5 and 14.51 breaths/min, plus integer and upper-limit cases.
+
+Expiratory peak flow regressions: `test_monitor_leak.py` checks phase/sign
+selection, peak hold, zero flow, invalid samples and reset; `test_protocol.py`
+checks MCM 0x0F encoding, CRC, once-per-breath upload and invalid suppression.
+
+Minute ventilation regressions: `test_monitor_leak.py` checks inspiratory and
+expiratory L/min, zero flow, invalid flow, zero duration, tick wrap and stop reset.
+`test_protocol.py` checks MCM 0x08/0x09 decimal encoding, saturation, CRC,
+once-per-breath publication and invalid-result suppression.
+
 `device_tool.py` is a local development helper for this firmware project. It reads
 `device_tool_config.json`, matches the current computer by OS and hostname, then
 uses the matched profile to build, flash, reset, and read RTT logs from the
@@ -94,7 +106,7 @@ target board.
 - `device_tool.py`: command line entry point.
 - `test_vti_compensation.py`: real scheduler/phase/monitor/flow-controller host regression.
   Also covers CPAP/PSV pressure/flow triggers, flow cycling, maximum inspiration,
-  apnea without backup, and the simplified PSV-ST backup plan and invalid settings.
+  apnea backup/recovery, plus PSV-ST timed cycles and invalid settings.
   Real expiration control verifies three consecutive PSV breaths for pressure and
   flow triggering, including rearming after the first breath without forced capture.
   Run `py -3 user/develop/test_vti_compensation.py`. Tests first-sample EMA initialization,
@@ -213,3 +225,12 @@ Each computer profile contains:
 
 Add more computers by copying `computer1` or `computer2` and changing the paths
 and hostnames.
+
+PSV-S/T regression: `py -3 user/develop/test_vti_compensation.py` exercises
+startup and repeated 60000/rate deadlines, mandatory Ti, pressure/flow patient
+recovery, same-tick patient priority, flow cycling, maximum spontaneous Ti,
+tick wrap, stop and invalid settings using production scheduler/phase/engines.
+`test_protocol.py` checks ST rate/Ti/max-Ti mapping (0x14/0x17/0x18) and isolation
+from CPAP/PSV apnea timing (0x16/0x19). These tests do not operate hardware.
+Use `vt psvst` to start with the selected local/host settings, `vt status` for
+`VT_PSVST_SETTINGS` and the active breath, and `vt stop` to stop.

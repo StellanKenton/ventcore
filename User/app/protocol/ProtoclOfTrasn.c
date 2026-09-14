@@ -102,21 +102,22 @@ void protocolApplyReceivedSettings(void) {
         if (lParams->m_valid[0x14]) {
             lPac->Rate = (float)lParams->m_rate / ProtocolGetScale(lParams->m_rate_scale);
             lVac->freq = (float)lParams->m_rate / ProtocolGetScale(lParams->m_rate_scale);
+            lSt->inspRateBpm = (float)lParams->m_rate / ProtocolGetScale(lParams->m_rate_scale);
         }
         if (lParams->m_valid[0x16]) {
             lPsv->apneaRateBpm = (float)lParams->m_apneaRate / ProtocolGetScale(lParams->m_apneaRate_scale);
-            lSt->apneaRateBpm = (float)lParams->m_apneaRate / ProtocolGetScale(lParams->m_apneaRate_scale);
         }
         if (lParams->m_valid[0x17]) {
             lPac->inspiratoryTimeMs = (float)lParams->m_ti * 1000.0f / ProtocolGetScale(lParams->m_ti_scale);
             lVac->inspTimeMs = (float)lParams->m_ti * 1000.0f / ProtocolGetScale(lParams->m_ti_scale);
+            lSt->inspTimeMs = (float)lParams->m_ti * 1000.0f / ProtocolGetScale(lParams->m_ti_scale);
         }
         if (lParams->m_valid[0x18]) {
             lPsv->maxInspiratoryTimeMs = (float)lParams->m_tiMax * 1000.0f / ProtocolGetScale(lParams->m_tiMax_scale);
+            lSt->maxInspiratoryTimeMs = (float)lParams->m_tiMax * 1000.0f / ProtocolGetScale(lParams->m_tiMax_scale);
         }
         if (lParams->m_valid[0x19]) {
             lPsv->apneaInspTimeMs = (float)lParams->m_apneaTi * 1000.0f / ProtocolGetScale(lParams->m_apneaTi_scale);
-            lSt->apneaInspTimeMs = (float)lParams->m_apneaTi * 1000.0f / ProtocolGetScale(lParams->m_apneaTi_scale);
         }
         if (lParams->m_valid[0x1A]) {
             lPac->riseTimeMs = (float)lParams->m_riseTime * 1000.0f / ProtocolGetScale(lParams->m_riseTime_scale);
