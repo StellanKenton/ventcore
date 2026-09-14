@@ -93,7 +93,32 @@ static bool ventTestUnsignedParse(const char **arguments, uint16_t *value)
 /** Show the supported ventilation test commands. */
 static void ventTestUsageShow(void)
 {
-    LOG_I(gVentTestTag, "usage: vt mode <x> | run <0|1> | pac | vac | psv | psvst | stop | set <peep> <delta> | volume <peep> <ml> [pause_pct [ti_ms rate]] | trigger off | trigger pressure <cmh2o100> | trigger flow <lpm100> | peep | status");
+    LOG_I(gVentTestTag, "usage: vt mode <x> | run <0|1> | pac | vac | psv | psvst | stop | set <peep> <delta> | support <peep> <delta> | volume <peep> <ml> [pause_pct [ti_ms rate]] | trigger off | trigger pressure <cmh2o100> | trigger flow <lpm100> | peep | status");
+}
+
+/** Report selected settings and the active breath separately. */
+static void ventTestSettingsShow(void) {
+    stVentCpapPsvSettings lSettings;
+    stBreathPlan lPlan;
+    uint8_t lHost;
+    int8_t lStatus;
+    repRtosEnterCritical();
+    lSettings = *GetVentCpapPsvSettings();
+    lHost = GetVentPatientSettings()->useHostSettings;
+    lStatus = phaseControllerActivePlanGet(&lPlan);
+    repRtosExitCritical();
+    LOG_R("VT_PSV_SETTINGS,host=%u,peep100=%ld,support100=%ld,backup100=%ld",
+          (unsigned int)lHost, (long)ventTestCenti(lSettings.peepCmh2o),
+          (long)ventTestCenti(lSettings.pressureSupportCmh2o),
+          (long)ventTestCenti(lSettings.apneaPressureCmh2o));
+    if (lStatus == PHASE_CONTROL_SUCCESS) {
+        LOG_R("VT_ACTIVE_PLAN,mode=%u,type=%u,trigger=%u,sequence=%lu,peep100=%ld,target100=%ld,low100=%ld",
+              (unsigned int)lPlan.mode, (unsigned int)lPlan.breathType,
+              (unsigned int)lPlan.triggerReason, (unsigned long)lPlan.sequence,
+              (long)ventTestCenti(lPlan.peepCmh2o),
+              (long)ventTestCenti(lPlan.inspiratoryPressureCmh2o),
+              (long)ventTestCenti(lPlan.limitSettings->pressureLow));
+    }
 }
 
 /** Snapshot display timing without uploading the waveform buffer. */
@@ -293,8 +318,25 @@ static eConsoleCommandResult ventTestConsoleCommand(const char *arguments)
         return CONSOLE_COMMAND_RESULT_OK;
     } else if (ventTestTokenMatch(&arguments, "status") &&
                (*ventTestSkipSpaces(arguments) == '\0')) {
+        ventTestSettingsShow();
         ventTestStatusShow();
         return CONSOLE_COMMAND_RESULT_OK;
+    } else if (ventTestTokenMatch(&arguments, "support") &&
+               ventTestUnsignedParse(&arguments, &lPeep) &&
+               ventTestUnsignedParse(&arguments, &lDeltaPressure) &&
+               (*ventTestSkipSpaces(arguments) == '\0')) {
+        (void)breathSchedulerStop();
+        lCpapPsvSettings = GetVentCpapPsvSettings();
+        lPreviousCpapPsvSettings = *lCpapPsvSettings;
+        lCpapPsvSettings->peepCmh2o = (float)lPeep;
+        lCpapPsvSettings->pressureSupportCmh2o = (float)lDeltaPressure;
+        lStatus = breathSchedulerTestModeSet((uint8_t)VENT_MD_CPAP_PSV);
+        if (lStatus != BREATH_CONTROL_SUCCESS) {
+            *lCpapPsvSettings = lPreviousCpapPsvSettings;
+            (void)breathSchedulerTestModeSet((uint8_t)VENT_MD_CPAP_PSV);
+        }
+        LOG_I(gVentTestTag, "support peep=%u delta=%u status=%d",
+              (unsigned int)lPeep, (unsigned int)lDeltaPressure, (int)lStatus);
     } else if (ventTestTokenMatch(&arguments, "set") &&
                ventTestUnsignedParse(&arguments, &lPeep) &&
                ventTestUnsignedParse(&arguments, &lDeltaPressure) &&
