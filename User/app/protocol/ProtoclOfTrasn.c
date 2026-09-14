@@ -77,6 +77,9 @@ void protocolApplyReceivedSettings(void) {
             lPsv->pressureSupportCmh2o = (float)lParams->m_deltaPsupp / ProtocolGetScale(lParams->m_deltaPsupp_scale);
             lSt->pressureSupportCmh2o = (float)lParams->m_deltaPsupp / ProtocolGetScale(lParams->m_deltaPsupp_scale);
         }
+        if (lParams->m_valid[0x0C]) {
+            lPsv->apneaPressureCmh2o = (float)lParams->m_deltaApneaP / ProtocolGetScale(lParams->m_deltaApneaP_scale);
+        }
         if (lParams->m_valid[0x0E]) {
             lVac->tidalVolume = (float)lParams->m_tidalVolume / ProtocolGetScale(lParams->m_tidalVolume_scale);
         }
@@ -101,6 +104,7 @@ void protocolApplyReceivedSettings(void) {
             lVac->freq = (float)lParams->m_rate / ProtocolGetScale(lParams->m_rate_scale);
         }
         if (lParams->m_valid[0x16]) {
+            lPsv->apneaRateBpm = (float)lParams->m_apneaRate / ProtocolGetScale(lParams->m_apneaRate_scale);
             lSt->apneaRateBpm = (float)lParams->m_apneaRate / ProtocolGetScale(lParams->m_apneaRate_scale);
         }
         if (lParams->m_valid[0x17]) {
@@ -111,6 +115,7 @@ void protocolApplyReceivedSettings(void) {
             lPsv->maxInspiratoryTimeMs = (float)lParams->m_tiMax * 1000.0f / ProtocolGetScale(lParams->m_tiMax_scale);
         }
         if (lParams->m_valid[0x19]) {
+            lPsv->apneaInspTimeMs = (float)lParams->m_apneaTi * 1000.0f / ProtocolGetScale(lParams->m_apneaTi_scale);
             lSt->apneaInspTimeMs = (float)lParams->m_apneaTi * 1000.0f / ProtocolGetScale(lParams->m_apneaTi_scale);
         }
         if (lParams->m_valid[0x1A]) {
@@ -120,9 +125,6 @@ void protocolApplyReceivedSettings(void) {
         }
         if (lParams->m_valid[0x26]) {
             lVac->inspPausePct = (float)lParams->m_inspPausePercent / ProtocolGetScale(lParams->m_inspPausePercent_scale);
-        }
-        if (lParams->m_valid[0x29]) {
-            lPsv->pressureLimitCmh2o = (float)lParams->m_peakPressure / ProtocolGetScale(lParams->m_peakPressure_scale);
         }
         if (lParams->m_valid[0x24] || lParams->m_valid[0x25]) {
             eVentTriggerType lTrigger = lParams->m_assistTrig == 0U ? VENT_TRIGGER_OFF :
@@ -147,7 +149,6 @@ void protocolApplyReceivedSettings(void) {
     if (lChanged) {
         const RxAlarmLimitsCache_t *lLimits = ProtocolGetRxAlarmLimitsCache();
         stVentLimitSettings *lAlarm = GetVentLimitSettings();
-        stVentCpapPsvSettings *lPsv = GetVentCpapPsvSettings();
 
         if (lLimits->m_valid[0]) {
             lAlarm->pressureLow = (float)lLimits->m_pAirwayLow / ProtocolGetScale(lLimits->m_pAirwayLow_scale);
@@ -181,7 +182,6 @@ void protocolApplyReceivedSettings(void) {
         }
         if (lLimits->m_valid[10]) {
             lAlarm->apneaTimeAlarm = (float)lLimits->m_apneaTime / ProtocolGetScale(lLimits->m_apneaTime_scale);
-            lPsv->apneaAlarmTimeMs = (uint32_t)lAlarm->apneaTimeAlarm * 1000U;
         }
     }
 

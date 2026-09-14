@@ -16,6 +16,12 @@
 
 /* Set enabled to false here to omit a detector from alarm processing. */
 static stPhysAlarmRegistration gPhysAlarmRegistrations[PHYS_ALARM_COUNT] = {
+    [PHYS_ALARM_APNEA] = {
+        .type = PHYS_ALARM_APNEA,
+        .enabled = true,
+        .detector = physAlarmApneaDetect,
+        .active = false,
+    },
     [PHYS_ALARM_AIRWAY_PRESSURE_HIGH] = {
         .type = PHYS_ALARM_AIRWAY_PRESSURE_HIGH,
         .enabled = true,

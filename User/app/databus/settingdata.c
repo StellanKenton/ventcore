@@ -53,7 +53,6 @@ stVentVacSettings gVentVacSettings = {
 stVentCpapPsvSettings gVentCpapPsvSettings = {
     .oxygenPercent = 21.0f,
     .peepCmh2o = 5.0f,
-    .pressureLimitCmh2o = 40.0f,
     .triggerType = VENT_TRIGGER_PRESSURE,
     .pressureTriggerCmh2o = -2.0f,
     .flowTriggerLpm = 3.0f,
@@ -64,7 +63,6 @@ stVentCpapPsvSettings gVentCpapPsvSettings = {
     .apneaPressureCmh2o = 20.0f,
     .apneaRateBpm = 15.0f,
     .apneaInspTimeMs = 1300U,
-    .apneaAlarmTimeMs = 10000U,
 };
 
 stVentPsvStSettings gVentPsvStSettings = {
@@ -118,7 +116,6 @@ static stVentVacSettings gHostVentVacSettings = {
 static stVentCpapPsvSettings gHostVentCpapPsvSettings = {
     .oxygenPercent = 21.0f,
     .peepCmh2o = 5.0f,
-    .pressureLimitCmh2o = 40.0f,
     .triggerType = VENT_TRIGGER_PRESSURE,
     .pressureTriggerCmh2o = -2.0f,
     .flowTriggerLpm = 3.0f,
@@ -126,7 +123,9 @@ static stVentCpapPsvSettings gHostVentCpapPsvSettings = {
     .riseTimeMs = 200U,
     .cycleOffPercent = 25.0f,
     .maxInspiratoryTimeMs = 2000U,
-    .apneaAlarmTimeMs = 10000U,
+    .apneaPressureCmh2o = 20.0f,
+    .apneaRateBpm = 15.0f,
+    .apneaInspTimeMs = 1300U,
 };
 static stVentPsvStSettings gHostVentPsvStSettings = {
     .oxygenPercent = 21.0f,

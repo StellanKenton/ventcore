@@ -11,7 +11,7 @@
 | `bsp/uart/uart.*` | USART0 PA9 TX / PA10 RX，115200、8N1；中断收发，2048 字节 RX 缓存；公开 API 仅供任务调用 |
 | `app/databus/` | 维护控制数据数组；SensorTask 保存当前及前一周期原始数据，VentTask 基于最新原始数据完成滤波和校准转换 |
 | `app/ventalgo/` | 实现吸气压力、吸气流量、公共 Release/PEEP 和 FiO₂ 控制器；各控制器只生成统一 `stActuatorRequest`，不直接写 BSP |
-| `app/ventlogic/` | Scheduler 为 PAC/VAC/PSV/PSV-ST 生成逐次 `stBreathPlan`，Phase Controller 执行计划，Trigger Engine 检测患者触发，Cycle Engine 完成 PSV 流量切换，Apnea Engine 调度 PSV-ST 备份呼吸，Monitor Engine 发布逐次 `stBreathResult`，Actuator Controller 统一仲裁并写入 BSP |
+| `app/ventlogic/` | Scheduler 为 PAC/VAC/PSV/PSV-ST 生成逐次 `stBreathPlan`，Phase Controller 执行计划，Trigger Engine 检测患者触发，Cycle Engine 完成 PSV 流量切换，Apnea Engine 检测窒息并调度 PSV/PSV-ST 后备呼吸，Monitor Engine 发布逐次 `stBreathResult`，Actuator Controller 统一仲裁并写入 BSP |
 | `app/physalarm/` | `physalarmmanager.*` 在 AlarmTask 注册、调度和发布 0xAD 生理报警；`physalarmvent.*` 实现检测；`alarmbits.h` 定义旧协议六组枚举及 union 位域 |
 | `app/techalarm/` | `techalarmmanager.*` 独立注册、调度、发布技术报警并生成 0xAB 快照；`techphys.*`、`techdevice.*`、`techpower.*`、`techcomm.*`、`techcal.*` 分别承接 SubId 0..4 检测 |
 | `bsp/adc/adc.*` | 使用 ADC1 规则组扫描、连续转换和 DMA1 循环模式持续采集 14 路板级模拟量 |
@@ -121,9 +121,11 @@ PAC 压力控制不使用报警高限 `pressureHigh` 限制患者压力参考值
 
 2026-09-08 潮气量换算台架回归：模拟肺 PAC，PEEP 5、Delta-P 25 cmH₂O、Ti 1350 ms、20/min、21% 氧、触发关闭。统一排除前两次启动呼吸并取随后 13 次：旧版平均 VTe−VTi 为 22.80 mL（3.34%）；最终 1000 ms 调零固件两次分别为 12.69 mL（1.78%）和 20.06 mL（2.84%），最大单次差值分别为 21.76、28.45 mL，未消除误差。原始日志/结果在 `build/volume_balance_old/`、`build/volume_balance_zero_long/`、`build/volume_balance_zero_repeat/`；统一统计、固件及源码 SHA-256 在 `build/volume_balance_comparison.json`。VAC 500 mL、PEEP 5、Ti 2000 ms、15/min、无暂停的末五次 VTI 为 495.93..503.00 mL，通过原 ±35 mL 目标验收，记录在 `build/volume_balance_vac/`。其中末次 VTi/VTe 为 500.02/533.09 mL，同时 PEEP 降到 3.48 cmH₂O，提示周期首尾储气变化仍影响两者比较；不能把容量目标通过解读为每次吸呼气相等。全部经 Device Tool 构建/烧录/RTT，最终收到停机确认；仅设备自身测量，无独立呼气参考仪器。
 
-CPAP/PSV 使用 `gVentCpapPsvSettings`，通过 `vt psv` 或 `breathSchedulerStart(VENT_MD_CPAP_PSV)` 启动。压力/流量触发后以 PEEP + pressureSupportCmh2o 为目标，按峰值流量百分比切换呼气，保留最短吸气、最大吸气及最短呼气保护；无触发时保持呼气，窒息引擎进入 ALARM 状态，不启动后备呼吸。Scheduler 校验氧浓度、压力、触发、流量切换比例及吸气时序。
+CPAP/PSV 使用 `gVentCpapPsvSettings`，通过 `vt psv` 或 `breathSchedulerStart(VENT_MD_CPAP_PSV)` 启动。压力/流量触发后以 PEEP + pressureSupportCmh2o 为目标，按峰值流量百分比切换呼气，保留最短吸气、最大吸气及最短呼气保护；无患者触发达到公共 `apneaTimeAlarm`（秒）时触发窒息报警，并在呼气捕获及最短呼气保护通过后启动后备通气。后备目标为 PEEP + `apneaPressureCmh2o`，频率为 `apneaRateBpm`，吸气时长为 `apneaInspTimeMs`，上升时间复用 `riseTimeMs` 并限制到后备吸气时长。两类呼吸的压力上限统一取公共 `pressureHigh`，CPAP/PSV 结构体不再保留 `pressureLimitCmh2o`、`apneaAlarmTimeMs`。Scheduler 校验后备压力、频率及吸气时序，确保保留最短呼气时间。
 
-PSV-ST 的精简结构体使用 `apneaInspTimeMs` / `apneaRateBpm` 定义后备吸气时长及频率；后备压力共用 PEEP + pressureSupportCmh2o，上升时间共用 riseTimeMs 并限制到后备吸气时长。自主吸气最大时长固定为 2000 ms，压力上限取公共 pressureHigh，窒息等待时间取公共 apneaTimeAlarm（秒）。旧协议独立后备压力、最大吸气时间及峰压字段不再写入 PSV-ST；CPAP/PSV 原绑定保留。`test_vti_compensation.py` 用真实 Scheduler/Phase/Trigger/Cycle/Apnea 覆盖 CPAP/PSV 两类触发、流量切换、最大吸气时间、窒息状态及 PSV-ST 后备计划和非法参数拒绝。此回归使用主机合成输入，未验证实机气路。
+窒息引擎在 VentTask 中使用公共 `apneaTimeAlarm` 计时，后备呼吸不会解除窒息报警；等待后备和后备期间由 AlarmTask 的 `physalarmapnea.c` 发布 `PHYS_ALARM_APNEA`，映射 0xAD 的 `APNEA_ALARM`（bit 8）。后备期间 Trigger Engine 仍每个 VentTask 周期执行，在允许触发的呼气阶段检测患者努力；有效压力/流量触发优先于后备请求，恢复压力支持并清除窒息状态、重新计时。停机及非通气阶段清除状态。旧协议 0xAF 的 0x0C/0x16/0x19 分别绑定 PSV 后备压差、频率及吸气时间，0x29 峰压不再写入 PSV，压力上限只从公共报警限值接收。
+
+PSV-ST 的精简结构体使用 `apneaInspTimeMs` / `apneaRateBpm` 定义后备吸气时长及频率；后备压力共用 PEEP + pressureSupportCmh2o，上升时间共用 riseTimeMs 并限制到后备吸气时长。自主吸气最大时长固定为 2000 ms，压力上限取公共 pressureHigh，窒息等待时间取公共 apneaTimeAlarm（秒）。旧协议独立后备压力、最大吸气时间及峰压字段不再写入 PSV-ST；CPAP/PSV 使用上述独立后备压差绑定。`test_vti_compensation.py` 用真实 Scheduler/Phase/Trigger/Cycle/Apnea 覆盖 CPAP/PSV 两类触发、流量切换、最大吸气时间、公共窒息超时边界、连续后备时序、后备后的两类患者触发恢复、报警解除及 PSV-ST 后备计划和非法参数拒绝。此回归使用主机合成输入，未验证实机气路。
 
 每次吸气（包括启动等待后的第一口）均加载新的计划序号，启动等待呼气的计划不能复用于第一口吸气。否则吸气结束清除 capture 标志后，呼气控制器因序号未变停留在 PEEP，不再通知捕获完成，CPAP/PSV 第二次触发永久被挡住。`test_vti_compensation.py` 使用真实呼气控制器及相位/触发/流量切换引擎验证压力、流量两类各连续三口，无手动 capture 通知；修复前在呼气准备标志恢复处失败，修复后通过。
 

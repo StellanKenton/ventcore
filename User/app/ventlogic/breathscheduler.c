@@ -275,32 +275,16 @@ static void breathSchedulerPsvPlanApply(eVentMode mode,
     *plan = lPlan;
 }
 
-/** Build the timed pressure-control breath used during PSV-ST backup. */
-static void breathSchedulerPsvBackupPlanApply(const stVentPsvStSettings *settings,
-                                              stBreathPlan *plan)
-{
-    stBreathPlan lPlan = {0};
-
-    lPlan.mode = VENT_MD_PSV_ST;
-    lPlan.breathType = BREATH_TYPE_MANDATORY_PRESSURE;
-    lPlan.allowedTriggerType = settings->triggerType;
-    lPlan.peepCmh2o = settings->peepCmh2o;
-    lPlan.inspiratoryPressureCmh2o = settings->peepCmh2o + settings->pressureSupportCmh2o;
-    lPlan.fio2Percent = settings->oxygenPercent;
-    lPlan.pressureLimitCmh2o = GetVentLimitSettings()->pressureHigh;
-    lPlan.pressureTriggerCmh2o = settings->pressureTriggerCmh2o;
-    lPlan.flowTriggerLpm = settings->flowTriggerLpm;
-    lPlan.cycleType = BREATH_CYCLE_TYPE_TIME;
-    lPlan.riseTimeMs = NUMFILTER_MIN(settings->riseTimeMs, settings->apneaInspTimeMs);
-    lPlan.holdTimeMs = settings->apneaInspTimeMs - NUMFILTER_MIN(settings->riseTimeMs, settings->apneaInspTimeMs);
-    lPlan.minimumInspiratoryTimeMs = settings->apneaInspTimeMs;
-    lPlan.maximumInspiratoryTimeMs = settings->apneaInspTimeMs;
-    lPlan.minimumExpiratoryTimeMs = BREATH_PEEP_LOCK_TIME_MS;
-    lPlan.apneaTimeMs = (uint32_t)GetVentLimitSettings()->apneaTimeAlarm * 1000U;
-    lPlan.backupBreathIntervalMs =
-        (uint32_t)(60000.0F / settings->apneaRateBpm);
-    lPlan.timeTriggerEnabled = 0U;
-    *plan = lPlan;
+/** Derive timed backup from the spontaneous plan, preserving patient triggers. */
+static void breathSchedulerPsvBackupPlanApply(const stBreathPlan *source, float pressureCmh2o, uint32_t inspTimeMs, stBreathPlan *plan) {
+    *plan = *source;
+    plan->breathType = BREATH_TYPE_MANDATORY_PRESSURE;
+    plan->inspiratoryPressureCmh2o = source->peepCmh2o + pressureCmh2o;
+    plan->cycleType = BREATH_CYCLE_TYPE_TIME;
+    plan->riseTimeMs = NUMFILTER_MIN(source->riseTimeMs, inspTimeMs);
+    plan->holdTimeMs = inspTimeMs - plan->riseTimeMs;
+    plan->minimumInspiratoryTimeMs = inspTimeMs;
+    plan->maximumInspiratoryTimeMs = inspTimeMs;
 }
 
 int8_t breathSchedulerInit(void)
@@ -434,12 +418,19 @@ int8_t breathSchedulerSettingsUpdate(eVentMode mode)
         breathSchedulerVacPlanApply(&lVacSettings, &lPlan);
     } else if (mode == VENT_MD_CPAP_PSV) {
         lCpapPsvSettings = *GetVentCpapPsvSettings();
-        /* CPAP permits zero support; PSV requires bounded flow-cycle timing. */
-        if (!(lCpapPsvSettings.oxygenPercent >= 21.0F && lCpapPsvSettings.oxygenPercent <= 100.0F) ||
+        /* Validate backup timing before division and preserve minimum expiration. */
+        if (!(lCpapPsvSettings.apneaRateBpm >= 1.0F && lCpapPsvSettings.apneaRateBpm <= 160.0F) ||
+            (lCpapPsvSettings.apneaInspTimeMs < BREATH_PSV_MIN_INSPIRATORY_TIME_MS) ||
+            ((float)lCpapPsvSettings.apneaInspTimeMs + BREATH_PEEP_LOCK_TIME_MS >
+             60000.0F / lCpapPsvSettings.apneaRateBpm) ||
+            !(lCpapPsvSettings.apneaPressureCmh2o > 0.0F &&
+              lCpapPsvSettings.peepCmh2o + lCpapPsvSettings.apneaPressureCmh2o < lLimitSettings->pressureHigh) ||
+            (lLimitSettings->apneaTimeAlarm == 0U) || (lLimitSettings->apneaTimeAlarm > 60U) ||
+            !(lCpapPsvSettings.oxygenPercent >= 21.0F && lCpapPsvSettings.oxygenPercent <= 100.0F) ||
             !(lCpapPsvSettings.peepCmh2o >= 0.0F && lCpapPsvSettings.peepCmh2o <= 100.0F) ||
             !(lCpapPsvSettings.pressureSupportCmh2o >= 0.0F &&
-              lCpapPsvSettings.peepCmh2o + lCpapPsvSettings.pressureSupportCmh2o < lCpapPsvSettings.pressureLimitCmh2o) ||
-            !(lCpapPsvSettings.pressureLimitCmh2o <= 100.0F) ||
+              lCpapPsvSettings.peepCmh2o + lCpapPsvSettings.pressureSupportCmh2o < lLimitSettings->pressureHigh) ||
+            !(lLimitSettings->pressureHigh <= 100.0F) ||
             (lCpapPsvSettings.maxInspiratoryTimeMs < BREATH_PSV_MIN_INSPIRATORY_TIME_MS) ||
             (lCpapPsvSettings.maxInspiratoryTimeMs > 10000U) ||
             (lCpapPsvSettings.riseTimeMs > lCpapPsvSettings.maxInspiratoryTimeMs) ||
@@ -454,7 +445,7 @@ int8_t breathSchedulerSettingsUpdate(eVentMode mode)
         breathSchedulerPsvPlanApply(mode,
                                     lCpapPsvSettings.oxygenPercent,
                                     lCpapPsvSettings.peepCmh2o,
-                                    lCpapPsvSettings.pressureLimitCmh2o,
+                                    lLimitSettings->pressureHigh,
                                     lCpapPsvSettings.triggerType,
                                     lCpapPsvSettings.pressureTriggerCmh2o,
                                     lCpapPsvSettings.flowTriggerLpm,
@@ -462,9 +453,12 @@ int8_t breathSchedulerSettingsUpdate(eVentMode mode)
                                     lCpapPsvSettings.riseTimeMs,
                                     lCpapPsvSettings.cycleOffPercent,
                                     lCpapPsvSettings.maxInspiratoryTimeMs,
-                                    lCpapPsvSettings.apneaAlarmTimeMs,
-                                    0U,
+                                    (uint32_t)lLimitSettings->apneaTimeAlarm * 1000U,
+                                    (uint32_t)(60000.0F / lCpapPsvSettings.apneaRateBpm),
                                     &lPlan);
+        breathSchedulerPsvBackupPlanApply(&lPlan, lCpapPsvSettings.apneaPressureCmh2o,
+                                          lCpapPsvSettings.apneaInspTimeMs, &lBackupPlan);
+        lBackupPlanValid = true;
     } else {
         lPsvStSettings = *GetVentPsvStSettings();
         /* Reject invalid values before division, conversion or plan publication. */
@@ -502,7 +496,8 @@ int8_t breathSchedulerSettingsUpdate(eVentMode mode)
                                     (uint32_t)(60000.0F /
                                                lPsvStSettings.apneaRateBpm),
                                     &lPlan);
-        breathSchedulerPsvBackupPlanApply(&lPsvStSettings, &lBackupPlan);
+        breathSchedulerPsvBackupPlanApply(&lPlan, lPsvStSettings.pressureSupportCmh2o,
+                                          lPsvStSettings.apneaInspTimeMs, &lBackupPlan);
         lBackupPlanValid = true;
     }
     lPlan.limitSettings = lLimitSettings;
@@ -511,6 +506,7 @@ int8_t breathSchedulerSettingsUpdate(eVentMode mode)
     }
     repRtosEnterCritical();
     lPlan.configurationSequence = gBreathPlanTemplate.configurationSequence + 1U;
+    lBackupPlan.configurationSequence = lPlan.configurationSequence;
     breathSchedulerVolumeReset();
     gBreathPlanTemplate = lPlan;
     gBreathBackupPlanTemplate = lBackupPlan;
@@ -557,6 +553,9 @@ int8_t breathSchedulerNextPlanGet(eBreathTriggerReason triggerReason, stBreathPl
     gBreathSequence++;
     plan->sequence = gBreathSequence;
     plan->triggerReason = triggerReason;
+    if ((plan->mode == VENT_MD_CPAP_PSV) || (plan->mode == VENT_MD_PSV_ST)) {
+        plan->pressureLimitCmh2o = plan->limitSettings->pressureHigh;
+    }
     if (plan->mode == VENT_MD_VAC) {
         if (gBreathVolumeFeedback.pressureLimitCmh2o != plan->limitSettings->pressureHigh) {
             breathSchedulerVolumeReset();

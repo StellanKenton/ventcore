@@ -2274,6 +2274,8 @@ void ProtocolDetectDataPreProcess(uint8_t instance, uint32_t taskCounter)
 /* Map implemented alarm states to the existing wire event IDs. */
 float ProtocolPhysAlarmDataGet(uint8_t event) {
     switch (event) {
+        case APNEA_ALARM:
+            return physAlarmManagerStateGet(PHYS_ALARM_APNEA);
         case AIRWAY_PRESSURE_HIGH:
             return physAlarmManagerStateGet(PHYS_ALARM_AIRWAY_PRESSURE_HIGH);
         case AIRWAY_PRESSURE_LOW:

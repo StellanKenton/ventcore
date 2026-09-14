@@ -1,7 +1,7 @@
 /************************************************************************************
 * @file     : apneaengine.h
 * @brief    : Spontaneous ventilation apnea engine interface.
-* @details  : Detects missing patient breaths and requests PSV-ST backup breaths.
+* @details  : Detects missing patient breaths and requests PSV/PSV-ST backup breaths.
 ***********************************************************************************/
 #ifndef USER_APP_VENTLOGIC_APNEAENGINE_H
 #define USER_APP_VENTLOGIC_APNEAENGINE_H
@@ -32,7 +32,7 @@ typedef struct stApneaEngine {
 /** Initialize apnea detection and backup scheduling. */
 void apneaEngineInit(void);
 
-/** Detect apnea and request a timed PSV-ST backup breath when configured. */
+/** Detect apnea and request a timed PSV/PSV-ST backup breath when configured. */
 void apneaEngineProcess(uint32_t nowMs);
 
 /** Return the current apnea monitoring state. */

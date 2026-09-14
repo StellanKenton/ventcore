@@ -235,8 +235,8 @@ static void testAlarmBitfields(void) {
 static void testPhysAlarms(void) {
     const ePhysAlarmType lTypes[] = {PHYS_ALARM_AIRWAY_PRESSURE_HIGH,
         PHYS_ALARM_AIRWAY_PRESSURE_LOW, PHYS_ALARM_EXHALED_VOLUME_HIGH,
-        PHYS_ALARM_EXHALED_VOLUME_LOW};
-    const uint32_t lMasks[] = {1U, 2U, 16U, 32U};
+        PHYS_ALARM_EXHALED_VOLUME_LOW, PHYS_ALARM_APNEA};
+    const uint32_t lMasks[] = {1U, 2U, 16U, 32U, 256U};
     uint8_t lExpected[32];
     ProtocolProcessInit(0);
     for (unsigned lIndex = 0U; lIndex < sizeof(lTypes) / sizeof(lTypes[0]); lIndex++) {
@@ -704,8 +704,6 @@ int main(void) {
     assert(GetVentLimitSettings()->frequencyHigh == 40U);
     assert(GetVentLimitSettings()->frequencyLow == 8U);
     assert(GetVentLimitSettings()->apneaTimeAlarm == 15U);
-    assert(GetVentCpapPsvSettings()->apneaAlarmTimeMs == 15000U);
-    assert(GetVentLimitSettings()->apneaTimeAlarm == 15U);
     assert(GetVentLimitSettings()->pressureHigh == 55.0f);
     /* Corrupt alarm frames must leave cached and applied limits intact. */
     length = frame(bytes, 0xAC, 1, 600, 2, 1); bytes[length - 1] ^= 1U;
@@ -722,6 +720,12 @@ int main(void) {
     assert(GetVentLimitSettings()->apneaTimeAlarm == 15U);
     send(0xAC, 1, 600, 2, 1);
     assert(GetVentLimitSettings()->pressureHigh == 60.0f);
+    send(0xAF, 0x0C, 23, 1, 0);
+    send(0xAF, 0x16, 18, 1, 0);
+    send(0xAF, 0x19, 125, 2, 2);
+    assert(GetVentCpapPsvSettings()->apneaPressureCmh2o == 23.0f);
+    assert(GetVentCpapPsvSettings()->apneaRateBpm == 18.0f);
+    assert(GetVentCpapPsvSettings()->apneaInspTimeMs == 1250U);
     send(0xAF, 0x17, 125, 2, 2); assert(GetVentVacSettings()->inspTimeMs == 1250);
     send(0xAF, 0x12, (uint16_t)-20, 2, 1); assert(GetVentVacSettings()->pressureTriggerCmh2o == -2.0f);
     send(0xAE, 0, 1, 1, 0); assert(gRunning && gMode == VENT_MD_VAC);

@@ -23,6 +23,7 @@ typedef enum {
     PHYS_ALARM_EXHALED_VOLUME_HIGH,
     PHYS_ALARM_EXHALED_VOLUME_LOW,
 
+    PHYS_ALARM_APNEA,
     PHYS_ALARM_COUNT,
 } ePhysAlarmType;
 
@@ -34,6 +35,9 @@ typedef struct stPhysAlarmRegistration {
     pfPhysAlarmDetector detector;
     bool active;
 } stPhysAlarmRegistration;
+
+/** Read the apnea engine alarm from AlarmTask, including active backup. */
+bool physAlarmApneaDetect(uint32_t nowMs);
 
 /** Initialize all registered physiological alarms. */
 void physAlarmManagerInit(void);

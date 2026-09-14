@@ -21,6 +21,7 @@ HARNESS = r'''
 #include "calibtrans.h"
 #include "rtos.h"
 #include "physalarmmanager.h"
+#include "apneaengine.h"
 #include "techalarmmanager.h"
 
 static float gData[CONTROL_DATA_COUNT];
@@ -50,6 +51,8 @@ int8_t calibtransPrsSpeed(float pressure, float *speed) {
 }
 void repRtosEnterCritical(void) {}
 void repRtosExitCritical(void) {}
+eApneaEngineState apneaEngineStateGet(void) { return APNEA_ENGINE_IDLE; }
+uint8_t breathSchedulerRunningGet(void) { return 1U; }
 void breathSchedulerVolumeReset(void) {}
 void breathSchedulerVolumeFeedback(const stBreathPlan *plan, float vtiMl, uint8_t valid) {
     (void)plan;
@@ -733,6 +736,7 @@ def main():
                    *[f"-I{ROOT / path}" for path in includes], str(harness),
                    str(ROOT / "user/app/ventlogic/monitorengine.c"),
                    str(ROOT / "user/app/physalarm/physalarmvent.c"),
+                   str(ROOT / "user/app/physalarm/physalarmapnea.c"),
                    str(ROOT / "user/app/physalarm/physalarmmanager.c"),
                    str(ROOT / "user/app/techalarm/techalarmmanager.c"),
                    str(ROOT / "user/app/techalarm/techphys.c"),
