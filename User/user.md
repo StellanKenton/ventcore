@@ -109,7 +109,7 @@ PAC 压力控制不使用报警高限 `pressureHigh` 限制患者压力参考值
 
 `MONITOR_HMI_MV_TOTAL` 按同一完整周期的呼出 VTe（mL）×60/实测周期时长（ms）计算，单位 L/min，包含自主和机控呼吸，不另加跨周期平滑。`MONITOR_HMI_LEAK_PERCENT = MONITOR_HMI_MV_LEAK / (MONITOR_HMI_MV_TOTAL + MONITOR_HMI_MV_LEAK) × 100`，随完成结果发布。容量采样或泄漏估计无效、分母非有限或为零时，泄漏率置零且不上传；有效的零泄漏上传 0%。MCM `0x0C` 使用一字节整数百分比、scale=0，截断小数并限幅 0..100；沿用逐呼吸上传与队列重试。停止、调零时监测快照清零。
 
-`MONITOR_HMI_RES_INSP = 60 × (Ppeak - PEEP) / Qinsppeak`，`MONITOR_HMI_RES_EXP = 60 × (Pplat - PEEP) / Qexppeak`，流量使用近端 `PAT_REAL_FLOW`（L/min），呼气峰值取呼气阶段负流量最大绝对值；PEEP 沿用完成结果的呼气末患者压力。两项随完整呼吸结算并保持到下次发布，吸气和呼气公式均乘 60，将 L/min 换算为 L/s。非有限采样、缺少对应压力、零峰值或负/非有限计算结果时置零且不上传；停止、调零时清零。CommTask 从同一 `stBreathResult` 快照上传 MCM `0x16` / `0x17`，沿用无符号 16 位、scale=0 的协议定义（截断小数、限幅 0..65535）及队列重试。主机回归覆盖公式、峰值相位隔离、跨周期清零、无平台压、异常采样和报文编码。
+`MONITOR_HMI_RES_INSP = 60 × (Ppeak - PEEP) / Qinsppeak`，`MONITOR_HMI_RES_EXP = 60 × (Pplat - PEEP) / Qexppeak`，流量使用近端 `PAT_REAL_FLOW`（L/min），呼气峰值取呼气阶段负流量最大绝对值；PEEP 使用完成结果的呼气末五点滑动平均压力。两项随完整呼吸结算并保持到下次发布，吸气和呼气公式均乘 60，将 L/min 换算为 L/s。非有限采样、缺少对应压力、零峰值或负/非有限计算结果时置零且不上传；停止、调零时清零。CommTask 从同一 `stBreathResult` 快照上传 MCM `0x16` / `0x17`，沿用无符号 16 位、scale=0 的协议定义（截断小数、限幅 0..65535）及队列重试。主机回归覆盖公式、峰值相位隔离、跨周期清零、无平台压、异常采样和报文编码。
 
 `MONITOR_HMI_C_DYNC = VTi / (Ppeak - PEEP)`，`MONITOR_HMI_C_STAT = VTe / (Pplat - PEEP)`，单位 mL/cmH₂O；使用同一完整呼吸的容量、压力和呼气末 PEEP，通过 `stBreathResult.complianceDynamic` / `complianceStatic` 同步发布并保持到下次结算。压差非正或非有限、容量为负、缺少对应有效压力/容量或周期采样异常时置零且不上传；停止、调零时清零。MCM 静态顺应性为 `0x18`，动态顺应性为 `0x19`，均使用无符号 16 位、数值 ×10、scale=1，沿用逐呼吸上传和队列重试；主机回归覆盖公式、无平台压、零/负压差、异常采样、快照保持、清零和报文缩放。
 
@@ -132,3 +132,9 @@ PSV-ST 的精简结构体使用 `apneaInspTimeMs` / `apneaRateBpm` 定义后备�
 MCM 报警每 500 ms 全量发送，不做变化抑制，也不锁存已恢复的短时事件。`0xAD` 固定 4 字节；`0xAB` 每次包含 SubId 0..4，宽度依次为 4、4、1、1、1 字节，包括全零模块与校准模块。未实现项及保留位为 0。已实现的气道压力高/低、潮气量高/低分别对应 `0xAD` bit 0、1、4、5；PEEP 高/低、持续气道压过高对应 `0xAB/0` bit 0、1、4。氧气供应不足预留映射至 `0xAB/1` bit 30，`0xAB/0` bit 12 保持保留。PEEP/CPAP 检测迁移至 `app/techalarm/techphys.c`，原阈值和恢复时序保持一致。
 
 技术报警与生理报警由 AlarmTask 每 10 ms 使用同一 nowMs 分别调用 manager。`techAlarmManagerInit()` 在处理开始前初始化，`Process()` 及各检测器仅由 AlarmTask 调用，`StateGet()` / `SnapshotGet()` 允许其他任务通过临界区读取，不用于 ISR。注册表显式维护 enabled、检测函数和协议模块/位号；未知报警类型返回 false，空快照指针忽略。PEEP 高/低和 CPAP 默认启用，其余检测器仍为关闭的占位项，不根据现有硬件数据新增判断。氧气供应不足属于 `techdevice`，保持 SubId 1 bit 30。新增检测应在对应分组实现，并在 `techalarmmanager.c` 注册、设置启用标志及位号；宏和运行类型位于对应头文件。协议继续通过 `physalarm/alarmbits.h` 共享位图定义。
+
+PEEP 动态监测在呼气阶段保留最近 5 个有限的 `PAT_REAL_PRS` 样本，每 6 ms 发布均值；不足 5 点按实际点数平均，无有限压力时结果为 0 且无效。`MONITOR_DYN_PEEP`、`MONITOR_DYN_PEEP_VALID` 及报警触发/恢复逻辑保持实时语义，`stBreathResult.peepCmh2o` 在呼气结算时保存最终均值，供气阻/顺应性计算。
+
+显示独立使用 `MONITOR_HMI_PEEP` / `MONITOR_HMI_PEEP_VALID`：PAC 仅在呼气结束、下一吸气开始前更新，周期内保持上一结算值。CPAP/PSV 与 PSV-ST 在呼气捕获完成后，连续 17 个有限压力点（约 100 ms）保持在跨度 0.2 cmH₂O 内后，以最近 5 点均值持续刷新；超出该稳定区间则从当前点重新确认，包括首次触发前及长时间等待；泄压、非稳定窗口和吸气阶段保持上一显示值，呼气结算不以触发努力期间的压力覆盖它。捕获有超时路径，因此不能只凭 ready 判定稳定；稳定窗口不按设定 PEEP 限幅，真实稳定高压仍可显示。其他模式沿用实时窗口显示。首次有效显示前不上传 PEEP；停止、调零或计划无效时清除显示和有效位。显示值及有效位通过 RTOS 临界区同步发布，协议按原发送节拍读取该快照，不依赖完整呼吸序号。`vt peep` 只读输出同一时刻的计划、相位、ready、患者压力、动态 PEEP、显示 PEEP 及有效位，压力字段放大 100 倍，供 Device Tool RTT 台架核对。
+
+2026-09-14 PEEP 显示时序模拟肺复测：最终固件经 Device Tool 构建、烧录校验及 RTT 采集。PAC 使用当前本机参数 PEEP 5、Delta-P 25、Ti 800 ms、15/min，约 71 s 的 100 ms 诊断快照中显示为 4.61..4.75 cmH₂O，显示变化仅出现在新吸气计划，未记录到同一周期内跳变；56 个呼气动态压力不低于 6 的快照仍保持显示低于 5。PSV 首次触发前等待可持续刷新，10 次人工辅助触发均未记录到吸气内或未捕获呼气内的显示变化；含人工扰动的显示总范围为 4.45..5.82，最后回到 4.75。初版仅 5 点稳定确认曾被触发扰动的短暂平台误导，最终改为连续 17 点确认。原始日志、源码/固件 SHA-256 和汇总见 `build/peep_timing/`；`rtt_run1.log` 为初版，`rtt.log` 为最终版，停止命令已确认。主机监测、协议及真实调度/相位回归均通过。日志从启动阶段起另有 SFM3119 读取错误，未在本次修复中处理；本记录只验证压力显示时序，不能作为流量测量或整机正常的验收。未采集实体屏幕及独立压力分析仪数据。Device Tool 普通复位落入旧的 0x08000000 启动向量，实测由用户辅助调试启动 0x08010000 应用，未修改引导区。

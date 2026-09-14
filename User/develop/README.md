@@ -7,6 +7,17 @@ target board.
 
 ## Files
 
+- `ventcore.jdebug`: Ozone application debug project for `build/Debug/ventcore.elf`.
+  Builds and normal flashing/reset/RTT operations use Device Tool as above.
+  Ozone reset/download callbacks initialize SP, PC and VTOR from the application
+  vectors at `0x08010000`; do not leave these callbacks empty. This avoids running
+  a stale image at `0x08000000`. Reset strategy 0 uses SYSRESETREQ on this target;
+  the reset-pin strategy did not clear the captured HardFault on the current board.
+  It does not install or repair a bootloader:
+  standalone power-on/reset still requires a valid bootloader that hands off to
+  `0x08010000`. Use this project for application startup debugging; attach to an
+  already running target when the bootloader handoff itself must be inspected.
+
 - `test_trigger.py`: host regression for the production trigger engine. Run
   `py -3 user/develop/test_trigger.py`. Covers passive negative-flow recovery,
   positive bias flow, real flow/pressure efforts, consecutive confirmation,
@@ -97,7 +108,7 @@ target board.
   Run `py -3 user/develop/test_monitor_leak.py` with native GCC/Clang. Covers known
   leakage, positive expiratory proximal flow, signed diagnostics, invalid samples,
   stop/restart, mid-breath re-zeroing, incomplete cycles and compensation limits.
-  Also covers dynamic PEEP pressure/flow validity, five-point windows, PEEP alarm
+  Also covers dynamic PEEP sliding five-point pressure windows, PAC completed-expiration display, PSV/ST stable-window display during trigger waits, inspiration hold, short windows and invalid pressure, PEEP alarm
   registration, inspiration-only triggering, strict thresholds and 200 ms recovery.
 - `device_tool_config.json`: per-computer tool paths and target settings.
 - `test_flow_pause.py`: also verifies PAC pressure targets ignore alarm-high changes while PSV/ST retain pressure caps. Native host regression for VAC pause entry and zero-flow
@@ -110,6 +121,10 @@ target board.
 - `vent_test_gui.py`: graphical 25-group PEEP/Delta-P test collector. It updates
   the scheme every 10 seconds while polling the incremental `vt status` data
   every 250 ms for one continuous 250-second run, then exports one CSV file.
+
+`vt peep` prints a compact, read-only PEEP snapshot through Device Tool RTT: time,
+plan sequence, mode, phase, capture readiness, patient/dynamic/display pressure
+(in hundredths of cmH2O), and independent display validity.
 
 ## Computer Matching
 

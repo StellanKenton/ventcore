@@ -25,10 +25,8 @@ extern "C" {
 #define MONITOR_FLOW_SAMPLE_VOLUME_ML            0.1F
 #define MONITOR_PLATEAU_END_WINDOW_MS             100U
 #define MONITOR_DYN_PEEP_WINDOW_SIZE                5U
-#define MONITOR_DYN_PEEP_SAMPLE_INTERVAL_S          0.006F
-#define MONITOR_DYN_PEEP_SLOPE_LIMIT                5.0F
-#define MONITOR_DYN_PEEP_FLOW_LIMIT_LPM             1.0F
-#define MONITOR_DYN_PEEP_FLOW_SLOPE_LIMIT           0.5F
+#define MONITOR_HMI_PEEP_STABLE_RANGE_CMH2O         0.2F
+#define MONITOR_HMI_PEEP_STABLE_SAMPLE_COUNT        17U
 #define MONITOR_LEAK_COEFFICIENT_MIN               0.0F
 #define MONITOR_LEAK_COEFFICIENT_MAX               50.0F
 #define MONITOR_LEAK_PRESSURE_SUM_MIN               0.001F
@@ -64,14 +62,15 @@ typedef enum {
     MONITOR_LEAK_BALANCE_COEFFICIENT,
     /* Completed-window numeric validity, not proof of lung volume balance. */
     MONITOR_LEAK_VALID,
-    /* Completed expiration: latest five valid points, otherwise its minimum. */
+    /* Live expiration mean of up to five points; held during inspiration. */
     MONITOR_DYN_PEEP,
+    MONITOR_DYN_PEEP_VALID,
     /* Stable numeric snapshot of the latest completed breath. */
     MONITOR_HMI_TIDA_VOL_INSP,
     MONITOR_HMI_TIDA_VOL_EXP,
     MONITOR_HMI_PPEAK,
     MONITOR_HMI_PLATEAU_PRS,
-    MONITOR_HMI_PEEP,
+    MONITOR_HMI_PEEP, /* PAC: completed expiration; PSV/ST: stable expiration window. */
     MONITOR_HMI_PEAK_INSP_FLOW,
     MONITOR_HMI_INSP_TIME_MS,
     MONITOR_HMI_CYCLE_TIME_MS,
@@ -85,6 +84,7 @@ typedef enum {
     MONITOR_HMI_RES_EXP,
     MONITOR_HMI_C_DYNC,
     MONITOR_HMI_C_STAT,
+    MONITOR_HMI_PEEP_VALID,
     MONITOR_DATA_COUNT,
 } eMonitorDataType;
 
@@ -132,12 +132,11 @@ typedef struct stMonitorEngine {
     uint32_t meanPressureSampleCount;
     uint8_t meanPressureInvalid;
     float peepSamplesCmh2o[MONITOR_DYN_PEEP_WINDOW_SIZE];
-    float peepPreviousCmh2o;
-    float peepPreviousFlowLpm;
-    float peepMinimumCmh2o;
     uint8_t peepSampleCount;
     uint8_t peepSampleIndex;
-    uint8_t peepPreviousValid;
+    uint8_t peepReadySampleCount;
+    float peepStableMinimumCmh2o;
+    float peepStableMaximumCmh2o;
     float minuteLeakSumLpm;
     uint32_t minuteLeakSampleCount;
     uint8_t minuteLeakInvalid;

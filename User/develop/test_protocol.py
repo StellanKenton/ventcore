@@ -328,11 +328,42 @@ int8_t breathSchedulerStart(eVentMode mode) {
 int8_t breathSchedulerStop(void) { gRunning = 0; return 1; }
 ePhaseControllerState phaseControllerStateGet(void) { return PHASE_INSP; }
 float controlDataGet(ControlData_Index_EnumDef index) { return index == PAT_REAL_PRS ? 12.3f : -25.0f; }
-float monitorEngineGet(eMonitorDataType type) { return 456.0f; }
+static float gPeepValid;
+static float gPeep;
+float monitorEngineGet(eMonitorDataType type) {
+    if (type == MONITOR_HMI_PEEP_VALID) { return gPeepValid; }
+    if (type == MONITOR_HMI_PEEP) { return gPeep; }
+    return 456.0f;
+}
 static stBreathResult gBreathResult;
 int8_t monitorEngineBreathResultGet(stBreathResult *result) {
     *result = gBreathResult;
     return MONITOR_ENGINE_SUCCESS;
+}
+
+/** PEEP updates without any complete breath or changed sequence. */
+static void testLivePeep(void) {
+    uint8_t lExpected[32];
+    gRunning = 1U;
+    gPeepValid = 1.0F;
+    ProtocolProcessInit(0);
+    for (uint32_t lIndex = 0U; lIndex < 3U; lIndex++) {
+        gPeep = 5.0F + (float)lIndex;
+        SubIDCache_t lItem = {.m_id = 0x04U, .m_value = (uint16_t)(gPeep * 10.0F),
+            .m_size = E_PEEP_SIZE, .m_scale = E_PEEP_SCALE};
+        uint16_t lLength = ProtocolCreateSubIdData(lExpected, PROTOCOL_ADDR_VCM_TO_MCM,
+            false, PROTOCOL_TX_MID_MONITOR_PARAMS, (const uint8_t *)&lItem, 1U);
+        gTxSize = 0U;
+        ProtocolDetectDataPreProcess(0, 50U);
+        ProtocolSchedulerProcess(0);
+        assert(gTxSize == lLength && memcmp(gTx, lExpected, lLength) == 0);
+    }
+    gPeepValid = 0.0F;
+    gTxSize = 0U;
+    ProtocolDetectDataPreProcess(0, 50U);
+    ProtocolSchedulerProcess(0);
+    assert(gTxSize == 0U);
+    gRunning = 0U;
 }
 
 /** Verify completed mean pressure reaches the wire with signed scaling. */
@@ -632,6 +663,7 @@ static void testHeartbeat(void) {
 }
 
 int main(void) {
+    testLivePeep();
     uint8_t bytes[256];
     ProtocolPacket_t packet;
     assert(ProtocolProcessInit(0) == PROTOCOL_OK);

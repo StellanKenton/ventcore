@@ -180,62 +180,82 @@ static void monitorEnginePlateauPressureProcess(uint32_t nowMs)
         (float)gMonitorEngine.plateauPressureSampleCount);
 }
 
-/** Retain the latest valid expiration pressures and the expiration minimum. */
-static void monitorEngineDynamicPeepAccumulate(void) {
-    float lPressure = controlDataGet(PAT_REAL_PRS);
-    float lFlow = controlDataGet(PAT_REAL_FLOW);
-    float lSlope;
-    float lFlowSlope;
-
-    if (monitorEngineFinite(lPressure) == 0U) {
-        gMonitorEngine.peepPreviousValid = 0U;
-        return;
-    }
-    if (lPressure < gMonitorEngine.peepMinimumCmh2o) {
-        gMonitorEngine.peepMinimumCmh2o = lPressure;
-    }
-    if (monitorEngineFinite(lFlow) == 0U) {
-        gMonitorEngine.peepPreviousValid = 0U;
-        return;
-    }
-    lSlope = (lPressure - gMonitorEngine.peepPreviousCmh2o) /
-             MONITOR_DYN_PEEP_SAMPLE_INTERVAL_S;
-    lFlowSlope = (lFlow - gMonitorEngine.peepPreviousFlowLpm) /
-                 MONITOR_DYN_PEEP_SAMPLE_INTERVAL_S;
-    if ((gMonitorEngine.peepPreviousValid != 0U) &&
-        (lSlope > -MONITOR_DYN_PEEP_SLOPE_LIMIT) &&
-        (lSlope < MONITOR_DYN_PEEP_SLOPE_LIMIT) &&
-        (lFlow >= -MONITOR_DYN_PEEP_FLOW_LIMIT_LPM) &&
-        (lFlow <= MONITOR_DYN_PEEP_FLOW_LIMIT_LPM) &&
-        (lFlowSlope > -MONITOR_DYN_PEEP_FLOW_SLOPE_LIMIT) &&
-        (lFlowSlope < MONITOR_DYN_PEEP_FLOW_SLOPE_LIMIT)) {
-        gMonitorEngine.peepSamplesCmh2o[gMonitorEngine.peepSampleIndex] = lPressure;
-        gMonitorEngine.peepSampleIndex = (uint8_t)((gMonitorEngine.peepSampleIndex + 1U) %
-                                                  MONITOR_DYN_PEEP_WINDOW_SIZE);
-        if (gMonitorEngine.peepSampleCount < MONITOR_DYN_PEEP_WINDOW_SIZE) {
-            gMonitorEngine.peepSampleCount++;
-        }
-    }
-    /* Always compare adjacent samples, including rejected finite measurements. */
-    gMonitorEngine.peepPreviousCmh2o = lPressure;
-    gMonitorEngine.peepPreviousFlowLpm = lFlow;
-    gMonitorEngine.peepPreviousValid = 1U;
+/** Clear the expiration window after publishing its completed value. */
+static void monitorEngineDynamicPeepReset(void) {
+    (void)memset(gMonitorEngine.peepSamplesCmh2o, 0, sizeof(gMonitorEngine.peepSamplesCmh2o));
+    gMonitorEngine.peepSampleCount = 0U;
+    gMonitorEngine.peepSampleIndex = 0U;
+    gMonitorEngine.peepReadySampleCount = 0U;
 }
 
-/** Publish the latest five-point average, or the minimum for a short window. */
+/** Retain the latest five finite expiration pressures without flow gating. */
+static void monitorEngineDynamicPeepAccumulate(void) {
+    float lPressure = controlDataGet(PAT_REAL_PRS);
+
+    if (monitorEngineFinite(lPressure) == 0U) {
+        return;
+    }
+    gMonitorEngine.peepSamplesCmh2o[gMonitorEngine.peepSampleIndex] = lPressure;
+    gMonitorEngine.peepSampleIndex = (uint8_t)((gMonitorEngine.peepSampleIndex + 1U) %
+                                              MONITOR_DYN_PEEP_WINDOW_SIZE);
+    if (gMonitorEngine.peepSampleCount < MONITOR_DYN_PEEP_WINDOW_SIZE) {
+        gMonitorEngine.peepSampleCount++;
+    }
+}
+
+/** Publish the window mean; short expirations average only available points. */
 static void monitorEngineDynamicPeepCalculate(void) {
     float lPressure = 0.0F;
     uint8_t lIndex;
 
-    if (gMonitorEngine.peepSampleCount == MONITOR_DYN_PEEP_WINDOW_SIZE) {
-        for (lIndex = 0U; lIndex < gMonitorEngine.peepSampleCount; lIndex++) {
-            lPressure += gMonitorEngine.peepSamplesCmh2o[lIndex];
-        }
-        lPressure /= (float)gMonitorEngine.peepSampleCount;
-    } else if (gMonitorEngine.peepMinimumCmh2o != FLT_MAX) {
-        lPressure = gMonitorEngine.peepMinimumCmh2o;
+    for (lIndex = 0U; lIndex < gMonitorEngine.peepSampleCount; lIndex++) {
+        lPressure += gMonitorEngine.peepSamplesCmh2o[lIndex] /
+                     (float)gMonitorEngine.peepSampleCount;
     }
     (void)monitorEngineSet(MONITOR_DYN_PEEP, lPressure);
+    (void)monitorEngineSet(MONITOR_DYN_PEEP_VALID, (float)(gMonitorEngine.peepSampleCount != 0U));
+}
+
+/** Keep PAC latched; require about 100 ms of quiet pressure for PSV/ST display. */
+static void monitorEnginePeepDisplayProcess(eVentMode mode) {
+    float lPressure = controlDataGet(PAT_REAL_PRS);
+
+    if (mode == VENT_MD_PAC) {
+        return;
+    }
+    if ((mode == VENT_MD_CPAP_PSV) || (mode == VENT_MD_PSV_ST)) {
+        if ((phaseControllerExpirationReadyGet() == 0U) ||
+            (monitorEngineFinite(lPressure) == 0U)) {
+            gMonitorEngine.peepReadySampleCount = 0U;
+            return;
+        }
+        if ((gMonitorEngine.peepReadySampleCount == 0U) ||
+            (lPressure < gMonitorEngine.peepStableMinimumCmh2o)) {
+            gMonitorEngine.peepStableMinimumCmh2o = lPressure;
+        }
+        if ((gMonitorEngine.peepReadySampleCount == 0U) ||
+            (lPressure > gMonitorEngine.peepStableMaximumCmh2o)) {
+            gMonitorEngine.peepStableMaximumCmh2o = lPressure;
+        }
+        /* Capture can time out; short plateaus during a trigger are not stable. */
+        if ((gMonitorEngine.peepStableMaximumCmh2o -
+             gMonitorEngine.peepStableMinimumCmh2o) >
+            MONITOR_HMI_PEEP_STABLE_RANGE_CMH2O) {
+            gMonitorEngine.peepStableMinimumCmh2o = lPressure;
+            gMonitorEngine.peepStableMaximumCmh2o = lPressure;
+            gMonitorEngine.peepReadySampleCount = 0U;
+        }
+        if (gMonitorEngine.peepReadySampleCount < MONITOR_HMI_PEEP_STABLE_SAMPLE_COUNT) {
+            gMonitorEngine.peepReadySampleCount++;
+        }
+        if (gMonitorEngine.peepReadySampleCount < MONITOR_HMI_PEEP_STABLE_SAMPLE_COUNT) {
+            return;
+        }
+    }
+    repRtosEnterCritical();
+    gMonitorData[MONITOR_HMI_PEEP] = monitorEngineGet(MONITOR_DYN_PEEP);
+    gMonitorData[MONITOR_HMI_PEEP_VALID] = monitorEngineGet(MONITOR_DYN_PEEP_VALID);
+    repRtosExitCritical();
 }
 
 /** Convert the shared phase to the local monitoring state. */
@@ -267,7 +287,7 @@ static void monitorEngineMeanPressureAccumulate(void) {
 /** Publish the breath that ended immediately before a new inspiration. */
 static void monitorEngineBreathResultPublish(uint32_t nowMs)
 {
-    float lPeepPressure = controlDataGet(PAT_REAL_PRS);
+    float lPeepPressure = monitorEngineGet(MONITOR_DYN_PEEP);
     stBreathResult lResult = {0};
 
     lResult.sequence = gMonitorEngine.breathPlan.sequence;
@@ -315,7 +335,8 @@ static void monitorEngineBreathResultPublish(uint32_t nowMs)
         (monitorEngineFinite(lResult.plateauPressureCmh2o) != 0U)) {
         lResult.validMask |= BREATH_RESULT_VALID_PLATEAU_PRESSURE;
     }
-    if (monitorEngineFinite(lResult.peepCmh2o) != 0U) {
+    if ((gMonitorEngine.peepSampleCount != 0U) &&
+        (monitorEngineFinite(lResult.peepCmh2o) != 0U)) {
         lResult.validMask |= BREATH_RESULT_VALID_PEEP;
     }
     if (monitorEngineFinite(lResult.peakInspiratoryFlowLpm) != 0U) {
@@ -405,7 +426,11 @@ static void monitorEngineBreathResultPublish(uint32_t nowMs)
     gMonitorData[MONITOR_HMI_TIDA_VOL_EXP] = lResult.vteMl;
     gMonitorData[MONITOR_HMI_PPEAK] = lResult.ppeakCmh2o;
     gMonitorData[MONITOR_HMI_PLATEAU_PRS] = lResult.plateauPressureCmh2o;
-    gMonitorData[MONITOR_HMI_PEEP] = lResult.peepCmh2o;
+    if ((lResult.mode != VENT_MD_CPAP_PSV) && (lResult.mode != VENT_MD_PSV_ST)) {
+        gMonitorData[MONITOR_HMI_PEEP] = lResult.peepCmh2o;
+        gMonitorData[MONITOR_HMI_PEEP_VALID] =
+            (float)((lResult.validMask & BREATH_RESULT_VALID_PEEP) != 0U);
+    }
     gMonitorData[MONITOR_HMI_PEAK_INSP_FLOW] = lResult.peakInspiratoryFlowLpm;
     gMonitorData[MONITOR_HMI_INSP_TIME_MS] = (float)lResult.inspiratoryTimeMs;
     gMonitorData[MONITOR_HMI_CYCLE_TIME_MS] = (float)lResult.cycleTimeMs;
@@ -427,6 +452,7 @@ static void monitorEngineBreathFinish(uint32_t nowMs) {
         monitorEngineLeakCoefficientCalculate();
         monitorEngineDynamicPeepCalculate();
         monitorEngineBreathResultPublish(nowMs);
+        monitorEngineDynamicPeepReset();
         gMonitorEngine.breathCompleted = 1U;
     }
 }
@@ -468,10 +494,7 @@ static int8_t monitorEngineBreathStart(uint32_t nowMs)
     gMonitorEngine.meanPressureSumCmh2o = 0.0F;
     gMonitorEngine.meanPressureSampleCount = 0U;
     gMonitorEngine.meanPressureInvalid = 0U;
-    gMonitorEngine.peepMinimumCmh2o = FLT_MAX;
-    gMonitorEngine.peepPreviousValid = 0U;
-    gMonitorEngine.peepSampleCount = 0U;
-    gMonitorEngine.peepSampleIndex = 0U;
+    monitorEngineDynamicPeepReset();
     gMonitorEngine.minuteLeakSumLpm = 0.0F;
     gMonitorEngine.minuteLeakSampleCount = 0U;
     gMonitorEngine.minuteLeakInvalid = 0U;
@@ -649,9 +672,12 @@ static void monitorEngineBreathProcess(uint32_t nowMs)
         }
         monitorEngineLeakAccumulate(controlDataGet(PAT_REAL_FLOW));
         monitorEngineMeanPressureAccumulate();
-        if (lPhase == PHASE_EXP) {
-            monitorEngineDynamicPeepAccumulate();
-        }
+    }
+    /* Include PSV waiting for its first trigger; inspiration holds this value. */
+    if ((lPhase == PHASE_EXP) && (gMonitorEngine.breathCompleted == 0U)) {
+        monitorEngineDynamicPeepAccumulate();
+        monitorEngineDynamicPeepCalculate();
+        monitorEnginePeepDisplayProcess(lPlan.mode);
     }
 }
 

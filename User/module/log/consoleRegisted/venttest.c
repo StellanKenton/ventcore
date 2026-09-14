@@ -19,6 +19,7 @@
 #include "log.h"
 #include "monitordata.h"
 #include "monitorengine.h"
+#include "controldata.h"
 #include "phasecontroller.h"
 #include "rtos.h"
 
@@ -92,7 +93,35 @@ static bool ventTestUnsignedParse(const char **arguments, uint16_t *value)
 /** Show the supported ventilation test commands. */
 static void ventTestUsageShow(void)
 {
-    LOG_I(gVentTestTag, "usage: vt mode <x> | run <0|1> | pac | vac | psv | psvst | stop | set <peep> <delta> | volume <peep> <ml> [pause_pct [ti_ms rate]] | trigger off | trigger pressure <cmh2o100> | trigger flow <lpm100> | status");
+    LOG_I(gVentTestTag, "usage: vt mode <x> | run <0|1> | pac | vac | psv | psvst | stop | set <peep> <delta> | volume <peep> <ml> [pause_pct [ti_ms rate]] | trigger off | trigger pressure <cmh2o100> | trigger flow <lpm100> | peep | status");
+}
+
+/** Snapshot display timing without uploading the waveform buffer. */
+static void ventTestPeepShow(void) {
+    stBreathPlan lPlan = {0};
+    uint32_t lNowMs;
+    ePhaseControllerState lPhase;
+    uint8_t lReady;
+    float lPressure;
+    float lDynamic;
+    float lDisplay;
+    float lValid;
+
+    repRtosEnterCritical();
+    lNowMs = repRtosGetTickMs();
+    (void)phaseControllerActivePlanGet(&lPlan);
+    lPhase = phaseControllerStateGet();
+    lReady = phaseControllerExpirationReadyGet();
+    lPressure = controlDataGet(PAT_REAL_PRS);
+    lDynamic = monitorEngineGet(MONITOR_DYN_PEEP);
+    lDisplay = monitorEngineGet(MONITOR_HMI_PEEP);
+    lValid = monitorEngineGet(MONITOR_HMI_PEEP_VALID);
+    repRtosExitCritical();
+    LOG_R("VT_PEEP,time_ms=%lu,sequence=%lu,mode=%u,phase=%u,ready=%u,pressure100=%ld,dynamic100=%ld,display100=%ld,valid=%u",
+          (unsigned long)lNowMs, (unsigned long)lPlan.sequence,
+          (unsigned int)lPlan.mode, (unsigned int)lPhase, (unsigned int)lReady,
+          (long)ventTestCenti(lPressure), (long)ventTestCenti(lDynamic),
+          (long)ventTestCenti(lDisplay), (unsigned int)(lValid != 0.0F));
 }
 
 /** Upload only samples recorded since the previous status command. */
@@ -258,6 +287,10 @@ static eConsoleCommandResult ventTestConsoleCommand(const char *arguments)
                (*ventTestSkipSpaces(arguments) == '\0')) {
         lStatus = breathSchedulerTestRunSet(0U);
         LOG_I(gVentTestTag, "stop status=%d", (int)lStatus);
+    } else if (ventTestTokenMatch(&arguments, "peep") &&
+               (*ventTestSkipSpaces(arguments) == '\0')) {
+        ventTestPeepShow();
+        return CONSOLE_COMMAND_RESULT_OK;
     } else if (ventTestTokenMatch(&arguments, "status") &&
                (*ventTestSkipSpaces(arguments) == '\0')) {
         ventTestStatusShow();

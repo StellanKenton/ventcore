@@ -28,6 +28,7 @@ static float gOffset;
 static uint32_t gNow;
 static ePhaseControllerState gPhase;
 static uint8_t gPause;
+static uint8_t gExpirationReady;
 static stVentLimitSettings gLimits = {.pressureLow = 1.0F, .pressureHigh = 60.0F};
 static stBreathPlan gPlan;
 
@@ -36,6 +37,7 @@ float controlDataGet(ControlData_Index_EnumDef index) { return gData[index]; }
 float controlDataMdiffFlowZeroOffsetGet(void) { return gOffset; }
 ePhaseControllerState phaseControllerStateGet(void) { return gPhase; }
 uint8_t phaseControllerVolumePauseActiveGet(void) { return gPause; }
+uint8_t phaseControllerExpirationReadyGet(void) { return gExpirationReady; }
 int8_t phaseControllerActivePlanGet(stBreathPlan *plan) {
     *plan = gPlan;
     return PHASE_CONTROL_SUCCESS;
@@ -69,6 +71,7 @@ static void reset(void) {
     gNow = 0U;
     gOffset = 0.0F;
     gPause = 0U;
+    gExpirationReady = 0U;
     gPlan = (stBreathPlan){.sequence = 1U, .mode = VENT_MD_VAC,
         .breathType = BREATH_TYPE_MANDATORY_VOLUME, .targetTidalVolumeMl = 500.0F, .peepCmh2o = 5.0F, .inspiratoryFlowLpm = 30.0F,
         .maximumInspiratoryTimeMs = 1000U, .limitSettings = &gLimits};
@@ -88,61 +91,66 @@ static void knownLeak(void) {
     assert(fabsf(monitorEngineGet(MONITOR_LEAK_FLOW) - 10.0F) < 0.001F);
 }
 
-/** Verify PEEP windows, rejected samples, short windows and cycle isolation. */
+/** Verify sliding windows, shared results, short windows and cycle isolation. */
 static void dynamicPeep(void) {
-    unsigned int lIndex;
-
+    stBreathResult lResult;
     reset();
+    gPlan.mode = VENT_MD_VAC;
+    sample(PHASE_EXP, 0.0F, 4.0F); /* Initial trigger wait has no completed breath. */
+    assert(monitorEngineGet(MONITOR_HMI_PEEP) == 4.0F);
+    assert(monitorEngineGet(MONITOR_DYN_PEEP_VALID) == 1.0F);
     sample(PHASE_INSP, 30.0F, 25.0F);
-    sample(PHASE_EXP, 0.0F, 2.0F);
-    sample(PHASE_EXP, 0.0F, 5.0F);
-    for (lIndex = 1U; lIndex <= 7U; lIndex++) {
-        sample(PHASE_EXP, 0.0F, 5.0F + 0.01F * (float)lIndex);
+    assert(monitorEngineGet(MONITOR_HMI_PEEP) == 4.0F);
+    sample(PHASE_EXP, -20.0F, 1.0F);
+    for (unsigned int lIndex = 2U; lIndex <= 8U; lIndex++) {
+        sample(PHASE_EXP, -20.0F, (float)lIndex);
+        float lExpected = lIndex < 5U ? (1.0F + (float)lIndex) / 2.0F : (float)lIndex - 2.0F;
+        assert(fabsf(monitorEngineGet(MONITOR_DYN_PEEP) - lExpected) < 0.0001F);
+        assert(monitorEngineGet(MONITOR_HMI_PEEP) == monitorEngineGet(MONITOR_DYN_PEEP));
     }
-    sample(PHASE_EXP, 0.0F, 9.0F); /* Rejection preserves the window. */
+    sample(PHASE_EXP, 0.0F, NAN);
+    sample(PHASE_EXP, 0.0F, INFINITY);
     monitorEngineBreathComplete(gNow);
-    assert(fabsf(monitorEngineGet(MONITOR_DYN_PEEP) - 5.05F) < 0.0001F);
-    sample(PHASE_EXP, 0.0F, 1.0F); /* Completed cycles are immutable. */
-    assert(fabsf(monitorEngineGet(MONITOR_DYN_PEEP) - 5.05F) < 0.0001F);
+    assert(monitorEngineGet(MONITOR_DYN_PEEP) == 6.0F);
+    assert(monitorEngineGet(MONITOR_HMI_PEEP) == 6.0F);
+    assert(monitorEngineBreathResultGet(&lResult) == MONITOR_ENGINE_SUCCESS);
+    assert(lResult.peepCmh2o == 6.0F);
+    assert((lResult.validMask & BREATH_RESULT_VALID_PEEP) != 0U);
+    sample(PHASE_EXP, 0.0F, 1.0F);
+    monitorEngineBreathComplete(gNow);
+    assert(monitorEngineGet(MONITOR_DYN_PEEP) == 6.0F);
 
-    /* Fewer than five valid points use this cycle's minimum. */
-    for (lIndex = 0U; lIndex < 5U; lIndex++) {
+    for (unsigned int lCount = 1U; lCount <= 5U; lCount++) {
         gPlan.sequence++;
         sample(PHASE_INSP, 30.0F, 25.0F);
-        sample(PHASE_EXP, 1.0F, 3.0F);
-        sample(PHASE_EXP, 1.0F, 6.0F);
-        for (unsigned int lPoint = 0U; lPoint < lIndex; lPoint++) {
-            sample(PHASE_EXP, 1.0F, 6.0F);
+        for (unsigned int lPoint = 0U; lPoint < lCount; lPoint++) {
+            sample(PHASE_EXP, 10.0F, 10.0F + (float)lPoint);
         }
         monitorEngineBreathComplete(gNow);
-        assert(monitorEngineGet(MONITOR_DYN_PEEP) == 3.0F);
+        assert(monitorEngineGet(MONITOR_DYN_PEEP) == 10.0F + (float)(lCount - 1U) / 2.0F);
+        assert(monitorEngineGet(MONITOR_HMI_PEEP) == monitorEngineGet(MONITOR_DYN_PEEP));
     }
 
-    /* Nonconsecutive valid points count; bad pressure breaks adjacency. */
     gPlan.sequence++;
     sample(PHASE_INSP, 30.0F, 25.0F);
-    sample(PHASE_EXP, -1.0F, 1.0F);
-    for (lIndex = 0U; lIndex < 5U; lIndex++) {
-        sample(PHASE_EXP, -1.0F, 5.0F + (float)lIndex);
-        sample(PHASE_EXP, -1.0F, 5.0F + (float)lIndex);
-        sample(PHASE_EXP, -1.0F, NAN);
-    }
+    sample(PHASE_EXP, 0.0F, 7.0F);
+    sample(PHASE_EXP, 0.0F, 9.0F);
     gPlan.sequence++;
-    sample(PHASE_INSP, 30.0F, 25.0F); /* Observed completion path. */
-    assert(monitorEngineGet(MONITOR_DYN_PEEP) == 7.0F);
-
-    /* The slope threshold is strict in both directions. */
-    sample(PHASE_EXP, -1.0F, 0.0F);
-    for (lIndex = 0U; lIndex < 8U; lIndex++) {
-        sample(PHASE_EXP, -1.0F, (lIndex % 2U == 0U) ? 0.03F : 0.0F);
-    }
+    sample(PHASE_INSP, 30.0F, 25.0F); /* Observed boundary excludes inspiration pressure. */
+    assert(monitorEngineGet(MONITOR_DYN_PEEP) == 8.0F);
+    assert(monitorEngineGet(MONITOR_HMI_PEEP) == 8.0F);
+    sample(PHASE_INSP, 20.0F, 30.0F);
+    assert(monitorEngineGet(MONITOR_HMI_PEEP) == 8.0F);
+    sample(PHASE_EXP, 0.0F, NAN);
     monitorEngineBreathComplete(gNow);
     assert(monitorEngineGet(MONITOR_DYN_PEEP) == 0.0F);
+    assert(monitorEngineBreathResultGet(&lResult) == MONITOR_ENGINE_SUCCESS);
+    assert((lResult.validMask & BREATH_RESULT_VALID_PEEP) == 0U);
     sample(PHASE_IDLE, 0.0F, 0.0F);
-    assert(monitorEngineGet(MONITOR_DYN_PEEP) == 0.0F);
+    assert(monitorEngineGet(MONITOR_HMI_PEEP) == 0.0F);
 }
 
-/** Check inclusive flow limits and strict adjacent flow-rate limits. */
+/** Flow magnitude, slope and validity do not gate pressure samples. */
 static void dynamicPeepFlow(void) {
     const float lFlows[] = {1.0F, -1.0F, 1.001F, -1.001F,
                            0.0029F, -0.0029F, 0.003F, -0.003F,
@@ -163,11 +171,102 @@ static void dynamicPeepFlow(void) {
         }
         monitorEngineBreathComplete(gNow);
         assert(monitorEngineGet(MONITOR_DYN_PEEP) ==
-               ((lCase < 2U || lCase == 4U || lCase == 5U) ? 5.0F : 2.0F));
+               5.0F);
     }
 }
 
-/** Publish a cycle's minimum and enter the next inspiration. */
+/** PAC excludes release transients; PSV/ST refresh without another breath. */
+static void peepDisplayTiming(void) {
+    stBreathResult lResult;
+    reset();
+    gPlan.mode = VENT_MD_PAC;
+    sample(PHASE_INSP, 30.0F, 30.0F);
+    sample(PHASE_EXP, -20.0F, 7.0F);
+    sample(PHASE_EXP, -20.0F, 6.0F);
+    assert(monitorEngineGet(MONITOR_DYN_PEEP_VALID) == 1.0F);
+    assert(monitorEngineGet(MONITOR_HMI_PEEP_VALID) == 0.0F);
+    for (unsigned int lIndex = 0U; lIndex < 5U; lIndex++) {
+        sample(PHASE_EXP, 0.0F, 4.7F);
+        assert(monitorEngineGet(MONITOR_HMI_PEEP_VALID) == 0.0F);
+    }
+    monitorEngineBreathComplete(gNow);
+    assert(fabsf(monitorEngineGet(MONITOR_HMI_PEEP) - 4.7F) < 0.0001F);
+    assert(monitorEngineGet(MONITOR_HMI_PEEP_VALID) == 1.0F);
+    gPlan.sequence++;
+    sample(PHASE_INSP, 30.0F, 30.0F);
+    sample(PHASE_EXP, -20.0F, 7.0F);
+    sample(PHASE_EXP, -20.0F, 6.0F);
+    assert(fabsf(monitorEngineGet(MONITOR_HMI_PEEP) - 4.7F) < 0.0001F);
+    assert(monitorEngineGet(MONITOR_DYN_PEEP) == 6.5F);
+    for (unsigned int lIndex = 0U; lIndex < 5U; lIndex++) {
+        sample(PHASE_EXP, 0.0F, 4.8F);
+    }
+    gPlan.sequence++;
+    sample(PHASE_INSP, 30.0F, 30.0F); /* Fallback boundary excludes rising pressure. */
+    assert(fabsf(monitorEngineGet(MONITOR_HMI_PEEP) - 4.8F) < 0.0001F);
+    sample(PHASE_EXP, 0.0F, NAN);
+    monitorEngineBreathComplete(gNow);
+    assert(monitorEngineGet(MONITOR_HMI_PEEP_VALID) == 0.0F);
+
+    for (unsigned int lMode = 0U; lMode < 2U; lMode++) {
+        reset();
+        gPlan.mode = lMode == 0U ? VENT_MD_CPAP_PSV : VENT_MD_PSV_ST;
+        for (unsigned int lIndex = 0U; lIndex < 10U; lIndex++) {
+            sample(PHASE_EXP, 0.0F, 4.7F);
+        }
+        assert(monitorEngineGet(MONITOR_HMI_PEEP_VALID) == 0.0F);
+        gExpirationReady = 1U;
+        for (unsigned int lIndex = 0U; lIndex < MONITOR_HMI_PEEP_STABLE_SAMPLE_COUNT; lIndex++) {
+            sample(PHASE_EXP, 0.0F, 7.0F - 0.4F * (float)lIndex);
+            assert(monitorEngineGet(MONITOR_HMI_PEEP_VALID) == 0.0F);
+        }
+        for (unsigned int lIndex = 0U; lIndex < MONITOR_HMI_PEEP_STABLE_SAMPLE_COUNT; lIndex++) {
+            sample(PHASE_EXP, 0.0F, 4.7F);
+        }
+        assert(fabsf(monitorEngineGet(MONITOR_HMI_PEEP) - 4.7F) < 0.0001F);
+        assert(monitorEngineGet(MONITOR_HMI_PEEP_VALID) == 1.0F);
+        assert(monitorEngineBreathResultGet(&lResult) != MONITOR_ENGINE_SUCCESS);
+        for (unsigned int lIndex = 0U; lIndex < 1000U; lIndex++) {
+            sample(PHASE_EXP, 0.0F, 5.2F);
+        }
+        assert(fabsf(monitorEngineGet(MONITOR_HMI_PEEP) - 5.2F) < 0.0001F);
+        /* A real stable high PEEP must remain visible, without setpoint clamping. */
+        for (unsigned int lIndex = 0U; lIndex < MONITOR_HMI_PEEP_STABLE_SAMPLE_COUNT; lIndex++) {
+            sample(PHASE_EXP, 0.0F, 8.0F);
+        }
+        assert(monitorEngineGet(MONITOR_HMI_PEEP) == 8.0F);
+        sample(PHASE_INSP, 30.0F, 30.0F);
+        gExpirationReady = 0U;
+        sample(PHASE_EXP, -20.0F, 20.0F);
+        assert(monitorEngineGet(MONITOR_HMI_PEEP) == 8.0F);
+        gExpirationReady = 1U;
+        for (unsigned int lIndex = 0U; lIndex < MONITOR_HMI_PEEP_STABLE_SAMPLE_COUNT - 1U; lIndex++) {
+            sample(PHASE_EXP, 0.0F, 4.7F);
+            assert(monitorEngineGet(MONITOR_HMI_PEEP) == 8.0F);
+        }
+        sample(PHASE_EXP, 0.0F, NAN);
+        for (unsigned int lIndex = 0U; lIndex < MONITOR_HMI_PEEP_STABLE_SAMPLE_COUNT - 1U; lIndex++) {
+            sample(PHASE_EXP, 0.0F, 4.7F);
+            assert(monitorEngineGet(MONITOR_HMI_PEEP) == 8.0F);
+        }
+        sample(PHASE_EXP, 0.0F, 4.7F);
+        assert(fabsf(monitorEngineGet(MONITOR_HMI_PEEP) - 4.7F) < 0.0001F);
+        /* A 30 ms pressure plateau during manual effort must not become PEEP. */
+        for (unsigned int lIndex = 0U; lIndex < 5U; lIndex++) {
+            sample(PHASE_EXP, 0.0F, 7.5F);
+            assert(fabsf(monitorEngineGet(MONITOR_HMI_PEEP) - 4.7F) < 0.0001F);
+        }
+        sample(PHASE_EXP, 0.0F, 2.0F); /* Trigger effort must not replace stable display. */
+        monitorEngineBreathComplete(gNow);
+        gPlan.sequence++;
+        sample(PHASE_INSP, 30.0F, 30.0F);
+        assert(fabsf(monitorEngineGet(MONITOR_HMI_PEEP) - 4.7F) < 0.0001F);
+        sample(PHASE_IDLE, 0.0F, 0.0F);
+        assert(monitorEngineGet(MONITOR_HMI_PEEP_VALID) == 0.0F);
+    }
+}
+
+/** Publish a cycle's pressure mean and enter the next inspiration. */
 static void peepAlarmNextBreath(float pressure) {
     sample(PHASE_EXP, 0.0F, pressure);
     monitorEngineBreathComplete(gNow);
@@ -421,13 +520,13 @@ static void resistance(void) {
     assert(monitorEngineBreathResultGet(&lResult) == MONITOR_ENGINE_SUCCESS);
     assert((lResult.validMask & BREATH_RESULT_VALID_RES_INSP) != 0U);
     assert((lResult.validMask & BREATH_RESULT_VALID_RES_EXP) != 0U);
-    assert(lResult.resistanceInspiratory == 120.0F);
-    assert(lResult.resistanceExpiratory == 30.0F);
-    assert(monitorEngineGet(MONITOR_HMI_RES_INSP) == 120.0F);
-    assert(monitorEngineGet(MONITOR_HMI_RES_EXP) == 30.0F);
+    assert(lResult.resistanceInspiratory == 105.0F);
+    assert(lResult.resistanceExpiratory == 25.0F);
+    assert(monitorEngineGet(MONITOR_HMI_RES_INSP) == 105.0F);
+    assert(monitorEngineGet(MONITOR_HMI_RES_EXP) == 25.0F);
     gPlan.sequence++;
     sample(PHASE_INSP, 0.0F, 20.0F);
-    assert(monitorEngineGet(MONITOR_HMI_RES_EXP) == 30.0F);
+    assert(monitorEngineGet(MONITOR_HMI_RES_EXP) == 25.0F);
     sample(PHASE_EXP, 0.0F, 5.0F);
     monitorEngineBreathComplete(gNow);
     assert(monitorEngineBreathResultGet(&lResult) == MONITOR_ENGINE_SUCCESS);
@@ -462,8 +561,11 @@ static void compliance(void) {
             sample(PHASE_INSP, 0.0F, 20.0F);
         }
         sample(PHASE_EXP, -60.0F, 10.0F);
-        sample(PHASE_EXP, 0.0F, lCase == 1U ? 25.0F :
-               lCase == 2U ? 30.0F : lCase == 5U ? 20.0F : 5.0F);
+        /* Fill the end-expiration window at the pressure used by the formula. */
+        for (unsigned int lPoint = 0U; lPoint < 5U; lPoint++) {
+            sample(PHASE_EXP, 0.0F, lCase == 1U ? 25.0F :
+                   lCase == 2U ? 30.0F : lCase == 5U ? 20.0F : 5.0F);
+        }
         monitorEngineBreathComplete(gNow);
         assert(monitorEngineBreathResultGet(&lResult) == MONITOR_ENGINE_SUCCESS);
         if (lCase == 0U || lCase == 3U || lCase == 5U) {
@@ -507,6 +609,7 @@ int main(void) {
     uint16_t lTarget;
     unsigned int lIndex;
     peepAlarms();
+    peepDisplayTiming();
     dynamicPeep();
     dynamicPeepFlow();
     knownLeak();
@@ -643,7 +746,7 @@ def main():
         environment["PATH"] = str(Path(compiler).parent) + os.pathsep + environment["PATH"]
         subprocess.run(command, check=True, env=environment)
         subprocess.run([str(executable)], check=True, env=environment)
-    print("PASS: PEEP alarms and recovery, dynamic PEEP pressure/flow windows, leak estimate, pause integration, boundaries, invalid data, restart, re-zero, limits")
+    print("PASS: PEEP alarms and recovery, dynamic PEEP windows, PAC latched display and PSV/ST stable live display, leak estimate, pause integration, boundaries, invalid data, restart, re-zero, limits")
 
 
 if __name__ == "__main__":

@@ -1795,13 +1795,6 @@ void ProtocolDetectDataPreProcess(uint8_t instance, uint32_t taskCounter)
                 0, UINT16_MAX);
             g_txMonitorParamsCache.m_valid[0x17U] = true;
         }
-        if ((lResult.validMask & BREATH_RESULT_VALID_PEEP) != 0U) {
-            g_txMonitorParamsCache.m_peep = (uint16_t)protocolWaveValue(
-                monitorEngineGet(MONITOR_HMI_PEEP) *
-                    (float)ProtocolGetScale(E_PEEP_SCALE),
-                0, UINT16_MAX);
-            g_txMonitorParamsCache.m_valid[0x04U] = true;
-        }
         if ((lResult.validMask & BREATH_RESULT_VALID_VTI) != 0U) {
             g_txMonitorParamsCache.m_tvi = (uint16_t)protocolWaveValue(
                 monitorEngineGet(MONITOR_HMI_TIDA_VOL_INSP) *
@@ -1868,6 +1861,18 @@ void ProtocolDetectDataPreProcess(uint8_t instance, uint32_t taskCounter)
          * WOB, PEEPi/PEEPtotal, P0.1, NIF, PTP, TVE/IBW, oxygen source pressure
          * and derived oxygen/mechanics indices. */
     }
+
+    /* Read the display snapshot: PAC is latched, PSV can update while waiting. */
+    repRtosEnterCritical();
+    if (monitorEngineGet(MONITOR_HMI_PEEP_VALID) != 0.0F) {
+        g_txMonitorParamsCache.m_peep = (uint16_t)protocolWaveValue(
+            monitorEngineGet(MONITOR_HMI_PEEP) * (float)ProtocolGetScale(E_PEEP_SCALE),
+            0, UINT16_MAX);
+        g_txMonitorParamsCache.m_valid[0x04U] = true;
+    } else {
+        g_txMonitorParamsCache.m_valid[0x04U] = false;
+    }
+    repRtosExitCritical();
 
     ProtocolSendMonitorParamsFromCache(instance);
 #else
