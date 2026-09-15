@@ -61,7 +61,7 @@ static int8_t portRtosTaskDelayMs(uint32_t delayMs)
         return REP_RTOS_STATUS_OK;
     }
 
-    lTicks = pdMS_TO_TICKS(delayMs);
+    lTicks = (TickType_t)(((uint64_t)delayMs * configTICK_RATE_HZ) / 1000ULL);
     if (lTicks == 0U) {
         lTicks = 1U;
     }
@@ -79,8 +79,9 @@ static int8_t portRtosTaskDelayUntilMs(uint32_t *previousWakeMs, uint32_t period
         return REP_RTOS_STATUS_INVALID_PARAM;
     }
 
-    lPreviousWakeTicks = pdMS_TO_TICKS(*previousWakeMs);
-    lPeriodTicks = pdMS_TO_TICKS(periodMs);
+    /* Absolute uptime exceeds the 32-bit multiply limit after about 71 minutes. */
+    lPreviousWakeTicks = (TickType_t)(((uint64_t)*previousWakeMs * configTICK_RATE_HZ) / 1000ULL);
+    lPeriodTicks = (TickType_t)(((uint64_t)periodMs * configTICK_RATE_HZ) / 1000ULL);
     if (lPeriodTicks == 0U) {
         lPeriodTicks = 1U;
     }

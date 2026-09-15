@@ -19,6 +19,12 @@ target board.
 
 ## Files
 
+- `test_rtos_timing.py`: host regression using production `portrtos.c` with kernel
+  stubs at the configured 1000 Hz tick rate. Covers periodic delays across the
+  71-minute multiplication-overflow boundary, captured uptime, 24 hours and
+  32-bit tick wrap, plus relative delays and invalid arguments. Run
+  `py -3 user/develop/test_rtos_timing.py`; does not operate the board.
+
 - `ventcore.jdebug`: Ozone application debug project for `build/Debug/ventcore.elf`.
   Builds and normal flashing/reset/RTT operations use Device Tool as above.
   Ozone reset/download callbacks initialize SP, PC and VTOR from the application
@@ -55,15 +61,19 @@ target board.
 - `test_pac_rtt.py`: default PAC terminal-flow bench regression. With a confirmed
   test lung connected, use Device Tool build/flash (or reset an already flashed
   build), then `py -3 user/develop/test_pac_rtt.py --output build/pac_repeat`.
-  Uses PEEP 5, Delta-P 25 and trigger off; Ti 1350 ms, rate 20/min and oxygen 21%
-  are the reset defaults. Records 68 seconds, stops on completion/error and saves
+  Uses PEEP 5, Delta-P 25 and trigger off; Ti is read from the current source
+  defaults after reset (currently 800 ms, rate 15/min and oxygen 21%).
+  Records 68 seconds, stops on completion/error and saves
   RTT, 6 ms CSV, source/firmware hashes and per-breath metrics. An empty `stop`
   file in the output directory aborts collection. The comparison window is the
   last 240 ms ending 12 ms before the pressure-reference fall, excluding two
   startup breaths. Requires at least ten analyzed breaths and terminal pressure
   28..32 cmH2O (a bench check, not a clinical limit). Flow peak-to-peak and standard
   deviation are reported for comparison, without declaring oscillation eliminated.
-  The raw CSV also preserves the earlier filling transient.
+  Full inspirations are segmented from rise entry to reference fall, so short
+  inspirations retain their rising transient. Reports full-inspiration peak and
+  overshoot as well as terminal metrics; the 600 ms window is shortened when
+  necessary and is not necessarily a settled plateau at short Ti.
 
 - `test_protocol.py`: host regression using the production MCM parser, caches and settings binding with a simulated UART. Run `py -3 user/develop/test_protocol.py`; covers MCM alarm limits with local/host settings, scaling, partial updates and CRC rejection, physiological alarm wire bits, recovery and unchanged-state suppression, fragmented frames, malformed packets, CRC, ACK, source switching, ventilation commands and waveform encoding, plus 1110 heartbeat responses with continuous traffic, bursts, UART busy/queue backpressure, timeout and reconnect. It does not flash or operate the board.
 

@@ -39,6 +39,8 @@ MCM 呼吸频率 `0x10/0x11/0x12`（总频率/机控/自主）由 `60000 / 完�
 
 项目代码只能通过 `rtos.h` 使用任务、调度、tick 和临界区能力；FreeRTOS 原生 API 仅允许出现在 `portrtos.c`。日志统一使用 `LOG_I`、`LOG_W`、`LOG_E` 等宏，不能直接使用标准库输出函数。
 
+`module/rtos/portrtos.c` 的毫秒转 tick 在乘法前提升到 64 位，避免默认 `pdMS_TO_TICKS` 在 1000 Hz 下运行约 71 分 35 秒后溢出，使最高优先级 SysTask 忙循环并饿死其他任务。`develop/test_rtos_timing.py` 使用真实端口代码验证该边界、长时间运行及当前 1000 Hz 配置下的 32 位 tick 回绕。
+
 呼气 RELEASE 在有限的患者压力连续 60 ms 不高于 PEEP + |PEEP|×5% 后进入 CAPTURE，压力跌穿 PEEP 也满足释放完成条件，避免因无法回到狭窄压力窗口而永久屏蔽患者触发。CAPTURE 保留稳定判定及 750 ms 超时进入 PEEP 的路径。Trigger Engine 在呼气阶段即可准备基线，实际触发仍须呼气捕获完成、3 点连续确认和最短呼气保护通过。压力准备屏蔽高于 PEEP + 0.5 cmH₂O 的残余高压；流量准备不要求压力稳定或流量过零。低压本身不作为患者触发事件。`develop/test_trigger.py` 使用真实呼气控制器、PID 和触发引擎验证低压恢复及重复触发，传感器和相位接口使用主机桩；不代表已完成实机气路验证。
 
 PAC 平台期在近端流量降至 20 L/min 及以下、患者压力进入目标 ±2 cmH₂O 后，本次吸气锁存低增益稳压：外环 Kp=0.25，内环 Kp=0.001、Ki=0.01。剩余流量前馈清零并通过 `pidTrackOutput` 转入内环输出；衔接实际风机转速，相对上一指令最多修正 40，反馈为零、非有限或超出 800 时回退上一指令。该处理用于减少填充结束时继续降速及随后的反复修正，不锁死风机；压力闭环和平台超压泄压继续工作。PAC 平台泄压借用呼气下降的趋势预测思路：每 6 ms 对患者压力差分斜率做 0.2 增益滤波，以 60 ms 预测量修正泄压误差，预测修正限于 ±1 cmH₂O；下降时提前收阀，上升时提前排气，原 0.8 cmH₂O 死区和最大 5% 开度保留。进入平台时重置预测历史，PSV/ST 保留原泄压算法；吸气压力目标和定时均保持原计划。内环积分在叠加前馈后的执行器饱和时撤回同方向增量。下一次吸气恢复原增益并清除锁存和积分；PSV/ST 不进入此分支。`develop/test_flow_pause.py` 验证捕获边界、稳压方向、预测收阀、持续超压泄压、模式隔离与重置；`develop/test_pac_rtt.py` 通过 Device Tool 采集默认 PAC，读取当前源代码 Ti，分别统计吸气后半段反向流量、末尾 600 ms 稳定段和末尾 240 ms，并核对压力参考切换时长。Monitor 的 Ti 含负流量确认延迟，不能作为控制切换时长。
@@ -158,3 +160,9 @@ SIMV 触发窗位于机控到期点前：成人 5000 ms，小儿及婴幼儿 150
 SIMV `apneaSwitch` 使用 `eVentApneaType`：`VENT_APNEA_OFF=0`（默认关闭）、`VENT_APNEA_PRESSURE=1`（`apneaPressureCmh2o` 生效）、`VENT_APNEA_VOLUME=2`（`apneaVolumeTidalMl` 生效）。P-SIMV 和 V-SIMV 均可选择任一后备类型，只校验所选后备目标；无患者触发达到公共 `apneaTimeAlarm` 时进入所选后备，普通定时机控不清除无自主呼吸计时。后备使用 `apneaPressureCmh2o` / `apneaVolumeTidalMl`、`apneaRateBpm`、`apneaInspTimeMs`，后备频率不得低于 SIMV 频率；患者触发恢复常规 SIMV，关闭后备后下一计划恢复常规机控。主机映射包括参数 0x15 SIMV 频率、0x0E 常规潮气量、0x0F 后备潮气量及开关组 0x0A 后备选择（0/1/2 对应上述枚举；主机需发送所选类型，不能仅用布尔值区分两种后备）。参数变化在下一呼吸应用，当前计划保持不变。
 
 `develop/test_vti_compensation.py` 增加真实 Scheduler/Phase/Cycle/Apnea 的 SIMV 回归，覆盖三类患者、窗口边界、短呼气全窗、窗外支持不延误机控、计时回绕、后备进入/恢复/关闭、参数拒绝与容量反馈隔离；`test_trigger.py` 验证两种模式压力/流量触发及关闭；`test_protocol.py` 验证 SIMV 参数和后备开关映射。主机回归不代表已完成模拟肺或实机气路验证。
+
+2026-09-14 PAC 升压超调修复：将工作区被改为 12.5 的 `PRESSURE_CONTROLLER_OUTER_KP` 恢复为 0.5。原值在患者压力跟踪误差达到 0.8 cmH₂O 时即触及 +10 cmH₂O 修正上限，并与流量前馈、升压提前量叠加；当前测试肺基线每次升压平均顶限 160.5 ms。恢复后两次独立启动均未出现正向顶限。平台增益、吸气目标与时长未调整。
+
+台架工况为 PEEP 5、Delta-P 25（目标 30 cmH₂O）、Ti 800 ms、15/min、21% 氧、BTPS、触发关闭；排除前两次启动呼吸。基线 8 次呼吸平均/最高峰压 31.746/32.20，修改版两轮各 12 次为 30.858/31.07、30.675/30.83 cmH₂O，平均超调降低约 51%/61%；第一轮修改版仅取前 8 次平均峰压仍为 30.87。末尾 240 ms 平均压力从 29.717 变为 30.258/30.219 cmH₂O。仍有小幅超调，不表示完全消除，也未验证其他肺顺应性、阻力或漏气工况。复测控制 Ti 为 804 ms，连续采样和压力检查通过，最终收到 `stop status=1`。
+
+记录位于 `build/pac_20260914_baseline/`、`build/pac_20260914_fixed/`、`build/pac_20260914_verify/`（RTT、CSV、固件/源码哈希、`summary.json`、`overshoot.json`），重算入口为 `build/pac_20260914_compare.py`。前两轮旧采集程序在完成并停机后因短平台校验失败，原始波形完整，统计已离线重算；第三轮使用修正后的采集程序完整通过。`develop/test_pac_rtt.py` 现在按升压入口至参考下降切分完整吸气，新增全吸气峰压/超调统计，并将峰压纳入原 32 cmH₂O 台架检查上限，避免只检查后半段遗漏早期过冲。编译、烧录、复位和 RTT 均经 Device Tool；`test_flow_pause.py` 主机回归通过。

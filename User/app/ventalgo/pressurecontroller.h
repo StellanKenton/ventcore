@@ -21,6 +21,7 @@ extern "C" {
 
 #define PRESSURE_CONTROLLER_SAMPLE_PERIOD_S          0.006F
 #define PRESSURE_CONTROLLER_SAMPLE_PERIOD_MS          6U
+/* Keep rise feedback below saturation for normal ramp tracking errors. */
 #define PRESSURE_CONTROLLER_OUTER_KP                 0.5F
 #define PRESSURE_CONTROLLER_OUTER_HOLD_KP            0.75F
 #define PRESSURE_CONTROLLER_OUTER_KI                 0.0F
