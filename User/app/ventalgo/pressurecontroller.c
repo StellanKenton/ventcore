@@ -324,10 +324,7 @@ static int8_t pressureControllerOuterLoopProcess(const stBreathPlan *plan,
 /** Calculate the actuator effort through the inspiratory-pressure inner loop. */
 static int8_t pressureControllerInnerLoopProcess(float inspTarget, float *effort)
 {
-    return pidUpdate(&gPressureInnerPid,
-                     inspTarget,
-                     controlDataGet(INSP_REAL_PRS),
-                     effort);
+    return pidUpdate(&gPressureInnerPid,inspTarget,controlDataGet(INSP_REAL_PRS),effort);
 }
 
 /** Vent bounded excess pressure during inspiratory hold. */

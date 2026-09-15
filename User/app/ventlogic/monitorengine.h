@@ -156,6 +156,7 @@ typedef struct stMonitorEngine {
     uint8_t breathCompleted;
     uint8_t volumeInvalid;
     uint8_t volumeLimited;
+    uint8_t volumeBlowerLimited;
     eBreathCycleReason cycleReason;
     uint8_t breathActive;
     stBreathPlan breathPlan;
@@ -175,6 +176,9 @@ void monitorEngineBreathComplete(uint32_t nowMs);
 
 /** Latch a delivery limit or controller failure for the active volume breath. */
 void monitorEngineVolumeLimitedNotify(void);
+
+/** Report speed saturation; bounded time adaptation may still compensate it. */
+void monitorEngineBlowerLimitedNotify(void);
 
 /** Update monitoring and publish a result when the next inspiration begins. */
 void monitorEngineProcess(uint32_t nowMs);

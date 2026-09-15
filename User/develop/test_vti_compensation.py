@@ -914,6 +914,33 @@ static void testSimvBackup(void) {
     GetVentLimitSettings()->apneaTimeAlarm = 60U;
 }
 
+/** Speed saturation permits bounded time learning, never flow or pressure escalation. */
+static void testBlowerLimitedFeedback(void) {
+    stBreathPlan lPlan;
+    stBreathResult lResult;
+    float lFiltered;
+    reset();
+    lPlan = advance(0U);
+    monitorEngineBlowerLimitedNotify();
+    lPlan = advance(lPlan.sequence);
+    assert(monitorEngineBreathResultGet(&lResult) == MONITOR_ENGINE_SUCCESS);
+    assert((lResult.validMask & BREATH_RESULT_VOLUME_LIMITED) != 0U);
+#if BREATH_VOLUME_FLOW_COMPENSATION_ENABLE
+    near(lPlan.filteredVtiMl, 0.0F);
+#else
+    assert(lPlan.filteredVtiMl > 0.0F);
+    assert(lPlan.riseTimeMs <= GetVentVacSettings()->inspTimeMs + BREATH_VOLUME_TIME_STEP_MS);
+#endif
+    lFiltered = lPlan.filteredVtiMl;
+    monitorEngineBlowerLimitedNotify();
+    monitorEngineVolumeLimitedNotify();
+    lPlan = advance(lPlan.sequence);
+    near(lPlan.filteredVtiMl, lFiltered);
+    lPlan = advance(lPlan.sequence);
+    assert(monitorEngineBreathResultGet(&lResult) == MONITOR_ENGINE_SUCCESS);
+    assert((lResult.validMask & BREATH_RESULT_VOLUME_LIMITED) == 0U);
+}
+
 int main(void) {
     testSimv();
     testSimvBackup();
@@ -937,6 +964,7 @@ int main(void) {
     testIntegration();
     testShortVolumeReference();
 #endif
+    testBlowerLimitedFeedback();
     return 0;
 }
 /**************************End of file********************************/

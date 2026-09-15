@@ -1,5 +1,9 @@
 # Device Tool
 
+`test_monitor_leak.py` checks PAC terminal pressure updates with residual flow,
+per-breath averaging/reset, invalid samples, expiration exclusion and early cycling,
+while preserving VAC/PSV/ST zero-flow plateau sampling.
+
 `test_protocol.py` also verifies half-up rounding of total/mandatory/spontaneous
 frequency at 14.49, 14.5 and 14.51 breaths/min, plus integer and upper-limit cases.
 
@@ -130,6 +134,8 @@ target board.
   Feedback uses proximal VTI without subtracting downstream leak. EMA alpha is 0.5 for both VTI and its applied correction. The outer loop removes
   the lag of already-applied corrections before updating with startup gain 0.8 then gain 1.0, a 0.5%
   deadband, 25% step and +/-30% total bound.
+  `pause_min` and `reverse_ml` cover the entire pause, including entry;
+  `steady_pressure_mean` records the last-400-ms pressure mean.
   Steady metrics use the last 400 ms of a 1-second pause: flow standard deviation,
   peak-to-peak amplitude, mean target error and error RMS. Check `steady_settled`
   before interpreting them. Raw/hysteretic crossings remain auxiliary metrics;
@@ -164,7 +170,11 @@ target board.
   `py -3 user/develop/test_flow_pause.py`; native GCC/Clang is required (`CC`
   overrides discovery). Temporary host builds do not access the board or replace
   Device Tool firmware builds. Scripted inputs verify command behavior, not
-  pneumatic stability or tuning.
+  pneumatic stability or tuning. VAC deceleration-lead cases cover bounded
+  speed correction, decay, invalid-feedback recovery, downstream leakage,
+  high-flow gating, high-pressure entry gains and isolation from delivery.
+  Load-feedforward tests check elastic-load selection, subtraction of measured
+  flow loss and the bounded pressure-rise lead.
 - `vent_test_gui.py`: graphical 25-group PEEP/Delta-P test collector. It updates
   the scheme every 10 seconds while polling the incremental `vt status` data
   every 250 ms for one continuous 250-second run, then exports one CSV file.
@@ -281,3 +291,8 @@ Run with `py -3 user/develop/<script>`. These are host tests, not bench validati
 SIMV apnea selection additionally tests both pressure and volume backup in each
 SIMV mode, selected-target validation, ignored inactive targets, invalid enum
 values and host selection values 0/1/2 (off/pressure/volume).
+
+VAC high-load continuation: `test_vti_compensation.py` also checks that speed
+saturation remains reported while permitting bounded time adaptation; pressure
+limits still block learning, and the legacy flow-adaptation build does not learn
+from speed saturation. All existing timing and output bounds remain in force.

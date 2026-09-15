@@ -38,6 +38,7 @@ int8_t phaseControlSet(ePhaseControlType type, float value) {
 }
 float monitorEngineGet(eMonitorDataType type) { (void)type; return gLeak; }
 void monitorEngineVolumeLimitedNotify(void) {}
+void monitorEngineBlowerLimitedNotify(void) {}
 uint8_t phaseControllerVolumePauseActiveGet(void) { return gPause; }
 ePhaseControllerState phaseControllerStateGet(void) { return gPhase; }
 int8_t calibtransPrsSpeed(float pressureValue, float *speedRps) {
@@ -442,7 +443,7 @@ static void testVacFeedforward(void) {
     gRefs[PHASE_REF_FLOW] = 30.0F;
     gData[INSP_REAL_FLOW] = 30.0F;
     gData[PAT_REAL_FLOW] = 30.0F;
-    gData[PAT_REAL_PRS] = 40.0F;
+    gData[PAT_REAL_PRS] = 10.0F;
     for (lIndex = 0U; lIndex < 5U; lIndex++) {
         flowControllerInit();
         lPlan.targetTidalVolumeMl = lVolumes[lIndex];
@@ -453,13 +454,30 @@ static void testVacFeedforward(void) {
         lExpected = 5.0F + 0.5F * (lVolumes[lIndex] + 100.0F) /
                     lCompliance[lIndex] + 8.3277F;
         assert(fabsf(gCapturedFeedforward - lExpected) < 0.001F);
-        /* Actual pressure is not added on top of the elastic model. */
+        /* A smaller measured load must not be added to the elastic model. */
         gData[PAT_REAL_PRS] = 10.0F;
         gCaptureFeedforward = 1U;
         (void)testStep(&lPlan);
         assert(fabsf(gCapturedFeedforward - lExpected) < 0.001F);
     }
     gRefs[PHASE_REF_VOLUME] = 0.0F;
+    flowControllerInit();
+    gData[PAT_REAL_PRS] = 40.0F;
+    gCaptureFeedforward = 1U;
+    (void)testStep(&lPlan);
+    assert(fabsf(gCapturedFeedforward - 40.0F) < 0.001F);
+    gData[PAT_REAL_FLOW] = 15.0F;
+    gCaptureFeedforward = 1U;
+    (void)testStep(&lPlan);
+    assert(fabsf(gCapturedFeedforward - 45.066775F) < 0.001F);
+    gData[PAT_REAL_FLOW] = 30.0F;
+    gData[PAT_REAL_PRS] = 60.0F;
+    gCaptureFeedforward = 1U;
+    (void)testStep(&lPlan);
+    assert(fabsf(gCapturedFeedforward - 50.0F) < 0.001F);
+    flowControllerInit();
+    gData[PAT_REAL_PRS] = 10.0F;
+    gData[PAT_REAL_FLOW] = 30.0F;
     gCaptureFeedforward = 1U;
     (void)testStep(&lPlan);
     assert(fabsf(gCapturedFeedforward - 13.3277F) < 0.001F);
@@ -477,7 +495,74 @@ static void testVacFeedforward(void) {
 }
 
 /** Verify zero-flow control, transition limits, delayed feedback and failure handling. */
+/** Verify bounded deceleration lead, decay, invalid feedback and pause isolation. */
+static void testVacPauseBrake(void) {
+    stVentLimitSettings lLimits = {.pressureLow = 1.0F, .pressureHigh = 60.0F};
+    stBreathPlan lPlan = {.sequence = 1U, .mode = VENT_MD_VAC,
+        .breathType = BREATH_TYPE_MANDATORY_VOLUME, .targetTidalVolumeMl = 500.0F,
+        .deliveryTargetMl = 500.0F, .peepCmh2o = 5.0F,
+        .inspiratoryFlowLpm = 30.0F, .limitSettings = &lLimits};
+    uint16_t lBaseline, lTarget;
+    for (unsigned lCase = 0U; lCase < 5U; lCase++) {
+        flowControllerInit();
+        gPause = 1U;
+        gLeak = lCase == 2U ? 3.0F : 0.0F;
+        gData[PAT_REAL_FLOW] = lCase == 3U ? 30.0F : gLeak;
+        gData[PAT_REAL_PRS] = lCase == 4U ? FLOW_CONTROLLER_PAUSE_GAIN_PRESSURE : 20.0F;
+        gData[RAW_BLOWER_SPEED] = 500.0F;
+        for (unsigned lStep = 0U; lStep < (lCase == 4U ? 30U : 10U); lStep++) { lBaseline = testStep(&lPlan); }
+        for (unsigned lStep = 0U; lStep < 20U; lStep++) {
+            gData[RAW_BLOWER_SPEED] += lCase == 1U ? 2.0F : -2.0F;
+            lTarget = testStep(&lPlan);
+            assert(lTarget <= lBaseline + FLOW_CONTROLLER_PAUSE_BRAKE_MAX + 1U);
+        }
+        assert((lCase == 1U || lCase == 3U) ? lTarget == lBaseline :
+               lTarget > lBaseline + (lCase == 4U ? 5U : 20U));
+        lLimits.pressureHigh = 5.0F;
+        assert(testStep(&lPlan) <= 50U);
+        lLimits.pressureHigh = 60.0F;
+        for (unsigned lStep = 0U; lStep < 100U; lStep++) { lTarget = testStep(&lPlan); }
+        assert(abs((int)lTarget - (int)lBaseline) <= 1);
+        gData[RAW_BLOWER_SPEED] = NAN;
+        assert(abs((int)testStep(&lPlan) - (int)lBaseline) <= 1);
+        gData[RAW_BLOWER_SPEED] = 400.0F;
+        assert(abs((int)testStep(&lPlan) - (int)lBaseline) <= 1);
+        gPause = 0U;
+        lPlan.sequence++;
+        gRefs[PHASE_REF_FLOW] = 30.0F;
+        gData[PAT_REAL_FLOW] = 30.0F;
+        lBaseline = testStep(&lPlan);
+        gData[RAW_BLOWER_SPEED] = 300.0F;
+        assert(testStep(&lPlan) == lBaseline);
+    }
+    gPause = 0U;
+    gLeak = 0.0F;
+    gData[RAW_BLOWER_SPEED] = 0.0F;
+}
+
+/** Schedule entry braking at the pressure boundary and reset it each breath. */
+static void testVacEntryGain(void) {
+    stVentLimitSettings lLimits = {.pressureLow = 1.0F, .pressureHigh = 100.0F};
+    stBreathPlan lPlan = {.sequence = 1U, .mode = VENT_MD_VAC,
+        .breathType = BREATH_TYPE_MANDATORY_VOLUME, .limitSettings = &lLimits};
+    stFlowControllerDiagnostic lDiagnostic;
+    for (unsigned lCase = 0U; lCase < 3U; lCase++) {
+        flowControllerInit();
+        gPause = 1U;
+        gLeak = 0.0F;
+        gData[PAT_REAL_PRS] = lCase == 1U ? 30.0F : 29.9F;
+        gData[PAT_REAL_FLOW] = 30.0F;
+        (void)testStep(&lPlan);
+        flowControllerDiagnosticGet(&lDiagnostic);
+        assert(fabsf(lDiagnostic.effort + 30.0F * (lCase == 1U ?
+            FLOW_CONTROLLER_PAUSE_HIGH_ENTRY_KP : FLOW_CONTROLLER_PAUSE_ENTRY_KP)) < 0.0001F);
+    }
+    gPause = 0U;
+}
+
 int main(void) {
+    testVacEntryGain();
+    testVacPauseBrake();
     testPressureAlarmLimit();
     testPacSettledHold();
     testPacPredictiveRelief();
@@ -628,7 +713,7 @@ def main():
         environment["PATH"] = str(Path(compiler).parent) + os.pathsep + environment["PATH"]
         subprocess.run(command, check=True, env=environment)
         subprocess.run([str(executable)], check=True, env=environment)
-    print("PASS: PAC high-pressure gain/compensation/reset, terminal handoff/regulation/reset, alarm-high independence, PSV/ST isolation, VAC entry, delayed-tail integral gating, reverse flow, flow-source distinction, limits, faults")
+    print("PASS: PAC high-pressure gain/compensation/reset, terminal handoff/regulation/reset, alarm-high independence, PSV/ST isolation, VAC entry, deceleration lead/limits/decay/isolation, delayed-tail integral gating, reverse flow, flow-source distinction, limits, faults")
 
 
 if __name__ == "__main__":

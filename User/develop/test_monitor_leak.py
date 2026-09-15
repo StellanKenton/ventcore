@@ -661,7 +661,53 @@ static void minuteVolumeBoundaries(void) {
     }
 }
 
+/** PAC publishes measured terminal pressure despite residual inspiratory flow. */
+static void pacPlateau(void) {
+    const eVentMode lModes[] = {VENT_MD_PAC, VENT_MD_VAC, VENT_MD_CPAP_PSV, VENT_MD_PSV_ST};
+    stBreathResult lResult;
+
+    for (unsigned int lMode = 0U; lMode < sizeof(lModes) / sizeof(lModes[0]); lMode++) {
+        reset();
+        gPlan.mode = lModes[lMode];
+        gPlan.maximumInspiratoryTimeMs = 120U;
+        for (unsigned int lBreath = 0U; lBreath < 2U; lBreath++) {
+            float lPressure = 25.0F + 5.0F * (float)lBreath;
+            sample(PHASE_INSP, 30.0F, 50.0F);
+            sample(PHASE_INSP, 30.0F, 50.0F);
+            sample(PHASE_INSP, 30.0F, 50.0F);
+            sample(PHASE_INSP, 30.0F, 50.0F);
+            assert(monitorEngineGet(MONITOR_PLATEAU_PRS) == 0.0F);
+            sample(PHASE_INSP, 10.0F, lPressure - 1.0F);
+            sample(PHASE_INSP, 8.0F, lPressure + 1.0F);
+            sample(PHASE_INSP, 8.0F, NAN);
+            sample(PHASE_INSP, NAN, 80.0F);
+            sample(PHASE_INSP, 8.0F, INFINITY);
+            sample(PHASE_EXP, 0.0F, 5.0F);
+            sample(PHASE_EXP, -20.0F, 5.0F);
+            monitorEngineBreathComplete(gNow);
+            assert(monitorEngineBreathResultGet(&lResult) == MONITOR_ENGINE_SUCCESS);
+            assert((lResult.validMask & BREATH_RESULT_VALID_PLATEAU_PRESSURE) != 0U);
+            /* Other modes retain their zero-flow boundary sample. */
+            assert(lResult.plateauPressureCmh2o == (lMode == 0U ? lPressure : 5.0F));
+            assert(monitorEngineGet(MONITOR_HMI_PLATEAU_PRS) == lResult.plateauPressureCmh2o);
+            gPlan.sequence++;
+        }
+    }
+
+    reset();
+    gPlan.mode = VENT_MD_PAC;
+    sample(PHASE_INSP, 30.0F, 25.0F);
+    sample(PHASE_EXP, 0.0F, 5.0F); /* Early cycling has no terminal window. */
+    monitorEngineBreathComplete(gNow);
+    assert(monitorEngineBreathResultGet(&lResult) == MONITOR_ENGINE_SUCCESS);
+    assert((lResult.validMask & BREATH_RESULT_VALID_PLATEAU_PRESSURE) == 0U);
+    assert(monitorEngineGet(MONITOR_HMI_PLATEAU_PRS) == 0.0F);
+    sample(PHASE_IDLE, 0.0F, 0.0F);
+    assert(monitorEngineGet(MONITOR_PLATEAU_PRS) == 0.0F);
+}
+
 int main(void) {
+    pacPlateau();
     peakExpiratoryFlow();
     minuteVolumeBoundaries();
     compliance();

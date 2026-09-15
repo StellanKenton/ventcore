@@ -27,6 +27,9 @@ static uint8_t gFlowFeedforwardPressureReady;
 static float gFlowAppliedEffort;
 static float gFlowBlowerTarget;
 static uint8_t gFlowPauseSamples;
+static float gFlowPausePreviousSpeed;
+static float gFlowPauseSpeedSlope;
+static uint8_t gFlowPauseLowPressure;
 static stFlowControllerDiagnostic gFlowDiagnostic;
 
 /** Clamp a flow-controller value to a configured range. */
@@ -72,12 +75,18 @@ static void flowControllerStateEnter(eFlowControllerState state)
     } else if (state == FLOW_CONTROLLER_INSP_PAUSE) {
         /* Brake the delivery tail before enabling low-bandwidth pause PI. */
         (void)pidSetTunings(&gFlowPid,
-                            FLOW_CONTROLLER_PAUSE_ENTRY_KP,
+                            (controlDataGet(PAT_REAL_PRS) < FLOW_CONTROLLER_PAUSE_GAIN_PRESSURE) ?
+                            FLOW_CONTROLLER_PAUSE_ENTRY_KP : FLOW_CONTROLLER_PAUSE_HIGH_ENTRY_KP,
                             0.0F,
                             FLOW_CONTROLLER_PAUSE_ENTRY_KD);
         (void)pidReset(&gFlowPid);
         gFlowAppliedEffort = 0.0F;
         gFlowPauseSamples = 0U;
+        gFlowPausePreviousSpeed = 0.0F;
+        gFlowPauseSpeedSlope = 0.0F;
+        /* Select once per pause; pressure drift must not switch gain families. */
+        gFlowPauseLowPressure = (uint8_t)(controlDataGet(PAT_REAL_PRS) <
+                                        FLOW_CONTROLLER_PAUSE_GAIN_PRESSURE);
     } else if (state == FLOW_CONTROLLER_IDLE) {
         (void)pidReset(&gFlowPid);
         gFlowFeedforwardPressureReady = 0U;
@@ -111,6 +120,33 @@ static eFlowControllerState flowControllerActiveStateGet(const stBreathPlan *pla
         return FLOW_CONTROLLER_INSP_RISE;
     }
     return FLOW_CONTROLLER_INSP_HOLD;
+}
+
+/** Arrest delayed blower deceleration as patient flow approaches its pause target. */
+static float flowControllerPauseBrake(float flowError) {
+    float lSpeed = controlDataGet(RAW_BLOWER_SPEED);
+    float lWeight;
+
+    if (!(lSpeed > 0.0F && lSpeed <= FLOW_CONTROLLER_BLOWER_SPEED_SCALE)) {
+        gFlowPausePreviousSpeed = 0.0F;
+        gFlowPauseSpeedSlope = 0.0F;
+        return 0.0F;
+    }
+    if (gFlowPausePreviousSpeed > 0.0F) {
+        gFlowPauseSpeedSlope += FLOW_CONTROLLER_PAUSE_SPEED_FILTER *
+            ((lSpeed - gFlowPausePreviousSpeed) / FLOW_CONTROLLER_SAMPLE_PERIOD_S -
+             gFlowPauseSpeedSlope);
+    }
+    gFlowPausePreviousSpeed = lSpeed;
+    lWeight = flowControllerClamp(
+        (FLOW_CONTROLLER_PAUSE_BRAKE_FLOW_MAX - flowError) /
+        (FLOW_CONTROLLER_PAUSE_BRAKE_FLOW_MAX - FLOW_CONTROLLER_PAUSE_BRAKE_FLOW_FULL),
+        0.0F, 1.0F);
+    return lWeight * flowControllerClamp(
+        -gFlowPauseSpeedSlope * ((gFlowPauseLowPressure != 0U) ?
+            FLOW_CONTROLLER_PAUSE_BRAKE_LEAD_S : FLOW_CONTROLLER_PAUSE_HIGH_BRAKE_LEAD_S),
+        0.0F, (gFlowPauseLowPressure != 0U) ?
+            FLOW_CONTROLLER_PAUSE_BRAKE_MAX : FLOW_CONTROLLER_PAUSE_HIGH_BRAKE_MAX);
 }
 
 /** Run the flow loop and produce the active inspiratory request. */
@@ -207,6 +243,19 @@ static int8_t flowControllerClosedLoopProcess(const stBreathPlan *plan,
             flowControllerClamp(lFeedforwardVolume, 0.0F, plan->deliveryTargetMl) / lCompliance +
             FLOW_CONTROLLER_FLOW_FF_LINEAR * flowReference +
             FLOW_CONTROLLER_FLOW_FF_QUADRATIC * flowReference * flowReference;
+        if (lMeasuredFlow >= 0.0F && lMeasuredFlow <= FLOW_CONTROLLER_FLOW_TARGET_MAX) {
+            /* Infer the elastic load without counting measured flow loss twice. */
+            float lLoadPressure = gFlowFeedforwardPressure +
+                flowControllerClamp((lPatientPressure - gFlowFeedforwardPressure) *
+                                    FLOW_CONTROLLER_LOAD_LEAD_RATIO,
+                                    0.0F, FLOW_CONTROLLER_LOAD_LEAD_MAX) +
+                FLOW_CONTROLLER_FLOW_FF_LINEAR * (flowReference - lMeasuredFlow) +
+                FLOW_CONTROLLER_FLOW_FF_QUADRATIC *
+                (flowReference * flowReference - lMeasuredFlow * lMeasuredFlow);
+            if (lLoadPressure > lFeedforwardPressure) {
+                lFeedforwardPressure = lLoadPressure;
+            }
+        }
     } else {
         /* Preserve measured-pressure feedforward for pause and other volume modes. */
         lFeedforwardPressure = gFlowFeedforwardPressure +
@@ -232,9 +281,12 @@ static int8_t flowControllerClosedLoopProcess(const stBreathPlan *plan,
         return ACTUATOR_REQUEST_ERROR_STATE;
     }
     gFlowDiagnostic.blowerFeedforward = lBlowerFeedforward;
-
     lEffort = lBlowerFeedforward +
               (gFlowAppliedEffort * FLOW_CONTROLLER_BLOWER_SPEED_SCALE);
+    if (state == FLOW_CONTROLLER_INSP_PAUSE) {
+        /* Keep transient braking outside the integral; retain all output limits. */
+        lEffort += flowControllerPauseBrake(lMeasuredFlow - flowReference);
+    }
     lLimitedEffort = lEffort;
     if (state == FLOW_CONTROLLER_INSP_PAUSE) {
         lLimitedEffort = flowControllerClamp(lLimitedEffort,
@@ -252,7 +304,7 @@ static int8_t flowControllerClosedLoopProcess(const stBreathPlan *plan,
         gFlowPid.integral = lIntegralBefore;
     }
     if ((state != FLOW_CONTROLLER_INSP_PAUSE) && (lEffort > lLimitedEffort)) {
-        monitorEngineVolumeLimitedNotify();
+        monitorEngineBlowerLimitedNotify();
     }
     request->blowerTarget = (uint16_t)lLimitedEffort;
     gFlowBlowerTarget = (float)request->blowerTarget;

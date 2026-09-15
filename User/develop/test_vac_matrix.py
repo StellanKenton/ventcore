@@ -50,6 +50,8 @@ def summarize(rows):
         if len(pause) < 150:
             continue
         result.append(dict(breath=index, samples=len(pause),
+            pause_min=min(flow),
+            reverse_ml=-sum(min(v, 0) for v in flow)*0.1,
             crossings=crossings(flow), crossings_05=crossings(flow, 0.5),
             tail_crossings=crossings(tail), tail_crossings_05=crossings(tail, 0.5),
             tail_min=min(tail), tail_max=max(tail),
@@ -61,6 +63,7 @@ def summarize(rows):
         steady = [r for r in pause if r["time_ms"] - pause[0]["time_ms"] >= 600]
         steady_flow = [r["prox_x2"]/50 for r in steady]
         result[-1].update(steady_samples=len(steady),
+            steady_pressure_mean=statistics.mean(r["ppat_x1"]/100 for r in steady),
             steady_flow_sd=statistics.pstdev(steady_flow),
             steady_flow_p2p=max(steady_flow)-min(steady_flow))
         if "leak_lpm" in pause[0]:

@@ -132,7 +132,7 @@ static void monitorEngineLeakFlowProcess(void)
     }
 }
 
-/** Average valid zero-flow pressure samples from the plateau window. */
+/** Average PAC end-inspiration pressure; other modes require near-zero flow. */
 static void monitorEnginePlateauPressureProcess(uint32_t nowMs)
 {
     ePhaseControllerState lPhaseState;
@@ -147,6 +147,11 @@ static void monitorEnginePlateauPressureProcess(uint32_t nowMs)
     }
 
     lPhaseState = phaseControllerStateGet();
+    /* PAC must exclude pressure decay after the controller ends inspiration. */
+    if ((gMonitorEngine.breathPlan.mode == VENT_MD_PAC) &&
+        (lPhaseState != PHASE_INSP)) {
+        return;
+    }
     lSampleActive = phaseControllerVolumePauseActiveGet();
     if ((lSampleActive == 0U) &&
         (((nowMs - gMonitorEngine.breathStartedMs) +
@@ -167,8 +172,9 @@ static void monitorEnginePlateauPressureProcess(uint32_t nowMs)
     lPressure = controlDataGet(PAT_REAL_PRS);
     if ((monitorEngineFinite(lFlow) == 0U) ||
         (monitorEngineFinite(lPressure) == 0U) ||
-        (lFlow <= -MONITOR_FLOW_DEADBAND_LPM) ||
-        (lFlow >= MONITOR_FLOW_DEADBAND_LPM)) {
+        ((gMonitorEngine.breathPlan.mode != VENT_MD_PAC) &&
+         ((lFlow <= -MONITOR_FLOW_DEADBAND_LPM) ||
+          (lFlow >= MONITOR_FLOW_DEADBAND_LPM)))) {
         return;
     }
 
@@ -350,7 +356,7 @@ static void monitorEngineBreathResultPublish(uint32_t nowMs)
     } else {
         lResult.peakExpiratoryFlowLpm = 0.0F;
     }
-    if (gMonitorEngine.volumeLimited != 0U) {
+    if ((gMonitorEngine.volumeLimited != 0U) || (gMonitorEngine.volumeBlowerLimited != 0U)) {
         lResult.validMask |= BREATH_RESULT_VOLUME_LIMITED;
     }
     /* Completed tidal volume in mL times 60 / cycle ms gives L/min. */
@@ -461,6 +467,8 @@ static void monitorEngineBreathResultPublish(uint32_t nowMs)
     breathSchedulerVolumeFeedback(&gMonitorEngine.breathPlan, lResult.vtiMl,
         (uint8_t)(((lResult.validMask & BREATH_RESULT_VALID_VTI) != 0U) &&
                   (gMonitorEngine.volumeLimited == 0U) &&
+                  ((BREATH_VOLUME_FLOW_COMPENSATION_ENABLE == 0) ||
+                   (gMonitorEngine.volumeBlowerLimited == 0U)) &&
                   (gMonitorEngine.runState == MONITOR_STATE_EXP) &&
                   (lResult.cycleReason == BREATH_CYCLE_REASON_TIME)));
 }
@@ -495,6 +503,14 @@ void monitorEngineVolumeLimitedNotify(void) {
     }
 }
 
+/** Keep saturation visible while distinguishing it from a hard pressure limit. */
+void monitorEngineBlowerLimitedNotify(void) {
+    if ((gMonitorEngine.breathActive != 0U) &&
+        (gMonitorEngine.breathCompleted == 0U)) {
+        gMonitorEngine.volumeBlowerLimited = 1U;
+    }
+}
+
 /** Start accumulation for the plan that just entered inspiration. */
 static int8_t monitorEngineBreathStart(uint32_t nowMs)
 {
@@ -526,6 +542,7 @@ static int8_t monitorEngineBreathStart(uint32_t nowMs)
     gMonitorEngine.breathCompleted = 0U;
     gMonitorEngine.volumeInvalid = 0U;
     gMonitorEngine.volumeLimited = 0U;
+    gMonitorEngine.volumeBlowerLimited = 0U;
     gMonitorEngine.inspiratoryTimeMs = 0U;
     gMonitorEngine.cycleReason = BREATH_CYCLE_REASON_NONE;
     gMonitorEngine.breathActive = 1U;
