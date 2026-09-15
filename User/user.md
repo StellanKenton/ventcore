@@ -125,7 +125,7 @@ PAC 压力控制不使用报警高限 `pressureHigh` 限制患者压力参考值
 
 `MONITOR_HMI_MV_TOTAL` 按同一完整周期的呼出 VTe（mL）×60/实测周期时长（ms）计算，单位 L/min，包含自主和机控呼吸，不另加跨周期平滑。`MONITOR_HMI_LEAK_PERCENT = MONITOR_HMI_MV_LEAK / (MONITOR_HMI_MV_TOTAL + MONITOR_HMI_MV_LEAK) × 100`，随完成结果发布。容量采样或泄漏估计无效、分母非有限或为零时，泄漏率置零且不上传；有效的零泄漏上传 0%。MCM `0x0C` 使用一字节整数百分比、scale=0，截断小数并限幅 0..100；沿用逐呼吸上传与队列重试。停止、调零时监测快照清零。
 
-`MONITOR_HMI_RES_INSP = 60 × (Ppeak - PEEP) / Qinsppeak`，`MONITOR_HMI_RES_EXP = 60 × (Pplat - PEEP) / Qexppeak`，流量使用近端 `PAT_REAL_FLOW`（L/min），呼气峰值取呼气阶段负流量最大绝对值；PEEP 使用完成结果的呼气末五点滑动平均压力。两项随完整呼吸结算并保持到下次发布，吸气和呼气公式均乘 60，将 L/min 换算为 L/s。非有限采样、缺少对应压力、零峰值或负/非有限计算结果时置零且不上传；停止、调零时清零。CommTask 从同一 `stBreathResult` 快照上传 MCM `0x16` / `0x17`，沿用无符号 16 位、scale=0 的协议定义（截断小数、限幅 0..65535）及队列重试。主机回归覆盖公式、峰值相位隔离、跨周期清零、无平台压、异常采样和报文编码。
+`MONITOR_HMI_RES_INSP = 60 × (Ppeak - Pplat) / Qinsppeak`，`MONITOR_HMI_RES_EXP = 60 × (Pplat - PEEP) / Qexppeak`，流量使用近端 `PAT_REAL_FLOW`（L/min），呼气峰值取呼气阶段负流量最大绝对值；PEEP 使用完成结果的呼气末五点滑动平均压力。吸气气阻要求同口有效峰压和平台压；峰压与峰流量分别取最大值，变流量模式下仍为近似估算，平台压采样条件沿用现有实现。两项随完整呼吸结算并保持到下次发布，吸气和呼气公式均乘 60，将 L/min 换算为 L/s。非有限采样、缺少对应压力、零峰值或负/非有限计算结果时置零且不上传；停止、调零时清零。CommTask 从同一 `stBreathResult` 快照上传 MCM `0x16` / `0x17`，沿用无符号 16 位、scale=0 的协议定义（截断小数、限幅 0..65535）及队列重试。主机回归覆盖公式、峰值相位隔离、跨周期清零、无平台压、异常采样和报文编码。
 
 `MONITOR_HMI_C_DYNC = VTi / (Ppeak - PEEP)`，`MONITOR_HMI_C_STAT = VTe / (Pplat - PEEP)`，单位 mL/cmH₂O；使用同一完整呼吸的容量、压力和呼气末 PEEP，通过 `stBreathResult.complianceDynamic` / `complianceStatic` 同步发布并保持到下次结算。压差非正或非有限、容量为负、缺少对应有效压力/容量或周期采样异常时置零且不上传；停止、调零时清零。MCM 静态顺应性为 `0x18`，动态顺应性为 `0x19`，均使用无符号 16 位、数值 ×10、scale=1，沿用逐呼吸上传和队列重试；主机回归覆盖公式、无平台压、零/负压差、异常采样、快照保持、清零和报文缩放。
 

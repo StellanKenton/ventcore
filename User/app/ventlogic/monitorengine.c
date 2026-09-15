@@ -386,11 +386,13 @@ static void monitorEngineBreathResultPublish(uint32_t nowMs)
             lResult.validMask |= BREATH_RESULT_VALID_MVE;
         }
     }
-    /* Use the requested L/min formulas; expiration uses peak flow magnitude. */
+    /* Subtract elastic pressure for inspiration; convert L/min to L/s. */
     if ((gMonitorEngine.volumeInvalid == 0U) &&
         ((lResult.validMask & BREATH_RESULT_VALID_PEEP) != 0U)) {
         float lResistance;
-        if (((lResult.validMask & BREATH_RESULT_VALID_PPEAK) != 0U) &&
+        if (((lResult.validMask & (BREATH_RESULT_VALID_PPEAK |
+                                  BREATH_RESULT_VALID_PLATEAU_PRESSURE)) ==
+             (BREATH_RESULT_VALID_PPEAK | BREATH_RESULT_VALID_PLATEAU_PRESSURE)) &&
             (lResult.peakInspiratoryFlowLpm > 0.0F)) {
             lResistance = 60.0F * (lResult.ppeakCmh2o - lResult.peepCmh2o) /
                           lResult.peakInspiratoryFlowLpm;

@@ -527,9 +527,9 @@ static void resistance(void) {
     assert(monitorEngineBreathResultGet(&lResult) == MONITOR_ENGINE_SUCCESS);
     assert((lResult.validMask & BREATH_RESULT_VALID_RES_INSP) != 0U);
     assert((lResult.validMask & BREATH_RESULT_VALID_RES_EXP) != 0U);
-    assert(lResult.resistanceInspiratory == 105.0F);
+    assert(lResult.resistanceInspiratory == 30.0F);
     assert(lResult.resistanceExpiratory == 25.0F);
-    assert(monitorEngineGet(MONITOR_HMI_RES_INSP) == 105.0F);
+    assert(monitorEngineGet(MONITOR_HMI_RES_INSP) == 30.0F);
     assert(monitorEngineGet(MONITOR_HMI_RES_EXP) == 25.0F);
     gPlan.sequence++;
     sample(PHASE_INSP, 0.0F, 20.0F);
@@ -545,7 +545,8 @@ static void resistance(void) {
     sample(PHASE_EXP, -30.0F, 5.0F);
     monitorEngineBreathComplete(gNow);
     assert(monitorEngineBreathResultGet(&lResult) == MONITOR_ENGINE_SUCCESS);
-    assert((lResult.validMask & BREATH_RESULT_VALID_RES_INSP) != 0U);
+    assert((lResult.validMask & BREATH_RESULT_VALID_RES_INSP) == 0U);
+    assert(lResult.resistanceInspiratory == 0.0F);
     assert((lResult.validMask & BREATH_RESULT_VALID_RES_EXP) == 0U);
     reset();
     sample(PHASE_INSP, 10.0F, NAN);
