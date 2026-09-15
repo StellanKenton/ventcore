@@ -22,6 +22,12 @@ static uint8_t gPressureControllerReady;
 static ePressureControllerState gPressureControllerState;
 static stPressureControllerDiagnostic gPressureDiagnostic;
 static float gPressureFlowCompensation;
+static float gPressureFlowCompensationSlope;
+static uint8_t gPressureFlowLeadActive;
+static float gPressureHoldPreviousSpeed;
+static float gPressureHoldSpeedSlope;
+static uint32_t gPressureHoldElapsedMs;
+static uint8_t gPressureHoldBrakeActive;
 static float gPressureRiseStartPressure;
 static uint32_t gPressureRiseElapsedMs;
 static uint32_t gPressurePlanSequence;
@@ -110,6 +116,12 @@ void pressureControllerInit(void)
                                          (lInnerStatus == PID_STATUS_OK));
     gPressureControllerState = PRESSURE_CONTROLLER_IDLE;
     gPressureFlowCompensation = 0.0F;
+    gPressureFlowCompensationSlope = 0.0F;
+    gPressureFlowLeadActive = 0U;
+    gPressureHoldPreviousSpeed = 0.0F;
+    gPressureHoldSpeedSlope = 0.0F;
+    gPressureHoldElapsedMs = 0U;
+    gPressureHoldBrakeActive = 0U;
     gPressureRiseStartPressure = 0.0F;
     gPressureRiseElapsedMs = 0U;
     gPressurePlanSequence = 0U;
@@ -145,9 +157,15 @@ static void pressureControllerStateEnter(ePressureControllerState state)
         (void)pidReset(&gPressureOuterPid);
         (void)pidReset(&gPressureInnerPid);
         gPressureFlowCompensation = 0.0F;
+        gPressureFlowCompensationSlope = 0.0F;
+        gPressureFlowLeadActive = 0U;
+        gPressureHoldBrakeActive = 0U;
         gPressureRiseStartPressure = controlDataGet(PAT_REAL_PRS);
         gPressureRiseElapsedMs = 0U;
     } else if (state == PRESSURE_CONTROLLER_INSP_HOLD) {
+        gPressureHoldElapsedMs = 0U;
+        gPressureHoldPreviousSpeed = controlDataGet(RAW_BLOWER_SPEED);
+        gPressureHoldSpeedSlope = 0.0F;
         gPressureHoldPreviousPressure = controlDataGet(PAT_REAL_PRS);
         gPressureHoldPressureSlope = 0.0F;
         (void)pidSetTunings(&gPressureOuterPid,
@@ -169,6 +187,8 @@ static int8_t pressureControllerOuterLoopProcess(const stBreathPlan *plan,
     float lFlow;
     float lFlowCompensation;
     float lFlowCompensationMaximum;
+    float lPreviousFlowCompensation = gPressureFlowCompensation;
+    float lPeepCompensation = 0.0F;
     float lInspCorrection;
     float lPatientPressure;
     float lPatientReference;
@@ -196,13 +216,29 @@ static int8_t pressureControllerOuterLoopProcess(const stBreathPlan *plan,
                                                  lPressureLimit);
     lPatientPressure = controlDataGet(PAT_REAL_PRS);
     lFlow = controlDataGet(INSP_REAL_FLOW) * PRESSURE_CONTROLLER_FLOW_INPUT_SCALE;
-    lFlow = pressureControllerClamp(lFlow, 0.0F, PRESSURE_CONTROLLER_FLOW_INPUT_MAX);
+    /* PAC high-flow filling can exceed the legacy 70 L/min model ceiling. */
+    lFlow = pressureControllerClamp(lFlow, 0.0F,
+        plan->mode == VENT_MD_PAC ? PRESSURE_CONTROLLER_PAC_FLOW_INPUT_MAX :
+        PRESSURE_CONTROLLER_FLOW_INPUT_MAX);
     lFlowCompensation = (PRESSURE_CONTROLLER_FLOW_FF_LINEAR * lFlow) +
                         (PRESSURE_CONTROLLER_FLOW_FF_QUADRATIC * lFlow * lFlow);
     lFlowCompensationMaximum = (plan->inspiratoryPressureCmh2o - plan->peepCmh2o) *
                                PRESSURE_CONTROLLER_FLOW_FF_DELTA_RATIO;
+    /* Blend additional head/lead above the validated low-PEEP operating range. */
+    if ((plan->mode == VENT_MD_PAC) &&
+        (plan->inspiratoryPressureCmh2o > PRESSURE_CONTROLLER_PAC_GAIN_REFERENCE)) {
+        lPeepCompensation = pressureControllerClamp(
+            (plan->peepCmh2o - PRESSURE_CONTROLLER_PAC_FLOW_PEEP_BASE) /
+            PRESSURE_CONTROLLER_PAC_FLOW_PEEP_SPAN, 0.0F, 1.0F);
+        lFlowCompensationMaximum += plan->peepCmh2o * lPeepCompensation *
+                                   PRESSURE_CONTROLLER_FLOW_FF_DELTA_RATIO;
+        lFlowCompensation *= 1.0F + lPeepCompensation *
+                            (PRESSURE_CONTROLLER_PAC_FLOW_FF_SCALE - 1.0F);
+    }
     lFlowCompensationMaximum = pressureControllerClamp(lFlowCompensationMaximum,
                                                         0.0F,
+                                                        plan->mode == VENT_MD_PAC ?
+                                                        PRESSURE_CONTROLLER_PAC_FLOW_FF_MAX :
                                                         PRESSURE_CONTROLLER_FLOW_FF_MAX);
     lFlowCompensation = pressureControllerClamp(lFlowCompensation,
                                                 0.0F,
@@ -212,11 +248,37 @@ static int8_t pressureControllerOuterLoopProcess(const stBreathPlan *plan,
         lFlowCompensation = gPressureFlowCompensation;
     }
     if (state == PRESSURE_CONTROLLER_INSP_HOLD) {
-        gPressureFlowCompensation += PRESSURE_CONTROLLER_FLOW_FF_HOLD_FILTER_GAIN *
-                                     (lFlowCompensation - gPressureFlowCompensation);
+        /* The measured flow is already filtered; avoid another lag while the
+         * high-pressure lung fills and the required pipe-loss head falls. */
+        gPressureFlowCompensation +=
+            ((plan->mode == VENT_MD_PAC) &&
+             (plan->inspiratoryPressureCmh2o > PRESSURE_CONTROLLER_PAC_GAIN_REFERENCE) ?
+             PRESSURE_CONTROLLER_PAC_FLOW_FF_HOLD_FILTER_GAIN :
+             PRESSURE_CONTROLLER_FLOW_FF_HOLD_FILTER_GAIN) *
+            (lFlowCompensation - gPressureFlowCompensation);
     } else {
         gPressureFlowCompensation += PRESSURE_CONTROLLER_FLOW_FF_RISE_FILTER_GAIN *
                                      (lFlowCompensation - gPressureFlowCompensation);
+    }
+
+    lFlowCompensation = gPressureFlowCompensation;
+    if ((lPeepCompensation > 0.0F) &&
+        (state == PRESSURE_CONTROLLER_INSP_HOLD) && (gPressureHoldSettled == 0U)) {
+        /* Advance falling pipe loss to account for the blower's deceleration lag.
+         * Differentiate the flow model, never delayed patient-pressure feedback. */
+        gPressureFlowCompensationSlope += PRESSURE_CONTROLLER_PAC_FLOW_SLOPE_GAIN *
+            ((gPressureFlowCompensation - lPreviousFlowCompensation) /
+             PRESSURE_CONTROLLER_SAMPLE_PERIOD_S - gPressureFlowCompensationSlope);
+        if (lPatientPressure >= lPatientReference - PRESSURE_CONTROLLER_PAC_FLOW_LEAD_ENTRY_BAND) {
+            gPressureFlowLeadActive = 1U;
+        }
+        if (gPressureFlowLeadActive != 0U) {
+            lFlowCompensation += lPeepCompensation * pressureControllerClamp(
+                gPressureFlowCompensationSlope * PRESSURE_CONTROLLER_PAC_FLOW_LEAD_TIME_S,
+                -PRESSURE_CONTROLLER_PAC_FLOW_LEAD_MAX, 0.0F);
+            lFlowCompensation = pressureControllerClamp(lFlowCompensation, 0.0F,
+                                                       gPressureFlowCompensation);
+        }
     }
 
     lStatus = pidUpdate(&gPressureOuterPid,
@@ -246,7 +308,7 @@ static int8_t pressureControllerOuterLoopProcess(const stBreathPlan *plan,
     }
 
     *inspTarget = pressureControllerClamp(lPatientReference +
-                                          gPressureFlowCompensation +
+                                          lFlowCompensation +
                                           lInspCorrection +
                                           lRiseLead,
                                           PRESSURE_CONTROLLER_INSP_TARGET_MIN,
@@ -254,7 +316,7 @@ static int8_t pressureControllerOuterLoopProcess(const stBreathPlan *plan,
                                                                   PRESSURE_CONTROLLER_INSP_TARGET_MIN,
                                                                   PRESSURE_CONTROLLER_INSP_TARGET_MAX));
     gPressureDiagnostic.inspTarget = *inspTarget;
-    gPressureDiagnostic.flowCompensation = gPressureFlowCompensation;
+    gPressureDiagnostic.flowCompensation = lFlowCompensation;
     gPressureDiagnostic.patientCorrection = lInspCorrection;
     return PID_STATUS_OK;
 }
@@ -336,6 +398,21 @@ static int8_t pressureControllerClosedLoopProcess(const stBreathPlan *plan,
     gPressureDiagnostic.blowerFeedforward = lBlowerFeedforward;
     lEffort = (lEffort * PRESSURE_CONTROLLER_BLOWER_SPEED_SCALE) +
               lBlowerFeedforward;
+    /* Brake residual deceleration as flow loss vanishes; this transient
+     * correction stays outside the PI integral and fades as speed settles. */
+    if ((plan->mode == VENT_MD_PAC) && (gPressureHoldBrakeActive != 0U)) {
+        lEffort += pressureControllerClamp(
+            -gPressureHoldSpeedSlope * PRESSURE_CONTROLLER_SETTLED_BRAKE_TIME_S,
+            0.0F, PRESSURE_CONTROLLER_SETTLED_BRAKE_MAX) * pressureControllerClamp(
+            (plan->inspiratoryPressureCmh2o + PRESSURE_CONTROLLER_SETTLED_BRAKE_BAND -
+             controlDataGet(PAT_REAL_PRS)) / PRESSURE_CONTROLLER_SETTLED_BRAKE_BAND,
+            0.0F, 1.0F) * pressureControllerClamp(
+            (PRESSURE_CONTROLLER_SETTLED_BRAKE_FLOW_MAX - controlDataGet(PAT_REAL_FLOW)) /
+            (PRESSURE_CONTROLLER_SETTLED_BRAKE_FLOW_MAX - PRESSURE_CONTROLLER_SETTLED_FLOW_MAX),
+            0.0F, 1.0F);
+        gPressureDiagnostic.innerEffort = (lEffort - lBlowerFeedforward) /
+                                         PRESSURE_CONTROLLER_BLOWER_SPEED_SCALE;
+    }
     if (((lEffort > (float)PRESSURE_CONTROLLER_BLOWER_SPEED_SCALE) &&
          (gPressureInnerPid.integral > lPreviousIntegral)) ||
         ((lEffort < 0.0F) && (gPressureInnerPid.integral < lPreviousIntegral))) {
@@ -360,6 +437,30 @@ static int8_t pressureControllerHoldProcess(const stBreathPlan *plan,
 
     (void)phaseControlSet(PHASE_REF_PRESSURE,
                           plan->inspiratoryPressureCmh2o);
+    gPressureHoldElapsedMs += PRESSURE_CONTROLLER_SAMPLE_PERIOD_MS;
+    /* Only brake an early filling tail; late deceleration is needed for expiration. */
+    if ((gPressureFlowLeadActive != 0U) &&
+        (controlDataGet(PAT_REAL_FLOW) < PRESSURE_CONTROLLER_SETTLED_BRAKE_FLOW_MAX) &&
+        (gPressureRiseElapsedMs + gPressureHoldElapsedMs +
+         PRESSURE_CONTROLLER_SETTLED_BRAKE_REMAIN_MS <= plan->maximumInspiratoryTimeMs)) {
+        gPressureHoldBrakeActive = 1U;
+    }
+    lBlowerSpeed = controlDataGet(RAW_BLOWER_SPEED);
+    if ((lBlowerSpeed > 0.0F) &&
+        (lBlowerSpeed <= (float)PRESSURE_CONTROLLER_BLOWER_SPEED_SCALE)) {
+        if ((gPressureHoldPreviousSpeed > 0.0F) &&
+            (gPressureHoldPreviousSpeed <= (float)PRESSURE_CONTROLLER_BLOWER_SPEED_SCALE)) {
+            gPressureHoldSpeedSlope += PRESSURE_CONTROLLER_SETTLED_SPEED_FILTER *
+                ((lBlowerSpeed - gPressureHoldPreviousSpeed) /
+                 PRESSURE_CONTROLLER_SAMPLE_PERIOD_S - gPressureHoldSpeedSlope);
+        } else {
+            gPressureHoldSpeedSlope = 0.0F;
+        }
+        gPressureHoldPreviousSpeed = lBlowerSpeed;
+    } else {
+        gPressureHoldPreviousSpeed = 0.0F;
+        gPressureHoldSpeedSlope = 0.0F;
+    }
     /* Latch lower bandwidth in the PAC filling tail; reset on the next rise. */
     if ((plan->mode == VENT_MD_PAC || (plan->mode == VENT_MD_P_SIMV && plan->breathType == BREATH_TYPE_MANDATORY_PRESSURE)) && (gPressureHoldSettled == 0U) &&
         (controlDataGet(PAT_REAL_FLOW) <= PRESSURE_CONTROLLER_SETTLED_FLOW_MAX) &&
@@ -465,6 +566,21 @@ int8_t pressureControllerProcess(const stBreathPlan *plan, stActuatorRequest *re
     switch (gPressureControllerState) {
         case PRESSURE_CONTROLLER_IDLE:
             pressureControllerStateEnter(PRESSURE_CONTROLLER_INSP_RISE);
+            /* Blower pressure sensitivity rises with operating pressure. Keep the PAC
+             * filling loop below the delayed actuator bandwidth before low-flow capture. */
+            if (plan->mode == VENT_MD_PAC) {
+                float lGainScale = pressureControllerClamp(
+                    PRESSURE_CONTROLLER_PAC_GAIN_REFERENCE / pressureControllerClamp(
+                        plan->inspiratoryPressureCmh2o, PRESSURE_CONTROLLER_PAC_GAIN_REFERENCE,
+                        PRESSURE_CONTROLLER_INSP_TARGET_MAX),
+                    PRESSURE_CONTROLLER_PAC_GAIN_MIN_SCALE, 1.0F);
+                (void)pidSetTunings(&gPressureInnerPid,
+                                    PRESSURE_CONTROLLER_INNER_KP * pressureControllerClamp(
+                                        lGainScale * lGainScale,
+                                        PRESSURE_CONTROLLER_PAC_GAIN_MIN_SCALE, 1.0F),
+                                    PRESSURE_CONTROLLER_INNER_KI,
+                                    PRESSURE_CONTROLLER_INNER_KD);
+            }
             return pressureControllerRiseProcess(plan, request);
         case PRESSURE_CONTROLLER_INSP_RISE:
             return pressureControllerRiseProcess(plan, request);

@@ -238,6 +238,188 @@ static void testPacPredictiveRelief(void) {
     gRefs[PHASE_REF_PRESSURE] = 0.0F;
 }
 
+/** High-flow PAC needs pipe-loss headroom and bounded delayed pressure feedback. */
+static void testPacHighPressure(void) {
+    const float lTargets[] = {20.0F, 30.0F, 40.0F, 50.0F};
+    stVentLimitSettings lLimits = {.pressureLow = 1.0F, .pressureHigh = 100.0F};
+    stBreathPlan lPlan = {.sequence = 1U, .mode = VENT_MD_PAC,
+        .breathType = BREATH_TYPE_MANDATORY_PRESSURE, .peepCmh2o = 5.0F,
+        .riseTimeMs = 200U, .maximumInspiratoryTimeMs = 800U,
+        .pressureLimitCmh2o = 100.0F, .limitSettings = &lLimits};
+    stActuatorRequest lRequest;
+    stPressureControllerDiagnostic lDiagnostic;
+    uint16_t lPrevious;
+    gPhase = PHASE_INSP;
+    for (unsigned lIndex = 0U; lIndex < 4U; lIndex++) {
+        pressureControllerInit();
+        lPlan.inspiratoryPressureCmh2o = lTargets[lIndex];
+        gData[PAT_REAL_PRS] = lTargets[lIndex];
+        gData[INSP_REAL_PRS] = lTargets[lIndex] + 10.0F;
+        gData[PAT_REAL_FLOW] = 80.0F;
+        gData[INSP_REAL_FLOW] = 80.0F;
+        for (unsigned lStep = 0U; lStep < 110U; lStep++) {
+            assert(pressureControllerProcess(&lPlan, &lRequest) == ACTUATOR_REQUEST_SUCCESS);
+        }
+        pressureControllerDiagnosticGet(&lDiagnostic);
+        if (lIndex == 3U) {
+            assert(lDiagnostic.flowCompensation > 12.5F);
+            assert(lDiagnostic.flowCompensation < 13.5F);
+        }
+        lPrevious = lRequest.blowerTarget;
+        gData[INSP_REAL_PRS] += 1.0F;
+        assert(pressureControllerProcess(&lPlan, &lRequest) == ACTUATOR_REQUEST_SUCCESS);
+        assert(lRequest.blowerTarget < lPrevious);
+        assert(lPrevious - lRequest.blowerTarget <= (lIndex == 0U ? 13 : 9));
+        assert(lRequest.expiratoryValveDuty == 100U);
+        if (lIndex == 3U) {
+            /* PEEP 5 retains the previously validated falling-flow response. */
+            gData[INSP_REAL_FLOW] = 40.0F;
+            assert(pressureControllerProcess(&lPlan, &lRequest) == ACTUATOR_REQUEST_SUCCESS);
+            pressureControllerDiagnosticGet(&lDiagnostic);
+            assert(fabsf(lDiagnostic.flowCompensation - 4.7492F) < 0.001F);
+            for (unsigned lStep = 0U; lStep < 200U; lStep++) {
+                assert(pressureControllerProcess(&lPlan, &lRequest) == ACTUATOR_REQUEST_SUCCESS);
+            }
+            pressureControllerDiagnosticGet(&lDiagnostic);
+            assert(fabsf(lDiagnostic.flowCompensation - 4.7492F) < 0.001F);
+        }
+        /* Settled handoff must still work after high-flow filling. */
+        gData[PAT_REAL_FLOW] = 10.0F;
+        gData[RAW_BLOWER_SPEED] = 0.0F;
+        assert(pressureControllerProcess(&lPlan, &lRequest) == ACTUATOR_REQUEST_SUCCESS);
+        pressureControllerDiagnosticGet(&lDiagnostic);
+        assert(lDiagnostic.flowCompensation == 0.0F);
+    }
+    /* A subsequent low-pressure breath must restore the original loop gain. */
+    lPlan.sequence++;
+    lPlan.inspiratoryPressureCmh2o = 20.0F;
+    gData[PAT_REAL_PRS] = 20.0F;
+    gData[INSP_REAL_PRS] = 20.0F;
+    gData[PAT_REAL_FLOW] = 40.0F;
+    gData[INSP_REAL_FLOW] = 20.0F;
+    for (unsigned lStep = 0U; lStep < 110U; lStep++) {
+        assert(pressureControllerProcess(&lPlan, &lRequest) == ACTUATOR_REQUEST_SUCCESS);
+    }
+    lPrevious = lRequest.blowerTarget;
+    gData[INSP_REAL_PRS] += 1.0F;
+    assert(pressureControllerProcess(&lPlan, &lRequest) == ACTUATOR_REQUEST_SUCCESS);
+    assert(lPrevious - lRequest.blowerTarget >= 11);
+    assert(lPrevious - lRequest.blowerTarget <= 13);
+    for (unsigned lIndex = 0U; lIndex < CONTROL_DATA_COUNT; lIndex++) {
+        gData[lIndex] = 0.0F;
+    }
+    gRefs[PHASE_REF_PRESSURE] = 0.0F;
+}
+
+/** Do not withdraw pipe-loss head before the patient reaches the plateau. */
+static void testPacFlowLeadCapture(void) {
+    const float lPeeps[] = {5.0F, 7.5F, 10.0F, 10.0F};
+    const float lExpectedHeads[] = {9.0F, 9.375F, 10.5F, 7.5F};
+    stVentLimitSettings lLimits = {.pressureLow = 1.0F, .pressureHigh = 100.0F};
+    stBreathPlan lPlan = {.sequence = 1U, .mode = VENT_MD_PAC,
+        .breathType = BREATH_TYPE_MANDATORY_PRESSURE, .peepCmh2o = 10.0F,
+        .inspiratoryPressureCmh2o = 35.0F, .riseTimeMs = 200U,
+        .maximumInspiratoryTimeMs = 800U, .limitSettings = &lLimits};
+    stActuatorRequest lRequest;
+    stPressureControllerDiagnostic lDiagnostic;
+    pressureControllerInit();
+    for (unsigned lCase = 0U; lCase < 3U; lCase++) {
+        lPlan.sequence++;
+        gData[PAT_REAL_PRS] = lCase == 1U ? 35.0F : 32.0F;
+        gData[INSP_REAL_PRS] = 40.0F;
+        gData[PAT_REAL_FLOW] = 60.0F;
+        gData[INSP_REAL_FLOW] = 80.0F;
+        for (unsigned lStep = 0U; lStep < 100U; lStep++) {
+            assert(pressureControllerProcess(&lPlan, &lRequest) == ACTUATOR_REQUEST_SUCCESS);
+        }
+        pressureControllerDiagnosticGet(&lDiagnostic);
+        /* PEEP 10 must not inherit the old 7.5 cmH2O Delta-P-only cap. */
+        assert(lDiagnostic.flowCompensation > 10.0F);
+        gData[INSP_REAL_FLOW] = 40.0F;
+        assert(pressureControllerProcess(&lPlan, &lRequest) == ACTUATOR_REQUEST_SUCCESS);
+        pressureControllerDiagnosticGet(&lDiagnostic);
+        if (lCase == 1U) {
+            assert(lDiagnostic.flowCompensation >= 0.0F);
+            assert(lDiagnostic.flowCompensation < 2.0F);
+        } else {
+            assert(fabsf(lDiagnostic.flowCompensation - 5.22412F) < 0.001F);
+        }
+    }
+    /* PEEP interpolation is continuous, while PSV retains its old model cap. */
+    for (unsigned lCase = 0U; lCase < 4U; lCase++) {
+        lPlan.sequence++;
+        lPlan.peepCmh2o = lPeeps[lCase];
+        lPlan.mode = lCase == 3U ? VENT_MD_CPAP_PSV : VENT_MD_PAC;
+        lPlan.pressureLimitCmh2o = 100.0F;
+        gData[PAT_REAL_PRS] = 32.0F;
+        gData[INSP_REAL_FLOW] = 80.0F;
+        for (unsigned lStep = 0U; lStep < 100U; lStep++) {
+            assert(pressureControllerProcess(&lPlan, &lRequest) == ACTUATOR_REQUEST_SUCCESS);
+        }
+        pressureControllerDiagnosticGet(&lDiagnostic);
+        /* Rise filtering may leave a small residual below the model cap. */
+        assert(fabsf(lDiagnostic.flowCompensation - lExpectedHeads[lCase]) < 0.02F);
+    }
+    for (unsigned lIndex = 0U; lIndex < CONTROL_DATA_COUNT; lIndex++) {
+        gData[lIndex] = 0.0F;
+    }
+    gRefs[PHASE_REF_PRESSURE] = 0.0F;
+}
+
+/** Low-flow braking must be bounded, transient and absent on rising speed. */
+static void testPacSettledBrake(void) {
+    stVentLimitSettings lLimits = {.pressureLow = 1.0F, .pressureHigh = 100.0F};
+    stBreathPlan lPlan = {.sequence = 1U, .mode = VENT_MD_PAC,
+        .breathType = BREATH_TYPE_MANDATORY_PRESSURE, .peepCmh2o = 15.0F,
+        .inspiratoryPressureCmh2o = 40.0F, .riseTimeMs = 200U,
+        .maximumInspiratoryTimeMs = 800U, .limitSettings = &lLimits};
+    stActuatorRequest lRequest;
+    uint16_t lBaseline;
+    for (unsigned lCase = 0U; lCase < 3U; lCase++) {
+        pressureControllerInit();
+        gData[PAT_REAL_PRS] = 40.0F;
+        gData[INSP_REAL_PRS] = 40.0F;
+        gData[PAT_REAL_FLOW] = 80.0F;
+        gData[INSP_REAL_FLOW] = 80.0F;
+        gData[RAW_BLOWER_SPEED] = 400.0F;
+        for (unsigned lStep = 0U; lStep < (lCase == 2U ? 110U : 70U); lStep++) {
+            assert(pressureControllerProcess(&lPlan, &lRequest) == ACTUATOR_REQUEST_SUCCESS);
+        }
+        gData[PAT_REAL_FLOW] = 10.0F;
+        gData[INSP_REAL_FLOW] = 0.0F;
+        assert(pressureControllerProcess(&lPlan, &lRequest) == ACTUATOR_REQUEST_SUCCESS);
+        lBaseline = lRequest.blowerTarget;
+        for (unsigned lStep = 0U; lStep < 10U; lStep++) {
+            gData[RAW_BLOWER_SPEED] += lCase == 1U ? 2.0F : -2.0F;
+            assert(pressureControllerProcess(&lPlan, &lRequest) == ACTUATOR_REQUEST_SUCCESS);
+        }
+        if (lCase == 0U) {
+            assert(lRequest.blowerTarget > lBaseline + 10U);
+            assert(lRequest.blowerTarget <= lBaseline + 40U);
+            gData[PAT_REAL_PRS] = 40.5F;
+            assert(pressureControllerProcess(&lPlan, &lRequest) == ACTUATOR_REQUEST_SUCCESS);
+            assert(lRequest.blowerTarget <= lBaseline + 1U);
+            gData[PAT_REAL_PRS] = 40.0F;
+        } else {
+            assert(lRequest.blowerTarget == lBaseline);
+        }
+        for (unsigned lStep = 0U; lStep < 200U; lStep++) {
+            assert(pressureControllerProcess(&lPlan, &lRequest) == ACTUATOR_REQUEST_SUCCESS);
+        }
+        assert(abs((int)lRequest.blowerTarget - (int)lBaseline) <= 1);
+        gData[RAW_BLOWER_SPEED] = NAN;
+        assert(pressureControllerProcess(&lPlan, &lRequest) == ACTUATOR_REQUEST_SUCCESS);
+        assert(abs((int)lRequest.blowerTarget - (int)lBaseline) <= 1);
+        gData[RAW_BLOWER_SPEED] = 400.0F;
+        assert(pressureControllerProcess(&lPlan, &lRequest) == ACTUATOR_REQUEST_SUCCESS);
+        assert(abs((int)lRequest.blowerTarget - (int)lBaseline) <= 1);
+    }
+    for (unsigned lIndex = 0U; lIndex < CONTROL_DATA_COUNT; lIndex++) {
+        gData[lIndex] = 0.0F;
+    }
+    gRefs[PHASE_REF_PRESSURE] = 0.0F;
+}
+
 /** Run a successful cycle and return its blower request. */
 static uint16_t testStep(const stBreathPlan *plan) {
     stActuatorRequest lRequest;
@@ -299,6 +481,9 @@ int main(void) {
     testPressureAlarmLimit();
     testPacSettledHold();
     testPacPredictiveRelief();
+    testPacHighPressure();
+    testPacFlowLeadCapture();
+    testPacSettledBrake();
     stVentLimitSettings lLimits = {.pressureLow = 1.0F, .pressureHigh = 60.0F};
     stBreathPlan lPlan = {.sequence = 1U, .mode = VENT_MD_VAC,
         .breathType = BREATH_TYPE_MANDATORY_VOLUME, .targetTidalVolumeMl = 500.0F,
@@ -443,7 +628,7 @@ def main():
         environment["PATH"] = str(Path(compiler).parent) + os.pathsep + environment["PATH"]
         subprocess.run(command, check=True, env=environment)
         subprocess.run([str(executable)], check=True, env=environment)
-    print("PASS: PAC terminal handoff/regulation/reset, alarm-high independence, PSV/ST isolation, VAC entry, delayed-tail integral gating, reverse flow, flow-source distinction, limits, faults")
+    print("PASS: PAC high-pressure gain/compensation/reset, terminal handoff/regulation/reset, alarm-high independence, PSV/ST isolation, VAC entry, delayed-tail integral gating, reverse flow, flow-source distinction, limits, faults")
 
 
 if __name__ == "__main__":

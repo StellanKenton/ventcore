@@ -58,22 +58,47 @@ target board.
   pressure-density correction at table knots and through the real filters,
   and unavailable-table recovery.
 
-- `test_pac_rtt.py`: default PAC terminal-flow bench regression. With a confirmed
-  test lung connected, use Device Tool build/flash (or reset an already flashed
-  build), then `py -3 user/develop/test_pac_rtt.py --output build/pac_repeat`.
-  Uses PEEP 5, Delta-P 25 and trigger off; Ti is read from the current source
-  defaults after reset (currently 800 ms, rate 15/min and oxygen 21%).
-  Records 68 seconds, stops on completion/error and saves
-  RTT, 6 ms CSV, source/firmware hashes and per-breath metrics. An empty `stop`
-  file in the output directory aborts collection. The comparison window is the
-  last 240 ms ending 12 ms before the pressure-reference fall, excluding two
-  startup breaths. Requires at least ten analyzed breaths and terminal pressure
-  28..32 cmH2O (a bench check, not a clinical limit). Flow peak-to-peak and standard
-  deviation are reported for comparison, without declaring oscillation eliminated.
-  Full inspirations are segmented from rise entry to reference fall, so short
-  inspirations retain their rising transient. Reports full-inspiration peak and
-  overshoot as well as terminal metrics; the 600 ms window is shortened when
-  necessary and is not necessarily a settled plateau at short Ti.
+- `test_pac_rtt.py`: PAC pressure/flow bench regression through Device Tool RTT.
+  With a test lung connected, build/flash using Device Tool, then run
+  `py -3 user/develop/test_pac_rtt.py --output build/pac_check --delta 45 --seconds 44`.
+  Defaults explicitly configure PEEP 5, rate 25/min, Ti 800 ms, rise setting
+  200 ms and trigger off; `--peep`, `--delta`, `--ti-ms`, `--rate`, `--rise-ms` select the
+  operating point. `vt set <peep> <delta> [ti_ms rate rise_ms]` preserves timing
+  when the optional triple is omitted and rejects malformed/impossible timing.
+  `VT_PAC_SETTINGS` confirms the applied values during collection.
+  The script stops ventilation on completion/error. An empty `stop` file in the
+  output directory aborts collection. Save each run in a separate directory.
+  RTT, continuous 6 ms CSV, source/firmware hashes and per-breath metrics are saved.
+  Two startup breaths are excluded; at least ten complete analyzed breaths are
+  required. The terminal window is 240 ms, ending 12 ms before reference fall.
+  For the PEEP 10 platform-ramp regression, run
+  `py -3 user/develop/test_pac_rtt.py --output build/pac_flat_check --peep 10 --delta 25 --rate 15 --seconds 68 --max-plateau-drift 0.8`.
+  Plateau metrics exclude the first 60 ms of HOLD and final 12 ms of inspiration;
+  drift is the last 60 ms mean minus the first 60 ms mean of that window.
+  The optional drift limit checks every analyzed breath's absolute drift;
+  without this option, `plateau_flat=true` means the check was not requested.
+  Plateau peak-to-peak also reports intermediate dips that drift alone can miss.
+  `--max-plateau-undershoot 1.0` additionally rejects any analyzed plateau
+  sample more than 1 cmH2O below target, including an intermediate dip even if
+  the beginning and end agree. It uses the same HOLD window as plateau drift.
+  Example: `--peep 15 --delta 25 --rate 15 --seconds 56 --max-plateau-drift 0.8 --max-plateau-undershoot 1.0`.
+  Without this optional limit, `plateau_undershoot_valid=true` means that check
+  was not requested. Both optional limits must be finite and nonnegative.
+  A frozen supply-flow signal during changing patient flow invalidates a capture.
+  Bench acceptance requires terminal pressure within target +/-2 cmH2O and
+  full-inspiration peak no more than target +2, as well as matching settings,
+  continuous samples and control Ti. This is a bench check, not a clinical limit.
+  The reported half-inspiration window can include the effective high-pressure
+  rise, so its minimum is not used as a settled-pressure acceptance criterion.
+  Flow peak-to-peak includes normal decelerating flow; inspect waveforms before
+  interpreting it as oscillation. Disconnect other RTT readers (including Ozone)
+  during capture: readers can consume one another's log bytes.
+  `test_flow_pause.py` also verifies PAC high-flow compensation, bounded feedback
+  at targets 20/30/40/50, low-flow handoff, saturation and PSV/ST isolation.
+  It also covers PEEP compensation interpolation, pressure capture before applying
+  falling-flow advance, per-breath reset and the unchanged PEEP 5 response.
+  The filling-tail brake tests verify deceleration-only output, its bound,
+  pressure gating, decay without a retained PI bias, and invalid-speed recovery.
 
 - `test_protocol.py`: host regression using the production MCM parser, caches and settings binding with a simulated UART. Run `py -3 user/develop/test_protocol.py`; covers MCM alarm limits with local/host settings, scaling, partial updates and CRC rejection, physiological alarm wire bits, recovery and unchanged-state suppression, fragmented frames, malformed packets, CRC, ACK, source switching, ventilation commands and waveform encoding, plus 1110 heartbeat responses with continuous traffic, bursts, UART busy/queue backpressure, timeout and reconnect. It does not flash or operate the board.
 

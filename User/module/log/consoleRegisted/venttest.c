@@ -93,22 +93,28 @@ static bool ventTestUnsignedParse(const char **arguments, uint16_t *value)
 /** Show the supported ventilation test commands. */
 static void ventTestUsageShow(void)
 {
-    LOG_I(gVentTestTag, "usage: vt mode <x> | run <0|1> | pac | vac | psv | psvst | psimv | vsimv | stop | set <peep> <delta> | support <peep> <delta> | volume <peep> <ml> [pause_pct [ti_ms rate]] | trigger off | trigger pressure <cmh2o100> | trigger flow <lpm100> | peep | status");
+    LOG_I(gVentTestTag, "usage: vt mode <x> | run <0|1> | pac | vac | psv | psvst | psimv | vsimv | stop | set <peep> <delta> [ti_ms rate rise_ms] | support <peep> <delta> | volume <peep> <ml> [pause_pct [ti_ms rate]] | trigger off | trigger pressure <cmh2o100> | trigger flow <lpm100> | peep | status");
 }
 
 /** Report selected settings and the active breath separately. */
 static void ventTestSettingsShow(void) {
+    stVentPacSettings lPac;
     stVentCpapPsvSettings lSettings;
     stVentPsvStSettings lStSettings;
     stBreathPlan lPlan;
     uint8_t lHost;
     int8_t lStatus;
     repRtosEnterCritical();
+    lPac = *GetVentPacSettings();
     lSettings = *GetVentCpapPsvSettings();
     lStSettings = *GetVentPsvStSettings();
     lHost = GetVentPatientSettings()->useHostSettings;
     lStatus = phaseControllerActivePlanGet(&lPlan);
     repRtosExitCritical();
+    LOG_R("VT_PAC_SETTINGS,peep100=%ld,delta100=%ld,rate100=%ld,ti_ms=%lu,rise_ms=%lu",
+          (long)ventTestCenti(lPac.peep), (long)ventTestCenti(lPac.DeltaPressure),
+          (long)ventTestCenti(lPac.Rate), (unsigned long)lPac.inspiratoryTimeMs,
+          (unsigned long)lPac.riseTimeMs);
     LOG_R("VT_PSV_SETTINGS,host=%u,peep100=%ld,support100=%ld,backup100=%ld",
           (unsigned int)lHost, (long)ventTestCenti(lSettings.peepCmh2o),
           (long)ventTestCenti(lSettings.pressureSupportCmh2o),
@@ -291,6 +297,7 @@ static eConsoleCommandResult ventTestConsoleCommand(const char *arguments)
     stVentPsvStSettings *lPsvStSettings;
     int8_t lStatus;
     uint16_t lDeltaPressure;
+    uint16_t lRiseMs;
     uint16_t lMode;
     uint16_t lPeep;
     uint16_t lTidalVolume;
@@ -358,13 +365,31 @@ static eConsoleCommandResult ventTestConsoleCommand(const char *arguments)
               (unsigned int)lPeep, (unsigned int)lDeltaPressure, (int)lStatus);
     } else if (ventTestTokenMatch(&arguments, "set") &&
                ventTestUnsignedParse(&arguments, &lPeep) &&
-               ventTestUnsignedParse(&arguments, &lDeltaPressure) &&
-               (*ventTestSkipSpaces(arguments) == '\0')) {
-        (void)breathSchedulerStop();
+               ventTestUnsignedParse(&arguments, &lDeltaPressure)) {
         lPacSettings = GetVentPacSettings();
+        lInspTimeMs = (uint16_t)lPacSettings->inspiratoryTimeMs;
+        lRate = (uint16_t)lPacSettings->Rate;
+        lRiseMs = (uint16_t)lPacSettings->riseTimeMs;
+        if ((*ventTestSkipSpaces(arguments) != '\0') &&
+            (!ventTestUnsignedParse(&arguments, &lInspTimeMs) ||
+             !ventTestUnsignedParse(&arguments, &lRate) ||
+             !ventTestUnsignedParse(&arguments, &lRiseMs))) {
+            return CONSOLE_COMMAND_RESULT_INVALID_ARGUMENT;
+        }
+        if ((*ventTestSkipSpaces(arguments) != '\0') || (lRate == 0U) ||
+            (lRate < GetVentLimitSettings()->frequencyLow) ||
+            (lRate > GetVentLimitSettings()->frequencyHigh) ||
+            (lInspTimeMs == 0U) || (lRiseMs > lInspTimeMs) ||
+            ((uint32_t)lInspTimeMs + BREATH_PEEP_LOCK_TIME_MS > 60000U / lRate)) {
+            return CONSOLE_COMMAND_RESULT_INVALID_ARGUMENT;
+        }
+        (void)breathSchedulerStop();
         lPreviousSettings = *lPacSettings;
         lPacSettings->peep = (float)lPeep;
         lPacSettings->DeltaPressure = (float)lDeltaPressure;
+        lPacSettings->inspiratoryTimeMs = lInspTimeMs;
+        lPacSettings->Rate = (float)lRate;
+        lPacSettings->riseTimeMs = lRiseMs;
         lStatus = breathSchedulerTestModeSet((uint8_t)VENT_MD_PAC);
         if (lStatus != BREATH_CONTROL_SUCCESS) {
             *lPacSettings = lPreviousSettings;
