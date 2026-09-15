@@ -290,189 +290,227 @@ static void monitorEngineMeanPressureAccumulate(void) {
     gMonitorEngine.meanPressureSampleCount++;
 }
 
-/** Publish the breath that ended immediately before a new inspiration. */
-static void monitorEngineBreathResultPublish(uint32_t nowMs)
-{
-    float lPeepPressure = monitorEngineGet(MONITOR_DYN_PEEP);
-    stBreathResult lResult = {0};
-
-    lResult.sequence = gMonitorEngine.breathPlan.sequence;
-    lResult.mode = gMonitorEngine.breathPlan.mode;
-    lResult.breathType = gMonitorEngine.breathPlan.breathType;
-    lResult.triggerReason = gMonitorEngine.breathPlan.triggerReason;
-    lResult.vtiMl = gMonitorData[MONITOR_TIDA_VOL_INSP];
-    lResult.vteMl = gMonitorData[MONITOR_TIDA_VOL_EXP];
-    lResult.ppeakCmh2o = gMonitorEngine.peakPressureCmh2o;
-    lResult.plateauPressureCmh2o = gMonitorData[MONITOR_PLATEAU_PRS];
-    lResult.peepCmh2o = lPeepPressure;
-    lResult.peakInspiratoryFlowLpm = gMonitorEngine.peakInspiratoryFlowLpm;
-    lResult.peakExpiratoryFlowLpm = gMonitorEngine.peakExpiratoryFlowLpm;
-    lResult.cycleReason = gMonitorEngine.cycleReason;
-    lResult.inspiratoryTimeMs = gMonitorEngine.inspiratoryTimeMs;
-    lResult.cycleTimeMs = nowMs - gMonitorEngine.breathStartedMs;
-    lResult.validMask = BREATH_RESULT_VALID_COMPLETE |
+/** Capture the completed breath measurements and timing. */
+static void monitorEngineBreathResultCapture(stBreathResult *result, uint32_t nowMs) {
+    result->sequence = gMonitorEngine.breathPlan.sequence;
+    result->mode = gMonitorEngine.breathPlan.mode;
+    result->breathType = gMonitorEngine.breathPlan.breathType;
+    result->triggerReason = gMonitorEngine.breathPlan.triggerReason;
+    result->vtiMl = gMonitorData[MONITOR_TIDA_VOL_INSP];
+    result->vteMl = gMonitorData[MONITOR_TIDA_VOL_EXP];
+    result->ppeakCmh2o = gMonitorEngine.peakPressureCmh2o;
+    result->plateauPressureCmh2o = gMonitorData[MONITOR_PLATEAU_PRS];
+    result->peepCmh2o = monitorEngineGet(MONITOR_DYN_PEEP);
+    result->peakInspiratoryFlowLpm = gMonitorEngine.peakInspiratoryFlowLpm;
+    result->peakExpiratoryFlowLpm = gMonitorEngine.peakExpiratoryFlowLpm;
+    result->cycleReason = gMonitorEngine.cycleReason;
+    result->inspiratoryTimeMs = gMonitorEngine.inspiratoryTimeMs;
+    result->cycleTimeMs = nowMs - gMonitorEngine.breathStartedMs;
+    result->validMask = BREATH_RESULT_VALID_COMPLETE |
                         BREATH_RESULT_VALID_CYCLE_TIME |
                         BREATH_RESULT_VALID_INSPIRATORY_TIME;
+}
+
+/** Calculate whole-breath mean pressure and leak flow. */
+static void monitorEngineBreathResultAveragesCalculate(stBreathResult *result) {
     if ((gMonitorEngine.meanPressureInvalid == 0U) &&
         (gMonitorEngine.meanPressureSampleCount > 0U) &&
         (monitorEngineFinite(gMonitorEngine.meanPressureSumCmh2o) != 0U)) {
-        lResult.meanPressureCmh2o = gMonitorEngine.meanPressureSumCmh2o /
+        result->meanPressureCmh2o = gMonitorEngine.meanPressureSumCmh2o /
                                   (float)gMonitorEngine.meanPressureSampleCount;
-        lResult.validMask |= BREATH_RESULT_VALID_MEAN_PRESSURE;
+        result->validMask |= BREATH_RESULT_VALID_MEAN_PRESSURE;
     }
     if ((gMonitorEngine.minuteLeakInvalid == 0U) &&
         (gMonitorEngine.leakCycleInvalid == 0U) &&
         (gMonitorEngine.minuteLeakSampleCount > 0U) &&
         (monitorEngineFinite(gMonitorEngine.minuteLeakSumLpm) != 0U)) {
-        lResult.minuteLeakLpm = gMonitorEngine.minuteLeakSumLpm /
+        result->minuteLeakLpm = gMonitorEngine.minuteLeakSumLpm /
                                (float)gMonitorEngine.minuteLeakSampleCount;
-        lResult.validMask |= BREATH_RESULT_VALID_MINUTE_LEAK;
+        result->validMask |= BREATH_RESULT_VALID_MINUTE_LEAK;
     }
-    if ((monitorEngineFinite(lResult.vtiMl) != 0U) &&
+}
+
+/** Mark valid measurements and discard incomplete expiratory peaks. */
+static void monitorEngineBreathResultValidate(stBreathResult *result) {
+    if ((monitorEngineFinite(result->vtiMl) != 0U) &&
         (gMonitorEngine.volumeInvalid == 0U)) {
-        lResult.validMask |= BREATH_RESULT_VALID_VTI;
+        result->validMask |= BREATH_RESULT_VALID_VTI;
     }
-    if (monitorEngineFinite(lResult.vteMl) != 0U) {
-        lResult.validMask |= BREATH_RESULT_VALID_VTE;
+    if (monitorEngineFinite(result->vteMl) != 0U) {
+        result->validMask |= BREATH_RESULT_VALID_VTE;
     }
-    if (monitorEngineFinite(lResult.ppeakCmh2o) != 0U) {
-        lResult.validMask |= BREATH_RESULT_VALID_PPEAK;
+    if (monitorEngineFinite(result->ppeakCmh2o) != 0U) {
+        result->validMask |= BREATH_RESULT_VALID_PPEAK;
     }
     if ((gMonitorEngine.plateauPressureSampleCount > 0U) &&
-        (monitorEngineFinite(lResult.plateauPressureCmh2o) != 0U)) {
-        lResult.validMask |= BREATH_RESULT_VALID_PLATEAU_PRESSURE;
+        (monitorEngineFinite(result->plateauPressureCmh2o) != 0U)) {
+        result->validMask |= BREATH_RESULT_VALID_PLATEAU_PRESSURE;
     }
     if ((gMonitorEngine.peepSampleCount != 0U) &&
-        (monitorEngineFinite(lResult.peepCmh2o) != 0U)) {
-        lResult.validMask |= BREATH_RESULT_VALID_PEEP;
+        (monitorEngineFinite(result->peepCmh2o) != 0U)) {
+        result->validMask |= BREATH_RESULT_VALID_PEEP;
     }
-    if (monitorEngineFinite(lResult.peakInspiratoryFlowLpm) != 0U) {
-        lResult.validMask |= BREATH_RESULT_VALID_PEAK_INSP_FLOW;
+    if (monitorEngineFinite(result->peakInspiratoryFlowLpm) != 0U) {
+        result->validMask |= BREATH_RESULT_VALID_PEAK_INSP_FLOW;
     }
     /* Reject incomplete flow measurements even if a partial peak is finite. */
     if ((gMonitorEngine.volumeInvalid == 0U) &&
-        (monitorEngineFinite(lResult.peakExpiratoryFlowLpm) != 0U)) {
-        lResult.validMask |= BREATH_RESULT_VALID_PEAK_EXP_FLOW;
+        (monitorEngineFinite(result->peakExpiratoryFlowLpm) != 0U)) {
+        result->validMask |= BREATH_RESULT_VALID_PEAK_EXP_FLOW;
     } else {
-        lResult.peakExpiratoryFlowLpm = 0.0F;
+        result->peakExpiratoryFlowLpm = 0.0F;
     }
     if ((gMonitorEngine.volumeLimited != 0U) || (gMonitorEngine.volumeBlowerLimited != 0U)) {
-        lResult.validMask |= BREATH_RESULT_VOLUME_LIMITED;
+        result->validMask |= BREATH_RESULT_VOLUME_LIMITED;
     }
+}
+
+/** Calculate minute volumes and the completed-breath leak percentage. */
+static void monitorEngineBreathResultMinuteVolumeCalculate(stBreathResult *result) {
     /* Completed tidal volume in mL times 60 / cycle ms gives L/min. */
-    if (((lResult.validMask & BREATH_RESULT_VALID_VTI) != 0U) &&
-        (lResult.vtiMl >= 0.0F) && (lResult.cycleTimeMs > 0U)) {
-        lResult.minuteInspiratoryLpm = lResult.vtiMl * (60.0F / (float)lResult.cycleTimeMs);
-        if (monitorEngineFinite(lResult.minuteInspiratoryLpm) != 0U) {
-            lResult.validMask |= BREATH_RESULT_VALID_MVI;
+    if (((result->validMask & BREATH_RESULT_VALID_VTI) != 0U) &&
+        (result->vtiMl >= 0.0F) && (result->cycleTimeMs > 0U)) {
+        result->minuteInspiratoryLpm = result->vtiMl * (60.0F / (float)result->cycleTimeMs);
+        if (monitorEngineFinite(result->minuteInspiratoryLpm) != 0U) {
+            result->validMask |= BREATH_RESULT_VALID_MVI;
         } else {
-            lResult.minuteInspiratoryLpm = 0.0F;
+            result->minuteInspiratoryLpm = 0.0F;
         }
     }
-    if (((lResult.validMask & BREATH_RESULT_VALID_VTE) != 0U) &&
+    if (((result->validMask & BREATH_RESULT_VALID_VTE) != 0U) &&
         (gMonitorEngine.volumeInvalid == 0U) &&
-        (lResult.vteMl >= 0.0F) && (lResult.cycleTimeMs > 0U)) {
+        (result->vteMl >= 0.0F) && (result->cycleTimeMs > 0U)) {
         float lTotalFlow;
-        lResult.minuteTotalLpm = lResult.vteMl * (60.0F / (float)lResult.cycleTimeMs);
-        lTotalFlow = lResult.minuteTotalLpm + lResult.minuteLeakLpm;
-        if (((lResult.validMask & BREATH_RESULT_VALID_MINUTE_LEAK) != 0U) &&
+        result->minuteTotalLpm = result->vteMl * (60.0F / (float)result->cycleTimeMs);
+        lTotalFlow = result->minuteTotalLpm + result->minuteLeakLpm;
+        if (((result->validMask & BREATH_RESULT_VALID_MINUTE_LEAK) != 0U) &&
             (monitorEngineFinite(lTotalFlow) != 0U) && (lTotalFlow > 0.0F)) {
-            lResult.leakPercent = (lResult.minuteLeakLpm / lTotalFlow) * 100.0F;
-            lResult.validMask |= BREATH_RESULT_VALID_LEAK_PERCENT;
+            result->leakPercent = (result->minuteLeakLpm / lTotalFlow) * 100.0F;
+            result->validMask |= BREATH_RESULT_VALID_LEAK_PERCENT;
         }
-        if (monitorEngineFinite(lResult.minuteTotalLpm) == 0U) {
-            lResult.minuteTotalLpm = 0.0F;
+        if (monitorEngineFinite(result->minuteTotalLpm) == 0U) {
+            result->minuteTotalLpm = 0.0F;
         } else {
-            lResult.validMask |= BREATH_RESULT_VALID_MVE;
+            result->validMask |= BREATH_RESULT_VALID_MVE;
         }
     }
-    /* Subtract elastic pressure for inspiration; convert L/min to L/s. */
+}
+
+/** Calculate inspiratory and expiratory resistance. */
+static void monitorEngineBreathResultResistanceCalculate(stBreathResult *result) {
+    /* Convert L/min to L/s for both resistance values. */
     if ((gMonitorEngine.volumeInvalid == 0U) &&
-        ((lResult.validMask & BREATH_RESULT_VALID_PEEP) != 0U)) {
+        ((result->validMask & BREATH_RESULT_VALID_PEEP) != 0U)) {
         float lResistance;
-        if (((lResult.validMask & (BREATH_RESULT_VALID_PPEAK |
+        if (((result->validMask & (BREATH_RESULT_VALID_PPEAK |
                                   BREATH_RESULT_VALID_PLATEAU_PRESSURE)) ==
              (BREATH_RESULT_VALID_PPEAK | BREATH_RESULT_VALID_PLATEAU_PRESSURE)) &&
-            (lResult.peakInspiratoryFlowLpm > 0.0F)) {
-            lResistance = 60.0F * (lResult.ppeakCmh2o - lResult.peepCmh2o) /
-                          lResult.peakInspiratoryFlowLpm;
+            (result->peakInspiratoryFlowLpm > 0.0F)) {
+            lResistance = 60.0F * (result->ppeakCmh2o - result->peepCmh2o) /
+                          result->peakInspiratoryFlowLpm;
             if ((monitorEngineFinite(lResistance) != 0U) && (lResistance >= 0.0F)) {
-                lResult.resistanceInspiratory = lResistance;
-                lResult.validMask |= BREATH_RESULT_VALID_RES_INSP;
+                result->resistanceInspiratory = lResistance;
+                result->validMask |= BREATH_RESULT_VALID_RES_INSP;
             }
         }
-        if (((lResult.validMask & BREATH_RESULT_VALID_PLATEAU_PRESSURE) != 0U) &&
+        if (((result->validMask & BREATH_RESULT_VALID_PLATEAU_PRESSURE) != 0U) &&
             (gMonitorEngine.peakExpiratoryFlowLpm > 0.0F)) {
-            lResistance = 60.0F * (lResult.plateauPressureCmh2o - lResult.peepCmh2o) /
+            lResistance = 60.0F * (result->plateauPressureCmh2o - result->peepCmh2o) /
                           gMonitorEngine.peakExpiratoryFlowLpm;
             if ((monitorEngineFinite(lResistance) != 0U) && (lResistance >= 0.0F)) {
-                lResult.resistanceExpiratory = lResistance;
-                lResult.validMask |= BREATH_RESULT_VALID_RES_EXP;
+                result->resistanceExpiratory = lResistance;
+                result->validMask |= BREATH_RESULT_VALID_RES_EXP;
             }
         }
     }
+}
+
+/** Calculate dynamic and static compliance. */
+static void monitorEngineBreathResultComplianceCalculate(stBreathResult *result) {
     /* Compliance uses completed volumes in mL and positive pressure differences. */
     if ((gMonitorEngine.volumeInvalid == 0U) &&
-        ((lResult.validMask & (BREATH_RESULT_VALID_VTI | BREATH_RESULT_VALID_PPEAK |
+        ((result->validMask & (BREATH_RESULT_VALID_VTI | BREATH_RESULT_VALID_PPEAK |
                               BREATH_RESULT_VALID_PEEP)) ==
          (BREATH_RESULT_VALID_VTI | BREATH_RESULT_VALID_PPEAK | BREATH_RESULT_VALID_PEEP))) {
-        float lPressureDifference = lResult.ppeakCmh2o - lResult.peepCmh2o;
+        float lPressureDifference = result->ppeakCmh2o - result->peepCmh2o;
         if ((monitorEngineFinite(lPressureDifference) != 0U) &&
-            (lPressureDifference > 0.0F) && (lResult.vtiMl >= 0.0F)) {
-            float lCompliance = lResult.vtiMl / lPressureDifference;
+            (lPressureDifference > 0.0F) && (result->vtiMl >= 0.0F)) {
+            float lCompliance = result->vtiMl / lPressureDifference;
             if (monitorEngineFinite(lCompliance) != 0U) {
-                lResult.complianceDynamic = lCompliance;
-                lResult.validMask |= BREATH_RESULT_VALID_C_DYNC;
+                result->complianceDynamic = lCompliance;
+                result->validMask |= BREATH_RESULT_VALID_C_DYNC;
             }
         }
     }
     if ((gMonitorEngine.volumeInvalid == 0U) &&
-        ((lResult.validMask & (BREATH_RESULT_VALID_VTE | BREATH_RESULT_VALID_PLATEAU_PRESSURE |
+        ((result->validMask & (BREATH_RESULT_VALID_VTE | BREATH_RESULT_VALID_PLATEAU_PRESSURE |
                               BREATH_RESULT_VALID_PEEP)) ==
          (BREATH_RESULT_VALID_VTE | BREATH_RESULT_VALID_PLATEAU_PRESSURE | BREATH_RESULT_VALID_PEEP))) {
-        float lPressureDifference = lResult.plateauPressureCmh2o - lResult.peepCmh2o;
+        float lPressureDifference = result->plateauPressureCmh2o - result->peepCmh2o;
         if ((monitorEngineFinite(lPressureDifference) != 0U) &&
-            (lPressureDifference > 0.0F) && (lResult.vteMl >= 0.0F)) {
-            float lCompliance = lResult.vteMl / lPressureDifference;
+            (lPressureDifference > 0.0F) && (result->vteMl >= 0.0F)) {
+            float lCompliance = result->vteMl / lPressureDifference;
             if (monitorEngineFinite(lCompliance) != 0U) {
-                lResult.complianceStatic = lCompliance;
-                lResult.validMask |= BREATH_RESULT_VALID_C_STAT;
+                result->complianceStatic = lCompliance;
+                result->validMask |= BREATH_RESULT_VALID_C_STAT;
             }
         }
     }
+}
+
+/** Atomically store the completed snapshot and HMI values. */
+static void monitorEngineBreathResultStore(const stBreathResult *result) {
     repRtosEnterCritical();
-    gMonitorData[MONITOR_HMI_C_DYNC] = lResult.complianceDynamic;
-    gMonitorData[MONITOR_HMI_C_STAT] = lResult.complianceStatic;
-    gMonitorData[MONITOR_HMI_RES_INSP] = lResult.resistanceInspiratory;
-    gMonitorData[MONITOR_HMI_RES_EXP] = lResult.resistanceExpiratory;
-    gMonitorData[MONITOR_HMI_TIDA_VOL_INSP] = lResult.vtiMl;
-    gMonitorData[MONITOR_HMI_PRS_MEAN] = lResult.meanPressureCmh2o;
-    gMonitorData[MONITOR_HMI_MV_LEAK] = lResult.minuteLeakLpm;
-    gMonitorData[MONITOR_HMI_MV_TOTAL] = lResult.minuteTotalLpm;
-    gMonitorData[MONITOR_HMI_MV_INSP] = lResult.minuteInspiratoryLpm;
-    gMonitorData[MONITOR_HMI_LEAK_PERCENT] = lResult.leakPercent;
-    gMonitorData[MONITOR_HMI_TIDA_VOL_EXP] = lResult.vteMl;
-    gMonitorData[MONITOR_HMI_PPEAK] = lResult.ppeakCmh2o;
-    gMonitorData[MONITOR_HMI_PLATEAU_PRS] = lResult.plateauPressureCmh2o;
-    if ((lResult.mode != VENT_MD_CPAP_PSV) && (lResult.mode != VENT_MD_PSV_ST)) {
-        gMonitorData[MONITOR_HMI_PEEP] = lResult.peepCmh2o;
+    gMonitorData[MONITOR_HMI_C_DYNC] = result->complianceDynamic;
+    gMonitorData[MONITOR_HMI_C_STAT] = result->complianceStatic;
+    gMonitorData[MONITOR_HMI_RES_INSP] = result->resistanceInspiratory;
+    gMonitorData[MONITOR_HMI_RES_EXP] = result->resistanceExpiratory;
+    gMonitorData[MONITOR_HMI_TIDA_VOL_INSP] = result->vtiMl;
+    gMonitorData[MONITOR_HMI_PRS_MEAN] = result->meanPressureCmh2o;
+    gMonitorData[MONITOR_HMI_MV_LEAK] = result->minuteLeakLpm;
+    gMonitorData[MONITOR_HMI_MV_TOTAL] = result->minuteTotalLpm;
+    gMonitorData[MONITOR_HMI_MV_INSP] = result->minuteInspiratoryLpm;
+    gMonitorData[MONITOR_HMI_LEAK_PERCENT] = result->leakPercent;
+    gMonitorData[MONITOR_HMI_TIDA_VOL_EXP] = result->vteMl;
+    gMonitorData[MONITOR_HMI_PPEAK] = result->ppeakCmh2o;
+    gMonitorData[MONITOR_HMI_PLATEAU_PRS] = result->plateauPressureCmh2o;
+    if ((result->mode != VENT_MD_CPAP_PSV) && (result->mode != VENT_MD_PSV_ST)) {
+        gMonitorData[MONITOR_HMI_PEEP] = result->peepCmh2o;
         gMonitorData[MONITOR_HMI_PEEP_VALID] =
-            (float)((lResult.validMask & BREATH_RESULT_VALID_PEEP) != 0U);
+            (float)((result->validMask & BREATH_RESULT_VALID_PEEP) != 0U);
     }
-    gMonitorData[MONITOR_HMI_PEAK_INSP_FLOW] = lResult.peakInspiratoryFlowLpm;
-    gMonitorData[MONITOR_HMI_PEAK_EXP_FLOW] = lResult.peakExpiratoryFlowLpm;
-    gMonitorData[MONITOR_HMI_INSP_TIME_MS] = (float)lResult.inspiratoryTimeMs;
-    gMonitorData[MONITOR_HMI_CYCLE_TIME_MS] = (float)lResult.cycleTimeMs;
-    gMonitorLatestBreathResult = lResult;
+    gMonitorData[MONITOR_HMI_PEAK_INSP_FLOW] = result->peakInspiratoryFlowLpm;
+    gMonitorData[MONITOR_HMI_PEAK_EXP_FLOW] = result->peakExpiratoryFlowLpm;
+    gMonitorData[MONITOR_HMI_INSP_TIME_MS] = (float)result->inspiratoryTimeMs;
+    gMonitorData[MONITOR_HMI_CYCLE_TIME_MS] = (float)result->cycleTimeMs;
+    gMonitorLatestBreathResult = *result;
     gMonitorBreathResultAvailable = 1U;
     repRtosExitCritical();
-    breathSchedulerVolumeFeedback(&gMonitorEngine.breathPlan, lResult.vtiMl,
-        (uint8_t)(((lResult.validMask & BREATH_RESULT_VALID_VTI) != 0U) &&
+}
+
+/** Pass completed inspiratory volume to scheduler compensation. */
+static void monitorEngineBreathResultVolumeFeedback(const stBreathResult *result) {
+    breathSchedulerVolumeFeedback(&gMonitorEngine.breathPlan, result->vtiMl,
+        (uint8_t)(((result->validMask & BREATH_RESULT_VALID_VTI) != 0U) &&
                   (gMonitorEngine.volumeLimited == 0U) &&
                   ((BREATH_VOLUME_FLOW_COMPENSATION_ENABLE == 0) ||
                    (gMonitorEngine.volumeBlowerLimited == 0U)) &&
                   (gMonitorEngine.runState == MONITOR_STATE_EXP) &&
-                  (lResult.cycleReason == BREATH_CYCLE_REASON_TIME)));
+                  (result->cycleReason == BREATH_CYCLE_REASON_TIME)));
+}
+
+/** Calculate and publish the breath that ended before a new inspiration. */
+static void monitorEngineBreathResultPublish(uint32_t nowMs) {
+    stBreathResult lResult = {0};
+
+    monitorEngineBreathResultCapture(&lResult, nowMs);
+    monitorEngineBreathResultAveragesCalculate(&lResult);
+    monitorEngineBreathResultValidate(&lResult);
+    monitorEngineBreathResultMinuteVolumeCalculate(&lResult);
+    monitorEngineBreathResultResistanceCalculate(&lResult);
+    monitorEngineBreathResultComplianceCalculate(&lResult);
+    monitorEngineBreathResultStore(&lResult);
+    monitorEngineBreathResultVolumeFeedback(&lResult);
 }
 
 /** Complete a cycle once, shared by explicit and observed breath boundaries. */
