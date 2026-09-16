@@ -145,14 +145,19 @@ void triggerEngineProcess(uint32_t nowMs)
     float lProximalFlow;
     float lTriggerThreshold;
     bool lCandidate;
-    bool lHigh = phaseControllerBapapHighReadyGet(nowMs) != 0U;
+    bool lHigh = phaseControllerHighLevelReadyGet(nowMs) != 0U;
 
+    if (gTriggerEngine.highLevel != (uint8_t)lHigh) {
+        /* High-to-low pressure release changes the baseline without changing plan sequence. */
+        triggerEngineIdleEnter(lPhase);
+        gTriggerEngine.highLevel = (uint8_t)lHigh;
+    }
     if (lHigh) { lPhase = PHASE_EXP; }
 
     if ((lPhase != PHASE_EXP) ||
         (phaseControllerActivePlanGet(&lPlan) != PHASE_CONTROL_SUCCESS) ||
         ((lPlan.mode != VENT_MD_PAC) &&
-         (lPlan.mode != VENT_MD_VAC) && (lPlan.mode != VENT_MD_PRVC) && (lPlan.mode != VENT_MD_PRVC_SIMV) && (lPlan.mode != VENT_MD_VS) && (lPlan.mode != VENT_MD_BAPAP) &&
+         (lPlan.mode != VENT_MD_VAC) && (lPlan.mode != VENT_MD_PRVC) && (lPlan.mode != VENT_MD_PRVC_SIMV) && (lPlan.mode != VENT_MD_VS) && (lPlan.mode != VENT_MD_BAPAP) && (lPlan.mode != VENT_MD_APRV) &&
          (lPlan.mode != VENT_MD_CPAP_PSV) &&
          (lPlan.mode != VENT_MD_PSV_ST) &&
          (lPlan.mode != VENT_MD_P_SIMV) && (lPlan.mode != VENT_MD_V_SIMV)) ||

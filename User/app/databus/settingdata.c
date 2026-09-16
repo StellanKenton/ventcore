@@ -154,6 +154,22 @@ static stVentVsSettings gHostVentVsSettings = {
     .apneaRateBpm = 15.0F, .apneaInspTimeMs = 1000U, .apneaAlarmTimeMs = 15000U, .cycleOffPercent = 25.0F,
 };
 
+stVentAprvSettings gVentAprvSettings = {
+    .oxygenPercent = 21.0F, .pressureHighCmh2o = 20.0F, .pressureLowCmh2o = 5.0F,
+    .timeHighMs = 4000U, .timeLowMs = 500U, .riseTimeMs = 200U,
+    .triggerType = VENT_TRIGGER_PRESSURE, .pressureTriggerCmh2o = -2.0F, .flowTriggerLpm = 3.0F,
+    .apneaSwitch = VENT_APNEA_PRESSURE, .apneaPressureCmh2o = 20.0F,
+    .apneaVolumeTidalMl = 500.0F, .apneaRateBpm = 15.0F, .apneaInspTimeMs = 1000U,
+};
+
+static stVentAprvSettings gHostVentAprvSettings = {
+    .oxygenPercent = 21.0F, .pressureHighCmh2o = 20.0F, .pressureLowCmh2o = 5.0F,
+    .timeHighMs = 4000U, .timeLowMs = 500U, .riseTimeMs = 200U,
+    .triggerType = VENT_TRIGGER_PRESSURE, .pressureTriggerCmh2o = -2.0F, .flowTriggerLpm = 3.0F,
+    .apneaSwitch = VENT_APNEA_PRESSURE, .apneaPressureCmh2o = 20.0F,
+    .apneaVolumeTidalMl = 500.0F, .apneaRateBpm = 15.0F, .apneaInspTimeMs = 1000U,
+};
+
 stVentBapapSettings gVentBapapSettings = {
     .oxygenPercent = 21.0F, .pressureHighCmh2o = 20.0F, .pressureLowCmh2o = 5.0F,
     .timeHighMs = 2000U, .timeLowMs = 4000U, .triggerType = VENT_TRIGGER_PRESSURE,
@@ -319,6 +335,11 @@ stVentVsSettings *GetVentVsSettings(void) {
 /** Select local or host DuoLevel settings. */
 stVentBapapSettings *GetVentBapapSettings(void) {
     return gVentPatientSettings.useHostSettings == 1U ? &gHostVentBapapSettings : &gVentBapapSettings;
+}
+
+/** Select local or host APRV settings. */
+stVentAprvSettings *GetVentAprvSettings(void) {
+    return gVentPatientSettings.useHostSettings == 1U ? &gHostVentAprvSettings : &gVentAprvSettings;
 }
 
 /*************************************** End of file ********************************/

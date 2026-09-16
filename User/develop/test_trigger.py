@@ -47,7 +47,7 @@ int8_t calibtransPrsSpeed(float pressure, float *speed) {
 }
 ePhaseControllerState phaseControllerStateGet(void) { return gPhase; }
 uint8_t phaseControllerExpirationReadyGet(void) { return gReady; }
-uint8_t phaseControllerBapapHighReadyGet(uint32_t nowMs) { (void)nowMs; return gHighReady; }
+uint8_t phaseControllerHighLevelReadyGet(uint32_t nowMs) { (void)nowMs; return gHighReady; }
 int8_t phaseControllerActivePlanGet(stBreathPlan *plan) {
     *plan = gPlan;
     return PHASE_CONTROL_SUCCESS;
@@ -409,7 +409,7 @@ int main(void) {
     samples(5.0F, 0.0F, 20U);
     samples(1.0F, 10.0F, 20U);
     assert(gTriggers == 0U);
-    for (unsigned int mode = VENT_MD_VAC; mode <= VENT_MD_BAPAP; mode++) {
+    for (unsigned int mode = VENT_MD_VAC; mode <= VENT_MD_APRV; mode++) {
     for (int i = 0; i < 3; i++) {
         setup(i == 0 ? VENT_TRIGGER_FLOW : i == 1 ? VENT_TRIGGER_PRESSURE : VENT_TRIGGER_OFF);
         gPlan.mode = (eVentMode)mode;
@@ -423,9 +423,10 @@ int main(void) {
         }
     }
     }
+    for (unsigned int lMode = VENT_MD_BAPAP; lMode <= VENT_MD_APRV; lMode++) {
     for (unsigned int lType = VENT_TRIGGER_PRESSURE; lType <= VENT_TRIGGER_FLOW; lType++) {
         setup((eVentTriggerType)lType);
-        gPlan.mode = VENT_MD_BAPAP;
+        gPlan.mode = (eVentMode)lMode;
         gPlan.inspiratoryPressureCmh2o = 20.0F;
         gPhase = PHASE_INSP;
         gReady = 0U;
@@ -436,9 +437,14 @@ int main(void) {
         samples(20.0F, 0.0F, 20U);
         samples(16.0F, 10.0F, 3U);
         assert(gTriggers == 1U && gPhase == PHASE_INSP);
+        samples(20.0F, 0.0F, 20U);
+        gHighReady = 0U; gPhase = PHASE_EXP; gReady = 1U;
+        samples(5.0F, 0.0F, 20U);
+        assert(gTriggers == 1U); /* The pressure release is not a patient effort. */
+    }
     }
     setup(VENT_TRIGGER_FLOW);
-    gPlan.mode = VENT_MD_APRV;
+    gPlan.mode = VENT_MD_NCPAP;
     samples(5.0F, 0.0F, 20U);
     samples(1.0F, 10.0F, 20U);
     assert(gTriggers == 0U);

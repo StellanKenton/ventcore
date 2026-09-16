@@ -139,6 +139,13 @@ static inline uint8_t breathPlanIsBapapHigh(const stBreathPlan *plan) {
         plan->triggerReason != BREATH_TRIGGER_REASON_APNEA_BACKUP);
 }
 
+/** Identify normal high-level pressure holds, excluding apnea backup. */
+static inline uint8_t breathPlanIsHighLevel(const stBreathPlan *plan) {
+    return (uint8_t)(breathPlanIsBapapHigh(plan) || (plan->mode == VENT_MD_APRV &&
+        plan->breathType == BREATH_TYPE_MANDATORY_PRESSURE &&
+        plan->triggerReason != BREATH_TRIGGER_REASON_APNEA_BACKUP));
+}
+
 /** Identify volume-guaranteed mandatory breaths, excluding SIMV support and apnea backup. */
 static inline uint8_t breathPlanIsPrvc(const stBreathPlan *plan) {
     return (uint8_t)((plan->mode == VENT_MD_PRVC || plan->mode == VENT_MD_PRVC_SIMV) &&

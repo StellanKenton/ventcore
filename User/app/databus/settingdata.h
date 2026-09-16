@@ -277,12 +277,19 @@ typedef struct stVentBapapSettings {
 /* Airway pressure release ventilation. */
 typedef struct stVentAprvSettings {
     float oxygenPercent;
-    float pressureLimitCmh2o;
     float pressureHighCmh2o;
     float pressureLowCmh2o;
     uint32_t timeHighMs;
     uint32_t timeLowMs;
-    float releaseCycleOffPercent;
+    uint32_t riseTimeMs;
+    eVentTriggerType triggerType;
+    float pressureTriggerCmh2o;
+    float flowTriggerLpm;
+    eVentApneaType apneaSwitch;
+    float apneaPressureCmh2o; /* Backup pressure above the low level. */
+    float apneaVolumeTidalMl;
+    float apneaRateBpm;
+    uint32_t apneaInspTimeMs;
 } stVentAprvSettings;
 
 /* Neonatal nasal CPAP. */
@@ -425,6 +432,7 @@ stVentPrvcSettings *GetVentPrvcSettings(void);
 stVentPrvcSimvSettings *GetVentPrvcSimvSettings(void);
 stVentVsSettings *GetVentVsSettings(void);
 stVentBapapSettings *GetVentBapapSettings(void);
+stVentAprvSettings *GetVentAprvSettings(void);
 
 #ifdef __cplusplus
 }

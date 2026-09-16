@@ -79,8 +79,8 @@ float phaseControlGet(ePhaseControlType type);
 /** Get the current breath phase. */
 ePhaseControllerState phaseControllerStateGet(void);
 
-/** Return whether the normal DuoLevel high phase has finished its rise and settling guard. */
-uint8_t phaseControllerBapapHighReadyGet(uint32_t nowMs);
+/** Return whether the normal DuoLevel/APRV high phase has finished its rise and settling guard. */
+uint8_t phaseControllerHighLevelReadyGet(uint32_t nowMs);
 
 /** Return the volume-pause state published by the current VentTask phase update. */
 uint8_t phaseControllerVolumePauseActiveGet(void);

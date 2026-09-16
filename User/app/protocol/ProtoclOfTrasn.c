@@ -63,12 +63,14 @@ void protocolApplyReceivedSettings(void) {
         stVentPrvcSimvSettings *lPrvcSimv = GetVentPrvcSimvSettings();
         stVentVsSettings *lVs = GetVentVsSettings();
         stVentBapapSettings *lBapap = GetVentBapapSettings();
+        stVentAprvSettings *lAprv = GetVentAprvSettings();
 
         if (ProtocolGetRxVentSwitchCache()->m_valid[0x0A]) {
             lPSimv->apneaSwitch = (eVentApneaType)ProtocolGetRxVentSwitchCache()->m_ApneaVentSwitch;
             lVSimv->apneaSwitch = lPSimv->apneaSwitch;
             lPrvcSimv->apneaSwitch = lPSimv->apneaSwitch;
             lBapap->apneaSwitch = lPSimv->apneaSwitch;
+            lAprv->apneaSwitch = lPSimv->apneaSwitch;
             lVs->apneaSwitch = lPSimv->apneaSwitch;
         }
         if (lParams->m_valid[0x06]) {
@@ -81,19 +83,24 @@ void protocolApplyReceivedSettings(void) {
             lVSimv->oxygenPercent = (float)lParams->m_fio2 / ProtocolGetScale(lParams->m_fio2_scale);
             lPrvcSimv->oxygenPercent = (float)lParams->m_fio2 / ProtocolGetScale(lParams->m_fio2_scale);
             lBapap->oxygenPercent = (float)lParams->m_fio2 / ProtocolGetScale(lParams->m_fio2_scale);
+            lAprv->oxygenPercent = (float)lParams->m_fio2 / ProtocolGetScale(lParams->m_fio2_scale);
             lVs->oxygenPercent = (float)lParams->m_fio2 / ProtocolGetScale(lParams->m_fio2_scale);
         }
         if (lParams->m_valid[0x0A]) {
             lBapap->pressureHighCmh2o = (float)lParams->m_pHigh / ProtocolGetScale(lParams->m_pHigh_scale);
+            lAprv->pressureHighCmh2o = (float)lParams->m_pHigh / ProtocolGetScale(lParams->m_pHigh_scale);
         }
         if (lParams->m_valid[0x0B]) {
             lBapap->pressureLowCmh2o = (float)lParams->m_pLow / ProtocolGetScale(lParams->m_pLow_scale);
+            lAprv->pressureLowCmh2o = (float)lParams->m_pLow / ProtocolGetScale(lParams->m_pLow_scale);
         }
         if (lParams->m_valid[0x1B]) {
             lBapap->timeHighMs = (uint32_t)((float)lParams->m_tHigh * 1000.0F / ProtocolGetScale(lParams->m_tHigh_scale));
+            lAprv->timeHighMs = (uint32_t)((float)lParams->m_tHigh * 1000.0F / ProtocolGetScale(lParams->m_tHigh_scale));
         }
         if (lParams->m_valid[0x1C]) {
             lBapap->timeLowMs = (uint32_t)((float)lParams->m_tLow * 1000.0F / ProtocolGetScale(lParams->m_tLow_scale));
+            lAprv->timeLowMs = (uint32_t)((float)lParams->m_tLow * 1000.0F / ProtocolGetScale(lParams->m_tLow_scale));
         }
         if (lParams->m_valid[0x07]) {
             lPac->DeltaPressure = (float)lParams->m_deltaPinsp / ProtocolGetScale(lParams->m_deltaPinsp_scale);
@@ -124,6 +131,7 @@ void protocolApplyReceivedSettings(void) {
             lVSimv->apneaPressureCmh2o = (float)lParams->m_deltaApneaP / ProtocolGetScale(lParams->m_deltaApneaP_scale);
             lPrvcSimv->apneaPressureCmh2o = (float)lParams->m_deltaApneaP / ProtocolGetScale(lParams->m_deltaApneaP_scale);
             lBapap->apneaPressureCmh2o = (float)lParams->m_deltaApneaP / ProtocolGetScale(lParams->m_deltaApneaP_scale);
+            lAprv->apneaPressureCmh2o = (float)lParams->m_deltaApneaP / ProtocolGetScale(lParams->m_deltaApneaP_scale);
             lVs->apneaPressureCmh2o = (float)lParams->m_deltaApneaP / ProtocolGetScale(lParams->m_deltaApneaP_scale);
         }
         if (lParams->m_valid[0x0E]) {
@@ -143,6 +151,7 @@ void protocolApplyReceivedSettings(void) {
             lVSimv->flowTriggerLpm = (float)lParams->m_trigFlow / ProtocolGetScale(lParams->m_trigFlow_scale);
             lPrvcSimv->flowTriggerLpm = (float)lParams->m_trigFlow / ProtocolGetScale(lParams->m_trigFlow_scale);
             lBapap->flowTriggerLpm = (float)lParams->m_trigFlow / ProtocolGetScale(lParams->m_trigFlow_scale);
+            lAprv->flowTriggerLpm = (float)lParams->m_trigFlow / ProtocolGetScale(lParams->m_trigFlow_scale);
             lVs->flowTriggerLpm = (float)lParams->m_trigFlow / ProtocolGetScale(lParams->m_trigFlow_scale);
         }
         if (lParams->m_valid[0x12]) {
@@ -155,6 +164,7 @@ void protocolApplyReceivedSettings(void) {
             lVSimv->pressureTriggerCmh2o = (float)lParams->m_trigPress / ProtocolGetScale(lParams->m_trigPress_scale);
             lPrvcSimv->pressureTriggerCmh2o = (float)lParams->m_trigPress / ProtocolGetScale(lParams->m_trigPress_scale);
             lBapap->pressureTriggerCmh2o = (float)lParams->m_trigPress / ProtocolGetScale(lParams->m_trigPress_scale);
+            lAprv->pressureTriggerCmh2o = (float)lParams->m_trigPress / ProtocolGetScale(lParams->m_trigPress_scale);
             lVs->pressureTriggerCmh2o = (float)lParams->m_trigPress / ProtocolGetScale(lParams->m_trigPress_scale);
         }
         if (lParams->m_valid[0x13]) {
@@ -182,6 +192,7 @@ void protocolApplyReceivedSettings(void) {
             lVSimv->apneaVolumeTidalMl = lPSimv->apneaVolumeTidalMl;
             lPrvcSimv->apneaVolumeTidalMl = lPSimv->apneaVolumeTidalMl;
             lBapap->apneaVolumeTidalMl = lPSimv->apneaVolumeTidalMl;
+            lAprv->apneaVolumeTidalMl = lPSimv->apneaVolumeTidalMl;
             lVs->apneaVolumeTidalMl = lPSimv->apneaVolumeTidalMl;
         }
         if (lParams->m_valid[0x16]) {
@@ -190,6 +201,7 @@ void protocolApplyReceivedSettings(void) {
             lVSimv->apneaRateBpm = (float)lParams->m_apneaRate / ProtocolGetScale(lParams->m_apneaRate_scale);
             lPrvcSimv->apneaRateBpm = (float)lParams->m_apneaRate / ProtocolGetScale(lParams->m_apneaRate_scale);
             lBapap->apneaRateBpm = (float)lParams->m_apneaRate / ProtocolGetScale(lParams->m_apneaRate_scale);
+            lAprv->apneaRateBpm = (float)lParams->m_apneaRate / ProtocolGetScale(lParams->m_apneaRate_scale);
             lVs->apneaRateBpm = (float)lParams->m_apneaRate / ProtocolGetScale(lParams->m_apneaRate_scale);
         }
         if (lParams->m_valid[0x17]) {
@@ -212,12 +224,14 @@ void protocolApplyReceivedSettings(void) {
             lVSimv->apneaInspTimeMs = (float)lParams->m_apneaTi * 1000.0f / ProtocolGetScale(lParams->m_apneaTi_scale);
             lPrvcSimv->apneaInspTimeMs = (float)lParams->m_apneaTi * 1000.0f / ProtocolGetScale(lParams->m_apneaTi_scale);
             lBapap->apneaInspTimeMs = (float)lParams->m_apneaTi * 1000.0f / ProtocolGetScale(lParams->m_apneaTi_scale);
+            lAprv->apneaInspTimeMs = (float)lParams->m_apneaTi * 1000.0f / ProtocolGetScale(lParams->m_apneaTi_scale);
             lVs->apneaInspTimeMs = (float)lParams->m_apneaTi * 1000.0f / ProtocolGetScale(lParams->m_apneaTi_scale);
         }
         if (lParams->m_valid[0x1A]) {
             lPac->riseTimeMs = (float)lParams->m_riseTime * 1000.0f / ProtocolGetScale(lParams->m_riseTime_scale);
             lPsv->riseTimeMs = (float)lParams->m_riseTime * 1000.0f / ProtocolGetScale(lParams->m_riseTime_scale);
             lBapap->riseTimeMs = (float)lParams->m_riseTime * 1000.0f / ProtocolGetScale(lParams->m_riseTime_scale);
+            lAprv->riseTimeMs = (float)lParams->m_riseTime * 1000.0f / ProtocolGetScale(lParams->m_riseTime_scale);
             lVs->riseTimeMs = (float)lParams->m_riseTime * 1000.0f / ProtocolGetScale(lParams->m_riseTime_scale);
             lSt->riseTimeMs = (float)lParams->m_riseTime * 1000.0f / ProtocolGetScale(lParams->m_riseTime_scale);
             lPSimv->pressureRiseTimeMs = (float)lParams->m_riseTime * 1000.0f / ProtocolGetScale(lParams->m_riseTime_scale);
@@ -241,6 +255,7 @@ void protocolApplyReceivedSettings(void) {
             lVSimv->triggerType = lTrigger;
             lPrvcSimv->triggerType = lTrigger;
             lBapap->triggerType = lTrigger;
+            lAprv->triggerType = lTrigger;
             lVs->triggerType = lTrigger;
         }
         if (lParams->m_valid[2] && lParams->m_patientType < VENT_PATIENT_TYPE_COUNT) {

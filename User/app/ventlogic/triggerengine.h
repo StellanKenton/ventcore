@@ -43,6 +43,7 @@ typedef struct stTriggerEngine {
     uint8_t pressureStableSamples;
     uint8_t settleSamples;
     uint8_t confirmSamples;
+    uint8_t highLevel;
 } stTriggerEngine;
 
 /** Initialize the trigger engine. */

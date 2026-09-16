@@ -380,3 +380,7 @@ VAC high-load continuation: `test_vti_compensation.py` also checks that speed
 saturation remains reported while permitting bounded time adaptation; pressure
 limits still block learning, and the legacy flow-adaptation build does not learn
 from speed saturation. All existing timing and output bounds remain in force.
+
+## APRV 验证
+
+`py -3 user/develop/test_vti_compensation.py` 覆盖 APRV 固定高低压计时、tick 回绕、自主触发不改变释放周期、流量下降不提前切换、直接低压参考、实时压力高限、压力/容量后备及患者恢复、独立后备频率和非法设置。`test_trigger.py` 覆盖两个压力水平及切换时基线重建，`test_protocol.py` 覆盖主机高低压、时间、上升时间和后备选择映射。固件统一通过 `py -3 user/develop/quick_deploy.py build` 构建，控制台 `vt aprv` 启动；实机压力释放速度和自主呼吸性能仍需测试肺验证。参数及运行约定见 `User/user.md`。
