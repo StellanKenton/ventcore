@@ -15,6 +15,7 @@
 #include <string.h>
 
 #include "calibration.h"
+#include "monitorengine.h"
 #include "numfilter.h"
 #include "rtos.h"
 
@@ -32,6 +33,10 @@ static stVentVacSettings gBreathAppliedVacSettings;
 static stVentCpapPsvSettings gBreathAppliedCpapPsvSettings;
 static stVentPsvStSettings gBreathAppliedPsvStSettings;
 static stBreathVolumeFeedback gBreathVolumeFeedback;
+static stVentPrvcSettings gBreathAppliedPrvcSettings;
+static stVentVsSettings gBreathAppliedVsSettings;
+static stVentPrvcSimvSettings gBreathAppliedPrvcSimvSettings;
+static stBreathPrvcFeedback gBreathPrvcFeedback;
 static stVentPSimvSettings gBreathAppliedPSimvSettings;
 static stVentVSimvSettings gBreathAppliedVSimvSettings;
 static stBreathPlan gBreathSupportPlanTemplate;
@@ -44,6 +49,7 @@ static float breathSchedulerVolumeClamp(float value, float limit) {
 void breathSchedulerVolumeReset(void) {
     repRtosEnterCritical();
     (void)memset(&gBreathVolumeFeedback, 0, sizeof(gBreathVolumeFeedback));
+    (void)memset(&gBreathPrvcFeedback, 0, sizeof(gBreathPrvcFeedback));
     repRtosExitCritical();
 }
 
@@ -109,6 +115,103 @@ void breathSchedulerVolumeFeedback(const stBreathPlan *plan, float vtiMl, uint8_
         lStep = breathSchedulerVolumeClamp(lGain * lError, lStepLimit);
         gBreathVolumeFeedback.correctionMl = breathSchedulerVolumeClamp(
             gBreathVolumeFeedback.correctionMl + lStep, lCorrectionLimit);
+    }
+    repRtosExitCritical();
+}
+
+/** Adapt only a fresh, complete PRVC/VS breath; invalid/limited breaths hold pressure. */
+void breathSchedulerPrvcFeedback(const stBreathPlan *plan, const struct stBreathResult *result) {
+    float lDesired;
+    float lStep;
+    float lCompliance;
+    float lResistance;
+    float lFilling;
+    float lLimit;
+    const uint32_t lRequired = BREATH_RESULT_VALID_COMPLETE | BREATH_RESULT_VALID_VTI |
+        BREATH_RESULT_VALID_PPEAK | BREATH_RESULT_VALID_PEEP;
+
+    if (plan == NULL || result == NULL || plan->limitSettings == NULL) {
+        return;
+    }
+    repRtosEnterCritical();
+    if (!gBreathRunning || plan->mode != gBreathMode || !breathPlanIsVolumeAdaptive(plan) ||
+        plan->sequence != gBreathSequence || result->sequence != plan->sequence ||
+        plan->configurationSequence != gBreathPlanTemplate.configurationSequence ||
+        (gBreathPrvcFeedback.consumed && gBreathPrvcFeedback.lastSequence == plan->sequence)) {
+        repRtosExitCritical();
+        return;
+    }
+    gBreathPrvcFeedback.consumed = 1U;
+    gBreathPrvcFeedback.lastSequence = plan->sequence;
+    lLimit = plan->limitSettings->pressureHigh - BREATH_PRVC_PRESSURE_MARGIN_CMH2O;
+    if ((result->validMask & lRequired) != lRequired ||
+        (result->validMask & BREATH_RESULT_VOLUME_LIMITED) != 0U ||
+        result->cycleReason != (plan->mode == VENT_MD_VS ? BREATH_CYCLE_REASON_FLOW : BREATH_CYCLE_REASON_TIME) ||
+        !(result->vtiMl > 0.0F && result->vtiMl <= 6000.0F) ||
+        !(result->ppeakCmh2o >= 0.0F && result->ppeakCmh2o < plan->pressureLimitCmh2o) ||
+        !(result->peepCmh2o >= 0.0F && result->peepCmh2o < lLimit) ||
+        !(lLimit > plan->peepCmh2o && lLimit <= 95.0F)) {
+        repRtosExitCritical();
+        return;
+    }
+    if (plan->breathType == BREATH_TYPE_MANDATORY_VOLUME) {
+        /* The pause separates elastic pressure from the constant-flow resistive load. */
+        if ((result->validMask & (BREATH_RESULT_VALID_PLATEAU_PRESSURE | BREATH_RESULT_VALID_PEAK_INSP_FLOW)) !=
+            (BREATH_RESULT_VALID_PLATEAU_PRESSURE | BREATH_RESULT_VALID_PEAK_INSP_FLOW) ||
+            !(result->plateauPressureCmh2o > result->peepCmh2o &&
+              result->plateauPressureCmh2o <= result->ppeakCmh2o) ||
+            !(result->peakInspiratoryFlowLpm > 0.0F && result->peakInspiratoryFlowLpm <= 200.0F)) {
+            repRtosExitCritical();
+            return;
+        }
+        lCompliance = result->vtiMl / (result->plateauPressureCmh2o - result->peepCmh2o);
+        lResistance = (result->ppeakCmh2o - result->plateauPressureCmh2o) *
+                      60.0F / result->peakInspiratoryFlowLpm;
+        /* C is mL/cmH2O, R is cmH2O/(L/s), so R*C is the time constant in ms. */
+        lFilling = 1.0F;
+        if (lResistance > 0.0F) {
+            /* Stable 1-exp(-Ti/RC): scaled Pade approximation, no MCU libm dependency. */
+            lFilling = NUMFILTER_MIN(16.0F,
+                (float)plan->maximumInspiratoryTimeMs / (lResistance * lCompliance));
+            lFilling /= 256.0F + 0.5F * lFilling;
+            for (uint8_t lIndex = 0U; lIndex < 8U; lIndex++) {
+                lFilling *= 2.0F - lFilling;
+            }
+        }
+        lDesired = plan->peepCmh2o + plan->targetTidalVolumeMl / (lCompliance * lFilling);
+        if (!(lCompliance > 0.0F && lCompliance <= FLT_MAX) ||
+            !(lResistance >= 0.0F && lResistance <= FLT_MAX) ||
+            !(lFilling > 0.0F && lFilling <= 1.0F)) {
+            repRtosExitCritical();
+            return;
+        }
+        gBreathPrvcFeedback.complianceMlPerCmh2o = lCompliance;
+        gBreathPrvcFeedback.resistanceCmh2oPerLps = lResistance;
+    } else {
+        if (plan->mode == VENT_MD_VS) {
+            /* Effective estimates include patient effort; they are not static lung mechanics. */
+            float lDelta = plan->inspiratoryPressureCmh2o - plan->peepCmh2o;
+            if (!(lDelta > 0.0F) || (result->validMask & BREATH_RESULT_VALID_PEAK_INSP_FLOW) == 0U ||
+                !(result->peakInspiratoryFlowLpm > 0.0F && result->peakInspiratoryFlowLpm <= 200.0F)) {
+                repRtosExitCritical();
+                return;
+            }
+            gBreathPrvcFeedback.complianceMlPerCmh2o = result->vtiMl / lDelta;
+            gBreathPrvcFeedback.resistanceCmh2oPerLps = 60.0F * lDelta / result->peakInspiratoryFlowLpm;
+        }
+        /* Effective compliance includes filling time and current airway resistance. */
+        lDesired = plan->peepCmh2o + (plan->inspiratoryPressureCmh2o - plan->peepCmh2o) *
+                   plan->targetTidalVolumeMl / result->vtiMl;
+    }
+    if (lDesired >= 0.0F && lDesired <= FLT_MAX) {
+        lStep = gBreathPrvcFeedback.breathCount < 3U ?
+            BREATH_PRVC_STARTUP_STEP_CMH2O : BREATH_PRVC_NORMAL_STEP_CMH2O;
+        if (plan->mode != VENT_MD_VS) {
+            lStep = NUMFILTER_MIN(lStep, gBreathAppliedPrvcSettings.maximumPressureStepCmh2o);
+        }
+        gBreathPrvcFeedback.pressureCmh2o = NUMFILTER_MAX(plan->peepCmh2o,
+            NUMFILTER_MIN(lLimit, plan->inspiratoryPressureCmh2o +
+                breathSchedulerVolumeClamp(lDesired - plan->inspiratoryPressureCmh2o, lStep)));
     }
     repRtosExitCritical();
 }
@@ -239,6 +342,39 @@ static void breathSchedulerVacPlanApply(const stVentVacSettings *vacSettings,
     lPlan.minimumExpiratoryTimeMs = BREATH_PEEP_LOCK_TIME_MS;
     lPlan.timeTriggerEnabled = 1U;
     *plan = lPlan;
+}
+
+/** Validate PRVC settings and build the initial volume-control test breath. */
+static int8_t breathSchedulerPrvcPlanApply(const stVentPrvcSettings *settings, stBreathPlan *plan) {
+    const stVentLimitSettings *lLimits = GetVentLimitSettings();
+    stVentVacSettings lVac = {0};
+    if (!(settings->respiratoryRateBpm >= 1.0F && settings->respiratoryRateBpm <= 160.0F) ||
+        settings->inspiratoryTimeMs < 200U || settings->inspiratoryTimeMs > 10000U ||
+        (float)settings->inspiratoryTimeMs + BREATH_PEEP_LOCK_TIME_MS > 60000.0F / settings->respiratoryRateBpm ||
+        !(settings->oxygenPercent >= 21.0F && settings->oxygenPercent <= 100.0F) ||
+        !(settings->peepCmh2o >= 0.0F && settings->peepCmh2o < lLimits->pressureHigh - BREATH_PRVC_PRESSURE_MARGIN_CMH2O) ||
+        !(lLimits->pressureHigh <= 100.0F) ||
+        !(settings->targetTidalVolumeMl >= 1.0F && settings->targetTidalVolumeMl <= 6000.0F) ||
+        !(settings->maximumPressureStepCmh2o > 0.0F && settings->maximumPressureStepCmh2o <= FLT_MAX) ||
+        (unsigned int)settings->triggerType >= VENT_TRIGGER_COUNT ||
+        (settings->triggerType == VENT_TRIGGER_PRESSURE &&
+         !(settings->pressureTriggerCmh2o < 0.0F && settings->pressureTriggerCmh2o >= -100.0F)) ||
+        (settings->triggerType == VENT_TRIGGER_FLOW &&
+         !(settings->flowTriggerLpm > 0.0F && settings->flowTriggerLpm <= 200.0F))) {
+        return BREATH_CONTROL_ERROR_SETTINGS;
+    }
+    lVac.oxygen = settings->oxygenPercent;
+    lVac.peep = settings->peepCmh2o;
+    lVac.freq = settings->respiratoryRateBpm;
+    lVac.inspTimeMs = settings->inspiratoryTimeMs;
+    lVac.tidalVolume = settings->targetTidalVolumeMl;
+    lVac.triggerType = settings->triggerType;
+    lVac.pressureTriggerCmh2o = settings->pressureTriggerCmh2o;
+    lVac.flowTriggerLpm = settings->flowTriggerLpm;
+    lVac.inspPausePct = BREATH_PRVC_TRIAL_PAUSE_PERCENT;
+    breathSchedulerVacPlanApply(&lVac, plan);
+    plan->mode = VENT_MD_PRVC;
+    return BREATH_CONTROL_SUCCESS;
 }
 
 /** Build one patient-triggered pressure-support breath template. */
@@ -380,6 +516,54 @@ static int8_t breathSchedulerSimvPlanApply(eVentMode mode, const stVentPSimvSett
     return BREATH_CONTROL_SUCCESS;
 }
 
+/** Build patient-triggered VS and its independently selected timed apnea backup. */
+static int8_t breathSchedulerVsPlanApply(const stVentVsSettings *settings, stBreathPlan *plan, stBreathPlan *backup) {
+    float lLimit = GetVentLimitSettings()->pressureHigh - BREATH_PRVC_PRESSURE_MARGIN_CMH2O;
+    if (!(settings->oxygenPercent >= 21.0F && settings->oxygenPercent <= 100.0F) ||
+        !(settings->peepCmh2o >= 0.0F && settings->peepCmh2o < lLimit && lLimit <= 95.0F) ||
+        !(settings->targetTidalVolumeMl >= 1.0F && settings->targetTidalVolumeMl <= 6000.0F) ||
+        settings->riseTimeMs > BREATH_PSV_MAX_INSPIRATORY_TIME_MS ||
+        !(settings->cycleOffPercent > 0.0F && settings->cycleOffPercent < 100.0F) ||
+        (unsigned int)settings->triggerType >= VENT_TRIGGER_COUNT ||
+        (settings->triggerType == VENT_TRIGGER_PRESSURE &&
+         !(settings->pressureTriggerCmh2o < 0.0F && settings->pressureTriggerCmh2o >= -100.0F)) ||
+        (settings->triggerType == VENT_TRIGGER_FLOW &&
+         !(settings->flowTriggerLpm > 0.0F && settings->flowTriggerLpm <= 200.0F)) ||
+        (unsigned int)settings->apneaSwitch >= VENT_APNEA_COUNT ||
+        settings->apneaAlarmTimeMs < 1000U || settings->apneaAlarmTimeMs > 60000U) {
+        return BREATH_CONTROL_ERROR_SETTINGS;
+    }
+    breathSchedulerPsvPlanApply(VENT_MD_VS, settings->oxygenPercent, settings->peepCmh2o,
+        lLimit, settings->triggerType, settings->pressureTriggerCmh2o, settings->flowTriggerLpm,
+        BREATH_PRVC_STARTUP_STEP_CMH2O, settings->riseTimeMs, settings->cycleOffPercent,
+        BREATH_PSV_MAX_INSPIRATORY_TIME_MS, settings->apneaAlarmTimeMs, 0U, plan);
+    plan->targetTidalVolumeMl = settings->targetTidalVolumeMl;
+    if (settings->apneaSwitch != VENT_APNEA_OFF) {
+        if (!(settings->apneaRateBpm >= 1.0F && settings->apneaRateBpm <= 160.0F) ||
+            settings->apneaInspTimeMs < BREATH_PSV_MIN_INSPIRATORY_TIME_MS ||
+            (float)settings->apneaInspTimeMs + BREATH_PEEP_LOCK_TIME_MS > 60000.0F / settings->apneaRateBpm ||
+            (settings->apneaSwitch == VENT_APNEA_PRESSURE &&
+             !(settings->apneaPressureCmh2o > 0.0F && settings->peepCmh2o + settings->apneaPressureCmh2o < GetVentLimitSettings()->pressureHigh)) ||
+            (settings->apneaSwitch == VENT_APNEA_VOLUME &&
+             !(settings->apneaVolumeTidalMl >= 1.0F && settings->apneaVolumeTidalMl <= 6000.0F))) {
+            return BREATH_CONTROL_ERROR_SETTINGS;
+        }
+        plan->backupBreathIntervalMs = (uint32_t)(60000.0F / settings->apneaRateBpm);
+        breathSchedulerPsvBackupPlanApply(plan, settings->apneaPressureCmh2o, settings->apneaInspTimeMs, backup);
+        if (settings->apneaSwitch == VENT_APNEA_VOLUME) {
+            backup->breathType = BREATH_TYPE_MANDATORY_VOLUME;
+            backup->targetTidalVolumeMl = settings->apneaVolumeTidalMl;
+            backup->deliveryTargetMl = settings->apneaVolumeTidalMl;
+            backup->inspiratoryPressureCmh2o = settings->peepCmh2o;
+            backup->inspiratoryFlowLpm = breathSchedulerVacFlowCalculate(settings->apneaVolumeTidalMl, (float)settings->apneaInspTimeMs);
+            backup->riseTimeMs = settings->apneaInspTimeMs;
+            backup->holdTimeMs = 0U;
+        }
+        backup->pressureLimitCmh2o = GetVentLimitSettings()->pressureHigh;
+    }
+    return BREATH_CONTROL_SUCCESS;
+}
+
 int8_t breathSchedulerInit(void)
 {
     gBreathRunning = false;
@@ -481,6 +665,15 @@ int8_t breathSchedulerSettingsUpdate(eVentMode mode)
     stVentPsvStSettings lPsvStSettings;
     stVentPSimvSettings lPSimvSettings = {0};
     stVentVSimvSettings lVSimvSettings = {0};
+    stVentPrvcSettings lPrvcSettings = {0};
+    stVentVsSettings lVsSettings = {0};
+    stVentPrvcSimvSettings lPrvcSimvSettings = {0};
+    stBreathPrvcFeedback lPrvcFeedback = gBreathPrvcFeedback;
+    bool lPreservePrvc = gBreathMode == mode && gBreathSettingsApplied &&
+        ((mode == VENT_MD_VS && memcmp(&gBreathAppliedVsSettings, GetVentVsSettings(), sizeof(lVsSettings)) == 0) ||
+         (mode == VENT_MD_PRVC && memcmp(&gBreathAppliedPrvcSettings, GetVentPrvcSettings(), sizeof(lPrvcSettings)) == 0) ||
+         (mode == VENT_MD_PRVC_SIMV && memcmp(&gBreathAppliedPrvcSimvSettings, GetVentPrvcSimvSettings(), sizeof(lPrvcSimvSettings)) == 0)) &&
+        memcmp(&gBreathAppliedPatientSettings, GetVentPatientSettings(), sizeof(lPatientSettings)) == 0;
     stBreathPlan lSupportPlan = {0};
     stBreathPlan lPlan;
     stBreathPlan lBackupPlan = {0};
@@ -490,7 +683,7 @@ int8_t breathSchedulerSettingsUpdate(eVentMode mode)
         return BREATH_CONTROL_ERROR_PARAM;
     }
     if ((mode != VENT_MD_PAC) &&
-        (mode != VENT_MD_VAC) &&
+        (mode != VENT_MD_VAC) && (mode != VENT_MD_PRVC) && (mode != VENT_MD_PRVC_SIMV) && (mode != VENT_MD_VS) &&
         (mode != VENT_MD_CPAP_PSV) &&
         (mode != VENT_MD_PSV_ST) &&
         (mode != VENT_MD_P_SIMV) && (mode != VENT_MD_V_SIMV)) {
@@ -500,7 +693,7 @@ int8_t breathSchedulerSettingsUpdate(eVentMode mode)
         (calibrationIsValid(CALIBRATION_TYPE_PRESSURE) == 0U)) {
         return BREATH_CONTROL_ERROR_SETTINGS;
     }
-    if (((mode == VENT_MD_CPAP_PSV) || (mode == VENT_MD_PSV_ST) ||
+    if (((mode == VENT_MD_VS) || (mode == VENT_MD_PRVC) || (mode == VENT_MD_PRVC_SIMV) || (mode == VENT_MD_CPAP_PSV) || (mode == VENT_MD_PSV_ST) ||
          (mode == VENT_MD_P_SIMV) || (mode == VENT_MD_V_SIMV)) &&
         (calibrationIsValid(CALIBRATION_TYPE_PROX_FLOW) == 0U)) {
         return BREATH_CONTROL_ERROR_SETTINGS;
@@ -508,7 +701,41 @@ int8_t breathSchedulerSettingsUpdate(eVentMode mode)
 
     lPatientSettings = *GetVentPatientSettings();
     lLimitSettings = GetVentLimitSettings();
-    if ((mode == VENT_MD_P_SIMV) || (mode == VENT_MD_V_SIMV)) {
+    if (mode == VENT_MD_VS) {
+        lVsSettings = *GetVentVsSettings();
+        if (breathSchedulerVsPlanApply(&lVsSettings, &lPlan, &lBackupPlan) != BREATH_CONTROL_SUCCESS) {
+            return BREATH_CONTROL_ERROR_SETTINGS;
+        }
+        lBackupPlanValid = lVsSettings.apneaSwitch != VENT_APNEA_OFF;
+    } else if (mode == VENT_MD_PRVC) {
+        lPrvcSettings = *GetVentPrvcSettings();
+        if (breathSchedulerPrvcPlanApply(&lPrvcSettings, &lPlan) != BREATH_CONTROL_SUCCESS) {
+            return BREATH_CONTROL_ERROR_SETTINGS;
+        }
+    } else if (mode == VENT_MD_PRVC_SIMV) {
+        lPrvcSimvSettings = *GetVentPrvcSimvSettings();
+        lPrvcSettings = (stVentPrvcSettings){
+            .oxygenPercent = lPrvcSimvSettings.oxygenPercent, .peepCmh2o = lPrvcSimvSettings.peepCmh2o,
+            .respiratoryRateBpm = lPrvcSimvSettings.SIMVRateBpm, .inspiratoryTimeMs = lPrvcSimvSettings.inspiratoryTimeMs,
+            .triggerType = lPrvcSimvSettings.triggerType, .pressureTriggerCmh2o = lPrvcSimvSettings.pressureTriggerCmh2o,
+            .flowTriggerLpm = lPrvcSimvSettings.flowTriggerLpm, .targetTidalVolumeMl = lPrvcSimvSettings.targetTidalVolumeMl,
+            .maximumPressureStepCmh2o = lPrvcSimvSettings.maximumPressureStepCmh2o};
+        lPSimvSettings = (stVentPSimvSettings){
+            .oxygenPercent = lPrvcSimvSettings.oxygenPercent, .peepCmh2o = lPrvcSimvSettings.peepCmh2o,
+            .SIMVRateBpm = lPrvcSimvSettings.SIMVRateBpm, .inspiratoryTimeMs = lPrvcSimvSettings.inspiratoryTimeMs,
+            .triggerType = lPrvcSimvSettings.triggerType, .pressureTriggerCmh2o = lPrvcSimvSettings.pressureTriggerCmh2o,
+            .flowTriggerLpm = lPrvcSimvSettings.flowTriggerLpm, .pressureSupportCmh2o = lPrvcSimvSettings.supportPressureCmh2o,
+            .supportRiseTimeMs = BREATH_PRVC_RISE_TIME_MS, .pressureRiseTimeMs = BREATH_PRVC_RISE_TIME_MS,
+            .cycleOffPercent = lPrvcSimvSettings.cycleOffPercent, .apneaSwitch = lPrvcSimvSettings.apneaSwitch,
+            .apneaPressureCmh2o = lPrvcSimvSettings.apneaPressureCmh2o, .apneaVolumeTidalMl = lPrvcSimvSettings.apneaVolumeTidalMl,
+            .apneaRateBpm = lPrvcSimvSettings.apneaRateBpm, .apneaInspTimeMs = lPrvcSimvSettings.apneaInspTimeMs};
+        if (breathSchedulerPrvcPlanApply(&lPrvcSettings, &lPlan) != BREATH_CONTROL_SUCCESS ||
+            breathSchedulerSimvPlanApply(mode, &lPSimvSettings, lPrvcSettings.targetTidalVolumeMl,
+                BREATH_PRVC_TRIAL_PAUSE_PERCENT, &lPlan, &lSupportPlan, &lBackupPlan) != BREATH_CONTROL_SUCCESS) {
+            return BREATH_CONTROL_ERROR_SETTINGS;
+        }
+        lBackupPlanValid = lPSimvSettings.apneaSwitch != VENT_APNEA_OFF;
+    } else if ((mode == VENT_MD_P_SIMV) || (mode == VENT_MD_V_SIMV)) {
         lPSimvSettings = *GetVentPSimvSettings();
         if (mode == VENT_MD_V_SIMV) {
             lVSimvSettings = *GetVentVSimvSettings();
@@ -644,7 +871,18 @@ int8_t breathSchedulerSettingsUpdate(eVentMode mode)
     gBreathPlanTemplate = lPlan;
     gBreathBackupPlanTemplate = lBackupPlan;
     gBreathBackupPlanValid = lBackupPlanValid;
-    if (mode == VENT_MD_P_SIMV) {
+    if (mode == VENT_MD_VS) {
+        gBreathAppliedVsSettings = lVsSettings;
+        if (lPreservePrvc) {
+            gBreathPrvcFeedback = lPrvcFeedback;
+        }
+    } else if (mode == VENT_MD_PRVC || mode == VENT_MD_PRVC_SIMV) {
+        gBreathAppliedPrvcSimvSettings = lPrvcSimvSettings;
+        gBreathAppliedPrvcSettings = lPrvcSettings;
+        if (lPreservePrvc) {
+            gBreathPrvcFeedback = lPrvcFeedback;
+        }
+    } else if (mode == VENT_MD_P_SIMV) {
         gBreathAppliedPSimvSettings = lPSimvSettings;
     } else if (mode == VENT_MD_V_SIMV) {
         gBreathAppliedVSimvSettings = lVSimvSettings;
@@ -695,11 +933,36 @@ static int8_t breathSchedulerPlanGet(eBreathTriggerReason triggerReason, uint8_t
     } else {
         *plan = gBreathPlanTemplate;
     }
+    plan->triggerReason = triggerReason;
+    if (breathPlanIsVolumeAdaptive(plan)) {
+        float lLimit = plan->limitSettings->pressureHigh - BREATH_PRVC_PRESSURE_MARGIN_CMH2O;
+        if (!(lLimit > plan->peepCmh2o && lLimit <= 95.0F)) {
+            repRtosExitCritical();
+            return BREATH_CONTROL_ERROR_SETTINGS;
+        }
+        if (gBreathPrvcFeedback.breathCount == 0U) {
+            /* Initial pressure baseline if the test breath cannot identify mechanics. */
+            gBreathPrvcFeedback.pressureCmh2o = plan->peepCmh2o +
+                (plan->mode == VENT_MD_VS ? BREATH_PRVC_STARTUP_STEP_CMH2O :
+                 NUMFILTER_MIN(BREATH_PRVC_STARTUP_STEP_CMH2O, gBreathAppliedPrvcSettings.maximumPressureStepCmh2o));
+        } else if (plan->mode != VENT_MD_VS) {
+            plan->breathType = BREATH_TYPE_MANDATORY_PRESSURE;
+            plan->inspiratoryFlowLpm = 0.0F;
+            plan->riseTimeMs = NUMFILTER_MIN(BREATH_PRVC_RISE_TIME_MS, plan->maximumInspiratoryTimeMs);
+            plan->holdTimeMs = plan->maximumInspiratoryTimeMs - plan->riseTimeMs;
+        }
+        plan->inspiratoryPressureCmh2o = NUMFILTER_MIN(lLimit, gBreathPrvcFeedback.pressureCmh2o);
+        plan->pressureLimitCmh2o = lLimit;
+        gBreathPrvcFeedback.pressureCmh2o = plan->inspiratoryPressureCmh2o;
+        if (gBreathPrvcFeedback.breathCount < 4U) {
+            gBreathPrvcFeedback.breathCount++;
+        }
+    }
     gBreathSequence++;
     plan->sequence = gBreathSequence;
     plan->triggerReason = triggerReason;
     if ((plan->mode == VENT_MD_CPAP_PSV) || (plan->mode == VENT_MD_PSV_ST) ||
-        (plan->mandatoryIntervalMs != 0U)) {
+        (plan->mandatoryIntervalMs != 0U && !breathPlanIsPrvc(plan))) {
         plan->pressureLimitCmh2o = plan->limitSettings->pressureHigh;
     }
     if ((plan->mode == VENT_MD_VAC || plan->mode == VENT_MD_V_SIMV) &&
@@ -747,7 +1010,8 @@ int8_t breathSchedulerNextPlanGet(eBreathTriggerReason triggerReason, stBreathPl
 }
 
 int8_t breathSchedulerSupportPlanGet(eBreathTriggerReason triggerReason, stBreathPlan *plan) {
-    if ((breathSchedulerModeGet() != VENT_MD_P_SIMV && breathSchedulerModeGet() != VENT_MD_V_SIMV) ||
+    if ((breathSchedulerModeGet() != VENT_MD_P_SIMV && breathSchedulerModeGet() != VENT_MD_V_SIMV &&
+         breathSchedulerModeGet() != VENT_MD_PRVC_SIMV) ||
         (triggerReason != BREATH_TRIGGER_REASON_PRESSURE && triggerReason != BREATH_TRIGGER_REASON_FLOW)) {
         return BREATH_CONTROL_ERROR_PARAM;
     }
@@ -766,6 +1030,21 @@ void breathSchedulerProcess(void)
         return;
     }
     switch (lMode) {
+        case VENT_MD_VS:
+            lSettingsChanged = !gBreathSettingsApplied ||
+                memcmp(&gBreathAppliedVsSettings, GetVentVsSettings(), sizeof(gBreathAppliedVsSettings)) != 0 ||
+                memcmp(&gBreathAppliedPatientSettings, GetVentPatientSettings(), sizeof(gBreathAppliedPatientSettings)) != 0;
+            break;
+        case VENT_MD_PRVC_SIMV:
+            lSettingsChanged = !gBreathSettingsApplied ||
+                memcmp(&gBreathAppliedPrvcSimvSettings, GetVentPrvcSimvSettings(), sizeof(gBreathAppliedPrvcSimvSettings)) != 0 ||
+                memcmp(&gBreathAppliedPatientSettings, GetVentPatientSettings(), sizeof(gBreathAppliedPatientSettings)) != 0;
+            break;
+        case VENT_MD_PRVC:
+            lSettingsChanged = !gBreathSettingsApplied ||
+                memcmp(&gBreathAppliedPrvcSettings, GetVentPrvcSettings(), sizeof(gBreathAppliedPrvcSettings)) != 0 ||
+                memcmp(&gBreathAppliedPatientSettings, GetVentPatientSettings(), sizeof(gBreathAppliedPatientSettings)) != 0;
+            break;
         case VENT_MD_P_SIMV:
         case VENT_MD_V_SIMV:
             lSettingsChanged = !gBreathSettingsApplied ||

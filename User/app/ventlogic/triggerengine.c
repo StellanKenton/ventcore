@@ -149,7 +149,7 @@ void triggerEngineProcess(uint32_t nowMs)
     if ((lPhase != PHASE_EXP) ||
         (phaseControllerActivePlanGet(&lPlan) != PHASE_CONTROL_SUCCESS) ||
         ((lPlan.mode != VENT_MD_PAC) &&
-         (lPlan.mode != VENT_MD_VAC) &&
+         (lPlan.mode != VENT_MD_VAC) && (lPlan.mode != VENT_MD_PRVC) && (lPlan.mode != VENT_MD_PRVC_SIMV) && (lPlan.mode != VENT_MD_VS) &&
          (lPlan.mode != VENT_MD_CPAP_PSV) &&
          (lPlan.mode != VENT_MD_PSV_ST) &&
          (lPlan.mode != VENT_MD_P_SIMV) && (lPlan.mode != VENT_MD_V_SIMV)) ||

@@ -213,6 +213,15 @@ static int8_t flowControllerClosedLoopProcess(const stBreathPlan *plan,
     }
 
     lPressureLimit = plan->limitSettings->pressureHigh;
+    if (breathPlanIsVolumeAdaptive(plan)) {
+        lPressureLimit = plan->limitSettings->pressureHigh - BREATH_PRVC_PRESSURE_MARGIN_CMH2O;
+        if (plan->pressureLimitCmh2o < lPressureLimit) {
+            lPressureLimit = plan->pressureLimitCmh2o;
+        }
+        if (!(lPressureLimit > plan->peepCmh2o && lPressureLimit <= 95.0F)) {
+            return ACTUATOR_REQUEST_ERROR_STATE;
+        }
+    }
     if (lPatientPressure >= lPressureLimit) {
         monitorEngineVolumeLimitedNotify();
     }

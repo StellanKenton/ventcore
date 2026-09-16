@@ -206,56 +206,51 @@ typedef struct stVentVSimvSettings {
 typedef struct stVentPrvcSettings {
     float oxygenPercent;
     float peepCmh2o;
-    float pressureLimitCmh2o;
     float respiratoryRateBpm;
     uint32_t inspiratoryTimeMs;
     eVentTriggerType triggerType;
     float pressureTriggerCmh2o;
     float flowTriggerLpm;
     float targetTidalVolumeMl;
-    float minimumInspiratoryPressureCmh2o;
-    float maximumInspiratoryPressureCmh2o;
-    float maximumPressureStepCmh2o;
+    float maximumPressureStepCmh2o; /* Additional step cap; hard limits remain 10/3 cmH2O. */
 } stVentPrvcSettings;
 
 /* PRVC SIMV with spontaneous pressure support. */
 typedef struct stVentPrvcSimvSettings {
     float oxygenPercent;
     float peepCmh2o;
-    float pressureLimitCmh2o;
-    float respiratoryRateBpm;
+    float SIMVRateBpm;
     uint32_t inspiratoryTimeMs;
     eVentTriggerType triggerType;
     float pressureTriggerCmh2o;
     float flowTriggerLpm;
-    uint32_t syncWindowMs;
     float targetTidalVolumeMl;
-    float minimumInspiratoryPressureCmh2o;
-    float maximumInspiratoryPressureCmh2o;
+    float supportPressureCmh2o;
     float maximumPressureStepCmh2o;
-    float pressureSupportCmh2o;
-    uint32_t supportRiseTimeMs;
+    eVentApneaType apneaSwitch; /* Select disabled, pressure or volume backup. */
+    float apneaPressureCmh2o; /* Backup pressure above PEEP. */
+    float apneaVolumeTidalMl; /* Backup tidal volume. */
+    float apneaRateBpm;
+    uint32_t apneaInspTimeMs;
     float cycleOffPercent;
-    uint32_t maxSpontaneousInspiratoryTimeMs;
 } stVentPrvcSimvSettings;
 
 /* Spontaneous volume support. */
 typedef struct stVentVsSettings {
     float oxygenPercent;
+    float targetTidalVolumeMl;
     float peepCmh2o;
-    float pressureLimitCmh2o;
     eVentTriggerType triggerType;
     float pressureTriggerCmh2o;
     float flowTriggerLpm;
-    float initialPressureSupportCmh2o;
     uint32_t riseTimeMs;
-    float cycleOffPercent;
-    uint32_t maxInspiratoryTimeMs;
-    float targetTidalVolumeMl;
-    float minimumSupportPressureCmh2o;
-    float maximumSupportPressureCmh2o;
-    float maximumPressureStepCmh2o;
+    eVentApneaType apneaSwitch; /* Select disabled, pressure or volume backup. */
+    float apneaPressureCmh2o; /* Backup pressure above PEEP. */
+    float apneaVolumeTidalMl; /* Backup tidal volume. */
+    float apneaRateBpm;
+    uint32_t apneaInspTimeMs;
     uint32_t apneaAlarmTimeMs;
+    float cycleOffPercent;
 } stVentVsSettings;
 
 /* Biphasic airway pressure with spontaneous breathing. */
@@ -422,6 +417,9 @@ stVentCpapPsvSettings *GetVentCpapPsvSettings(void);
 stVentPsvStSettings *GetVentPsvStSettings(void);
 stVentPSimvSettings *GetVentPSimvSettings(void);
 stVentVSimvSettings *GetVentVSimvSettings(void);
+stVentPrvcSettings *GetVentPrvcSettings(void);
+stVentPrvcSimvSettings *GetVentPrvcSimvSettings(void);
+stVentVsSettings *GetVentVsSettings(void);
 
 #ifdef __cplusplus
 }

@@ -738,7 +738,8 @@ static void testPsvRepeat(void) {
 /** Exercise SIMV windows, mandatory deadlines and tick wrap with real modules. */
 static void testSimv(void) {
     stBreathPlan lPlan;
-    for (unsigned int lMode = VENT_MD_P_SIMV; lMode <= VENT_MD_V_SIMV; lMode++) {
+    for (unsigned int lMode = VENT_MD_P_SIMV; lMode <= VENT_MD_PRVC_SIMV; lMode++) {
+        if (lMode == VENT_MD_PRVC) { continue; }
         for (unsigned int lPatient = 0U; lPatient < VENT_PATIENT_TYPE_COUNT; lPatient++) {
             uint32_t lStart = UINT32_MAX - 500U;
             uint32_t lWindow = lPatient == VENT_PATIENT_ADULT ? 5000U : 1500U;
@@ -748,10 +749,13 @@ static void testSimv(void) {
             GetVentPatientSettings()->Type = (eVentPatientType)lPatient;
             GetVentPSimvSettings()->SIMVRateBpm = 5.0F;
             GetVentVSimvSettings()->SIMVRateBpm = 5.0F;
+            GetVentPrvcSimvSettings()->SIMVRateBpm = 5.0F;
             GetVentPSimvSettings()->triggerType = VENT_TRIGGER_PRESSURE;
             GetVentVSimvSettings()->triggerType = VENT_TRIGGER_PRESSURE;
+            GetVentPrvcSimvSettings()->triggerType = VENT_TRIGGER_PRESSURE;
             GetVentPSimvSettings()->apneaSwitch = VENT_APNEA_OFF;
             GetVentVSimvSettings()->apneaSwitch = VENT_APNEA_OFF;
+            GetVentPrvcSimvSettings()->apneaSwitch = VENT_APNEA_OFF;
             assert(breathSchedulerStart((eVentMode)lMode) == BREATH_CONTROL_SUCCESS);
             phaseControllerInit();
             phaseControllerProcess(lStart);
@@ -765,7 +769,7 @@ static void testSimv(void) {
             assert(phaseControllerActivePlanGet(&lPlan) == PHASE_CONTROL_SUCCESS);
             assert(lPlan.syncWindowMs == lWindow);
             assert(lPlan.breathType == (lMode == VENT_MD_P_SIMV ? BREATH_TYPE_MANDATORY_PRESSURE : BREATH_TYPE_MANDATORY_VOLUME));
-            if (lMode == VENT_MD_V_SIMV) { near(lPlan.targetTidalVolumeMl, 500.0F); }
+            if (lMode != VENT_MD_P_SIMV) { near(lPlan.targetTidalVolumeMl, 500.0F); }
             else { near(lPlan.inspiratoryPressureCmh2o, 25.0F); }
             phaseControllerProcess(lFirst + 1000U);
             assert(phaseControllerExpirationCaptureNotify() == PHASE_CONTROL_SUCCESS);
@@ -801,6 +805,7 @@ static void testSimv(void) {
             assert(phaseControllerStateGet() == PHASE_IDLE);
         }
     }
+    GetVentPrvcSimvSettings()->SIMVRateBpm = 10.0F;
     GetVentPatientSettings()->Type = VENT_PATIENT_ADULT;
     GetVentPSimvSettings()->SIMVRateBpm = 20.0F;
     assert(breathSchedulerStart(VENT_MD_P_SIMV) == BREATH_CONTROL_SUCCESS);
@@ -872,11 +877,13 @@ static void testSimvBackupSelection(void) {
 static void testSimvBackup(void) {
     stBreathPlan lPlan;
     for (unsigned int lBackup = VENT_APNEA_PRESSURE; lBackup <= VENT_APNEA_VOLUME; lBackup++) {
-    for (unsigned int lMode = VENT_MD_P_SIMV; lMode <= VENT_MD_V_SIMV; lMode++) {
+    for (unsigned int lMode = VENT_MD_P_SIMV; lMode <= VENT_MD_PRVC_SIMV; lMode++) {
+        if (lMode == VENT_MD_PRVC) { continue; }
         reset();
         GetVentLimitSettings()->apneaTimeAlarm = 7U;
         GetVentPSimvSettings()->apneaSwitch = (eVentApneaType)lBackup;
         GetVentVSimvSettings()->apneaSwitch = (eVentApneaType)lBackup;
+        GetVentPrvcSimvSettings()->apneaSwitch = (eVentApneaType)lBackup;
         assert(breathSchedulerStart((eVentMode)lMode) == BREATH_CONTROL_SUCCESS);
         phaseControllerInit();
         apneaEngineInit();
@@ -906,6 +913,7 @@ static void testSimvBackup(void) {
         assert(lPlan.triggerReason == BREATH_TRIGGER_REASON_PRESSURE);
         GetVentPSimvSettings()->apneaSwitch = VENT_APNEA_OFF;
         GetVentVSimvSettings()->apneaSwitch = VENT_APNEA_OFF;
+        GetVentPrvcSimvSettings()->apneaSwitch = VENT_APNEA_OFF;
         breathSchedulerProcess();
         assert(breathSchedulerNextPlanGet(BREATH_TRIGGER_REASON_APNEA_BACKUP, &lPlan) == BREATH_CONTROL_SUCCESS);
         assert(lPlan.triggerReason == BREATH_TRIGGER_REASON_TIME && lPlan.apneaTimeMs == 0U);
@@ -941,6 +949,440 @@ static void testBlowerLimitedFeedback(void) {
     assert((lResult.validMask & BREATH_RESULT_VOLUME_LIMITED) == 0U);
 }
 
+/** Restore a PRVC run without changing the user's settings layout. */
+static void resetPrvc(void) {
+    reset();
+    *GetVentPrvcSettings() = (stVentPrvcSettings){
+        .oxygenPercent = 21.0F, .peepCmh2o = 5.0F, .respiratoryRateBpm = 15.0F,
+        .inspiratoryTimeMs = 1000U, .targetTidalVolumeMl = 500.0F,
+        .maximumPressureStepCmh2o = 10.0F, .triggerType = VENT_TRIGGER_OFF};
+    assert(breathSchedulerStart(VENT_MD_PRVC) == BREATH_CONTROL_SUCCESS);
+}
+
+/** Build physically consistent completed test-breath data for C=50 and R=10. */
+static stBreathResult prvcResult(stBreathPlan plan, float volume) {
+    return (stBreathResult){.sequence = plan.sequence, .mode = VENT_MD_PRVC,
+        .breathType = plan.breathType, .vtiMl = volume, .peepCmh2o = 5.0F,
+        .plateauPressureCmh2o = 15.0F, .peakInspiratoryFlowLpm = plan.inspiratoryFlowLpm, .ppeakCmh2o = 15.0F + plan.inspiratoryFlowLpm / 6.0F,
+        .cycleReason = BREATH_CYCLE_REASON_TIME,
+        .validMask = BREATH_RESULT_VALID_COMPLETE | BREATH_RESULT_VALID_VTI |
+            BREATH_RESULT_VALID_PEEP | BREATH_RESULT_VALID_PPEAK | BREATH_RESULT_VALID_PLATEAU_PRESSURE |
+            BREATH_RESULT_VALID_PEAK_INSP_FLOW};
+}
+
+/** Verify the actual first inspiration and same-boundary monitor-to-plan feedback. */
+static void testPrvcIntegration(void) {
+    stBreathPlan lPlan;
+    stBreathPlan lNext;
+    stBreathResult lResult;
+    float lCompliance;
+    float lResistance;
+    float lExpected;
+    resetPrvc();
+    gData[PAT_REAL_PRS] = 0.0F;
+    gData[PAT_REAL_FLOW] = 0.0F;
+    gData[INSP_REAL_FLOW] = 0.0F;
+    lPlan = advance(0U);
+    assert(lPlan.breathType == BREATH_TYPE_MANDATORY_VOLUME);
+    lNext = lPlan;
+    for (unsigned int lIndex = 0U; lIndex < 1000U; lIndex++) {
+        gNow += 6U;
+        phaseControllerProcess(gNow);
+        assert(phaseControllerActivePlanGet(&lNext) == PHASE_CONTROL_SUCCESS);
+        if (lNext.sequence != lPlan.sequence) { break; }
+        if (phaseControllerStateGet() == PHASE_INSP) {
+            gData[PAT_REAL_FLOW] = phaseControllerVolumePauseActiveGet() ? 0.0F : 30.0F;
+            gData[PAT_REAL_PRS] = phaseControllerVolumePauseActiveGet() ? 15.0F : 20.0F;
+        } else {
+            gData[PAT_REAL_FLOW] = -10.0F;
+            gData[PAT_REAL_PRS] = 5.0F;
+        }
+        gData[INSP_REAL_FLOW] = fmaxf(0.0F, gData[PAT_REAL_FLOW]);
+        monitorEngineProcess(gNow);
+    }
+    assert(lNext.sequence != lPlan.sequence);
+    assert(lNext.breathType == BREATH_TYPE_MANDATORY_PRESSURE);
+    assert(monitorEngineBreathResultGet(&lResult) == MONITOR_ENGINE_SUCCESS);
+    assert(lResult.sequence == lPlan.sequence);
+    assert((lResult.validMask & BREATH_RESULT_VALID_PLATEAU_PRESSURE) != 0U);
+    near(lResult.plateauPressureCmh2o, 15.0F);
+    lCompliance = lResult.vtiMl / (lResult.plateauPressureCmh2o - lResult.peepCmh2o);
+    lResistance = (lResult.ppeakCmh2o - lResult.plateauPressureCmh2o) * 60.0F / lResult.peakInspiratoryFlowLpm;
+    lExpected = 5.0F + 500.0F / (lCompliance * (1.0F - expf(-1000.0F / (lResistance * lCompliance))));
+    near(lNext.inspiratoryPressureCmh2o, lExpected);
+}
+
+/** Converge after independent compliance and resistance changes in a passive RC model. */
+static void testPrvcConvergence(void) {
+    stBreathPlan lPlan;
+    stBreathResult lResult;
+    resetPrvc();
+    lPlan = next();
+    lResult = prvcResult(lPlan, 500.0F);
+    breathSchedulerPrvcFeedback(&lPlan, &lResult);
+    for (unsigned int lCase = 0U; lCase < 3U; lCase++) {
+        float lCompliance = lCase == 1U ? 25.0F : 50.0F;
+        float lResistance = lCase == 2U ? 30.0F : 10.0F;
+        for (unsigned int lBreath = 0U; lBreath < 15U; lBreath++) {
+            lPlan = next();
+            lResult = prvcResult(lPlan, (lPlan.inspiratoryPressureCmh2o - 5.0F) * lCompliance *
+                (1.0F - expf(-1000.0F / (lResistance * lCompliance))));
+            breathSchedulerPrvcFeedback(&lPlan, &lResult);
+        }
+        near(lResult.vtiMl, 500.0F);
+    }
+}
+
+/** Exercise mechanics, exact startup boundary, deduplication and live pressure caps. */
+static void testPrvc(void) {
+    stBreathPlan lPlan;
+    stBreathPlan lNext;
+    stBreathResult lResult;
+    resetPrvc();
+    lPlan = next();
+    assert(lPlan.breathType == BREATH_TYPE_MANDATORY_VOLUME);
+    assert(lPlan.riseTimeMs == 900U && lPlan.holdTimeMs == 100U);
+    near(lPlan.pressureLimitCmh2o, 45.0F);
+    lResult = prvcResult(lPlan, 500.0F);
+    breathSchedulerPrvcFeedback(&lPlan, &lResult);
+    /* RC=500 ms, Ti=1000 ms, so deltaP=10/(1-exp(-2)). */
+    lNext = next();
+    near(lNext.inspiratoryPressureCmh2o, 5.0F + 10.0F / (1.0F - expf(-2.0F)));
+    assert(lNext.breathType == BREATH_TYPE_MANDATORY_PRESSURE);
+    assert(lNext.riseTimeMs == 200U && lNext.holdTimeMs == 800U);
+    assert(lNext.maximumInspiratoryTimeMs == 1000U && lNext.expiratoryTimeMs == 3000U);
+    for (unsigned int lIndex = 0U; lIndex < 8U; lIndex++) {
+        lPlan = lNext;
+        lResult = prvcResult(lPlan, 1.0F);
+        breathSchedulerPrvcFeedback(&lPlan, &lResult);
+        breathSchedulerPrvcFeedback(&lPlan, &lResult);
+        lNext = next();
+        near(lNext.inspiratoryPressureCmh2o,
+             fminf(45.0F, lPlan.inspiratoryPressureCmh2o + (lIndex == 0U ? 10.0F : 3.0F)));
+    }
+    near(lNext.inspiratoryPressureCmh2o, 45.0F);
+    lPlan = lNext;
+    lResult = prvcResult(lPlan, 1000.0F);
+    breathSchedulerPrvcFeedback(&lPlan, &lResult);
+    lNext = next();
+    near(lNext.inspiratoryPressureCmh2o, 42.0F);
+    GetVentLimitSettings()->pressureHigh = 20.0F;
+    lNext = next();
+    near(lNext.inspiratoryPressureCmh2o, 15.0F);
+    GetVentLimitSettings()->pressureHigh = 50.0F;
+    near(next().inspiratoryPressureCmh2o, 15.0F); /* No stored windup. */
+    assert(breathSchedulerSettingsUpdate(VENT_MD_PRVC) == BREATH_CONTROL_SUCCESS);
+    assert(next().breathType == BREATH_TYPE_MANDATORY_PRESSURE);
+    GetVentPrvcSettings()->targetTidalVolumeMl = 600.0F;
+    breathSchedulerProcess();
+    lNext = next();
+    assert(lNext.breathType == BREATH_TYPE_MANDATORY_VOLUME);
+    near(lNext.targetTidalVolumeMl, 600.0F);
+    assert(breathSchedulerStop() == BREATH_CONTROL_SUCCESS);
+    assert(breathSchedulerStart(VENT_MD_PRVC) == BREATH_CONTROL_SUCCESS);
+    assert(next().breathType == BREATH_TYPE_MANDATORY_VOLUME);
+    breathSchedulerVolumeReset();
+    assert(next().breathType == BREATH_TYPE_MANDATORY_VOLUME);
+
+    /* Bad feedback is consumed once and never raises pressure. */
+    for (unsigned int lCase = 0U; lCase < 8U; lCase++) {
+        resetPrvc();
+        lPlan = next();
+        lResult = prvcResult(lPlan, 100.0F);
+        if (lCase == 0U) { lResult.vtiMl = NAN; }
+        if (lCase == 1U) { lResult.vtiMl = 0.0F; }
+        if (lCase == 2U) { lResult.validMask |= BREATH_RESULT_VOLUME_LIMITED; }
+        if (lCase == 3U) { lResult.validMask &= ~BREATH_RESULT_VALID_PLATEAU_PRESSURE; }
+        if (lCase == 4U) { lResult.cycleReason = BREATH_CYCLE_REASON_PRESSURE_LIMIT; }
+        if (lCase == 5U) { lResult.plateauPressureCmh2o = INFINITY; }
+        if (lCase == 6U) { lResult.ppeakCmh2o = NAN; }
+        if (lCase == 7U) { lResult.peepCmh2o = NAN; }
+        breathSchedulerPrvcFeedback(&lPlan, &lResult);
+        lResult = prvcResult(lPlan, 100.0F);
+        breathSchedulerPrvcFeedback(&lPlan, &lResult);
+        lNext = next();
+        assert(lNext.breathType == BREATH_TYPE_MANDATORY_PRESSURE);
+        near(lNext.inspiratoryPressureCmh2o, 15.0F);
+    }
+    resetPrvc();
+    GetVentPrvcSettings()->maximumPressureStepCmh2o = 1.0F;
+    breathSchedulerProcess();
+    lPlan = next();
+    lResult = prvcResult(lPlan, 100.0F);
+    breathSchedulerPrvcFeedback(&lPlan, &lResult);
+    near(next().inspiratoryPressureCmh2o, 7.0F);
+    GetVentPrvcSettings()->respiratoryRateBpm = NAN;
+    assert(breathSchedulerSettingsUpdate(VENT_MD_PRVC) == BREATH_CONTROL_ERROR_SETTINGS);
+    GetVentPrvcSettings()->respiratoryRateBpm = 160.0F;
+    assert(breathSchedulerSettingsUpdate(VENT_MD_PRVC) == BREATH_CONTROL_ERROR_SETTINGS);
+    resetPrvc();
+    GetVentLimitSettings()->pressureHigh = 10.0F;
+    assert(breathSchedulerNextPlanGet(BREATH_TRIGGER_REASON_TIME, &lPlan) == BREATH_CONTROL_ERROR_SETTINGS);
+    assert(breathSchedulerSettingsUpdate(VENT_MD_PRVC) == BREATH_CONTROL_ERROR_SETTINGS);
+
+    /* Real phase processing reacts to a mid-inspiration alarm reduction. */
+    resetPrvc();
+    gData[PAT_REAL_PRS] = 0.0F;
+    gData[PAT_REAL_FLOW] = 0.0F;
+    gData[INSP_REAL_FLOW] = 0.0F;
+    lPlan = advance(0U);
+    assert(lPlan.breathType == BREATH_TYPE_MANDATORY_VOLUME);
+    GetVentLimitSettings()->pressureHigh = 17.0F;
+    gData[PAT_REAL_PRS] = 12.0F;
+    phaseControllerProcess(gNow);
+    assert(phaseControllerStateGet() == PHASE_EXP);
+    assert(phaseControllerCycleReasonGet() == BREATH_CYCLE_REASON_PRESSURE_LIMIT);
+}
+
+/** SIMV support and backup must not consume PRVC startup steps or change learned pressure. */
+static void testPrvcSimvFeedback(void) {
+    stBreathPlan lPlan;
+    stBreathPlan lOther;
+    stBreathResult lResult;
+    float lPressure;
+    reset();
+    *GetVentPrvcSimvSettings() = (stVentPrvcSimvSettings){
+        .oxygenPercent = 21.0F, .peepCmh2o = 5.0F, .SIMVRateBpm = 10.0F,
+        .inspiratoryTimeMs = 1000U, .triggerType = VENT_TRIGGER_FLOW, .flowTriggerLpm = 3.0F,
+        .targetTidalVolumeMl = 500.0F, .supportPressureCmh2o = 10.0F,
+        .maximumPressureStepCmh2o = 10.0F, .cycleOffPercent = 25.0F,
+        .apneaSwitch = VENT_APNEA_VOLUME, .apneaVolumeTidalMl = 400.0F,
+        .apneaRateBpm = 15.0F, .apneaInspTimeMs = 1000U};
+    assert(breathSchedulerStart(VENT_MD_PRVC_SIMV) == BREATH_CONTROL_SUCCESS);
+    assert(breathSchedulerSupportPlanGet(BREATH_TRIGGER_REASON_FLOW, &lOther) == BREATH_CONTROL_SUCCESS);
+    assert(!breathPlanIsPrvc(&lOther));
+    lPlan = next();
+    assert(lPlan.breathType == BREATH_TYPE_MANDATORY_VOLUME && breathPlanIsPrvc(&lPlan));
+    assert(lPlan.holdTimeMs == 100U);
+    near(lPlan.pressureLimitCmh2o, 45.0F);
+    lResult = prvcResult(lPlan, 500.0F);
+    lResult.mode = VENT_MD_PRVC_SIMV;
+    breathSchedulerPrvcFeedback(&lPlan, &lResult);
+    for (unsigned int lBreath = 0U; lBreath < 4U; lBreath++) {
+        /* A support followed by a volume backup must not train or advance startup. */
+        assert(breathSchedulerSupportPlanGet(BREATH_TRIGGER_REASON_FLOW, &lOther) == BREATH_CONTROL_SUCCESS);
+        near(lOther.inspiratoryPressureCmh2o, 15.0F);
+        near(lOther.pressureLimitCmh2o, 50.0F);
+        lResult = prvcResult(lOther, 1.0F);
+        breathSchedulerPrvcFeedback(&lOther, &lResult);
+        assert(breathSchedulerNextPlanGet(BREATH_TRIGGER_REASON_APNEA_BACKUP, &lOther) == BREATH_CONTROL_SUCCESS);
+        assert(lOther.breathType == BREATH_TYPE_MANDATORY_VOLUME && !breathPlanIsPrvc(&lOther));
+        near(lOther.targetTidalVolumeMl, 400.0F);
+        lResult = prvcResult(lOther, 1.0F);
+        breathSchedulerPrvcFeedback(&lOther, &lResult);
+        lOther = next();
+        assert(lOther.breathType == BREATH_TYPE_MANDATORY_PRESSURE);
+        near(lOther.pressureLimitCmh2o, 45.0F);
+        if (lBreath == 0U) {
+            near(lOther.inspiratoryPressureCmh2o, 5.0F + 10.0F / (1.0F - expf(-2.0F)));
+        } else {
+            near(lOther.inspiratoryPressureCmh2o, lPressure + (lBreath == 1U ? 10.0F : 3.0F));
+        }
+        lPressure = lOther.inspiratoryPressureCmh2o;
+        lResult = prvcResult(lOther, 1.0F);
+        breathSchedulerPrvcFeedback(&lOther, &lResult);
+    }
+    GetVentLimitSettings()->pressureHigh = 20.0F;
+    near(next().inspiratoryPressureCmh2o, 15.0F);
+    GetVentLimitSettings()->pressureHigh = 50.0F;
+    assert(breathSchedulerSettingsUpdate(VENT_MD_PRVC_SIMV) == BREATH_CONTROL_SUCCESS);
+    assert(next().breathType == BREATH_TYPE_MANDATORY_PRESSURE);
+    GetVentPrvcSimvSettings()->apneaSwitch = VENT_APNEA_OFF;
+    GetVentPrvcSimvSettings()->supportPressureCmh2o = 0.0F;
+    GetVentPrvcSimvSettings()->SIMVRateBpm = 30.0F;
+    breathSchedulerProcess();
+    lPlan = next();
+    assert(lPlan.syncWindowMs == 1000U && lPlan.breathType == BREATH_TYPE_MANDATORY_VOLUME);
+    assert(breathSchedulerSupportPlanGet(BREATH_TRIGGER_REASON_FLOW, &lOther) == BREATH_CONTROL_SUCCESS);
+    near(lOther.inspiratoryPressureCmh2o, 5.0F);
+    for (unsigned int lPatient = 0U; lPatient < VENT_PATIENT_TYPE_COUNT; lPatient++) {
+        GetVentPatientSettings()->Type = (eVentPatientType)lPatient;
+        breathSchedulerProcess();
+        assert(next().syncWindowMs == 1000U); /* Whole expiration when shorter than either window. */
+    }
+    GetVentPrvcSimvSettings()->targetTidalVolumeMl = NAN;
+    assert(breathSchedulerSettingsUpdate(VENT_MD_PRVC_SIMV) == BREATH_CONTROL_ERROR_SETTINGS);
+    GetVentPrvcSimvSettings()->targetTidalVolumeMl = 500.0F;
+    GetVentPrvcSimvSettings()->supportPressureCmh2o = NAN;
+    assert(breathSchedulerSettingsUpdate(VENT_MD_PRVC_SIMV) == BREATH_CONTROL_ERROR_SETTINGS);
+    GetVentPrvcSimvSettings()->supportPressureCmh2o = 0.0F;
+    GetVentPatientSettings()->Type = VENT_PATIENT_ADULT;
+    GetVentPrvcSimvSettings()->apneaSwitch = VENT_APNEA_COUNT;
+    assert(breathSchedulerSettingsUpdate(VENT_MD_PRVC_SIMV) == BREATH_CONTROL_ERROR_SETTINGS);
+    GetVentPrvcSimvSettings()->apneaSwitch = VENT_APNEA_OFF;
+    assert(breathSchedulerStop() == BREATH_CONTROL_SUCCESS);
+    assert(breathSchedulerStart(VENT_MD_PRVC_SIMV) == BREATH_CONTROL_SUCCESS);
+    assert(next().breathType == BREATH_TYPE_MANDATORY_VOLUME);
+}
+
+/** Restore independent VS settings, including the configurable flow-cycle threshold. */
+static void resetVs(void) {
+    reset();
+    *GetVentVsSettings() = (stVentVsSettings){.oxygenPercent = 21.0F,
+        .peepCmh2o = 5.0F, .targetTidalVolumeMl = 500.0F, .riseTimeMs = 200U,
+        .triggerType = VENT_TRIGGER_FLOW, .flowTriggerLpm = 3.0F, .cycleOffPercent = 40.0F,
+        .apneaSwitch = VENT_APNEA_PRESSURE, .apneaPressureCmh2o = 20.0F,
+        .apneaVolumeTidalMl = 400.0F, .apneaRateBpm = 15.0F,
+        .apneaInspTimeMs = 1000U, .apneaAlarmTimeMs = 2000U};
+    assert(breathSchedulerStart(VENT_MD_VS) == BREATH_CONTROL_SUCCESS);
+    gData[PAT_REAL_PRS] = 0.0F;
+    gData[PAT_REAL_FLOW] = 0.0F;
+    gData[INSP_REAL_FLOW] = 0.0F;
+    cycleEngineInit();
+    apneaEngineInit();
+}
+
+/** Feed one complete flow-cycled VS breath with finite effective mechanics. */
+static void vsFeedback(stBreathPlan plan, float volume, eBreathCycleReason reason) {
+    stBreathResult lResult = prvcResult(plan, volume);
+    lResult.mode = VENT_MD_VS;
+    lResult.cycleReason = reason;
+    lResult.peakInspiratoryFlowLpm = 30.0F;
+    lResult.ppeakCmh2o = plan.inspiratoryPressureCmh2o - 0.1F;
+    breathSchedulerPrvcFeedback(&plan, &lResult);
+}
+
+/** Check VS steps, backup isolation, invalid feedback, limits and setting validation. */
+static void testVsFeedback(void) {
+    stBreathPlan lPlan;
+    stBreathPlan lBackup;
+    float lExpected[] = {15.0F, 25.0F, 35.0F, 38.0F, 41.0F, 44.0F, 45.0F};
+    resetVs();
+    for (unsigned int lIndex = 0U; lIndex < 7U; lIndex++) {
+        assert(breathSchedulerNextPlanGet(BREATH_TRIGGER_REASON_FLOW, &lPlan) == BREATH_CONTROL_SUCCESS);
+        near(lPlan.inspiratoryPressureCmh2o, lExpected[lIndex]);
+        near(lPlan.cycleOffPercent, 40.0F);
+        assert(lPlan.breathType == BREATH_TYPE_SPONTANEOUS_PRESSURE_SUPPORT);
+        assert(lPlan.timeTriggerEnabled == 0U && lPlan.cycleType == BREATH_CYCLE_TYPE_FLOW);
+        vsFeedback(lPlan, 1.0F, BREATH_CYCLE_REASON_FLOW);
+        vsFeedback(lPlan, 6000.0F, BREATH_CYCLE_REASON_FLOW); /* Duplicate cannot reverse the update. */
+        assert(breathSchedulerNextPlanGet(BREATH_TRIGGER_REASON_APNEA_BACKUP, &lBackup) == BREATH_CONTROL_SUCCESS);
+        assert(!breathPlanIsVolumeAdaptive(&lBackup));
+        vsFeedback(lBackup, 1.0F, BREATH_CYCLE_REASON_FLOW);
+    }
+    lPlan = next();
+    vsFeedback(lPlan, 1000.0F, BREATH_CYCLE_REASON_FLOW);
+    near(next().inspiratoryPressureCmh2o, 42.0F);
+    GetVentLimitSettings()->pressureHigh = 20.0F;
+    near(next().inspiratoryPressureCmh2o, 15.0F);
+    GetVentLimitSettings()->pressureHigh = 50.0F;
+    near(next().inspiratoryPressureCmh2o, 15.0F);
+    for (unsigned int lCase = 0U; lCase < 4U; lCase++) {
+        lPlan = next();
+        vsFeedback(lPlan, lCase == 0U ? NAN : lCase == 1U ? 0.0F : 1.0F,
+            lCase == 2U ? BREATH_CYCLE_REASON_MAX_INSPIRATORY_TIME :
+            lCase == 3U ? BREATH_CYCLE_REASON_PRESSURE_LIMIT : BREATH_CYCLE_REASON_FLOW);
+        near(next().inspiratoryPressureCmh2o, 15.0F);
+    }
+    for (unsigned int lCase = 0U; lCase < 4U; lCase++) {
+        GetVentVsSettings()->cycleOffPercent = lCase == 0U ? 0.0F : lCase == 1U ? 100.0F : lCase == 2U ? NAN : INFINITY;
+        assert(breathSchedulerSettingsUpdate(VENT_MD_VS) == BREATH_CONTROL_ERROR_SETTINGS);
+    }
+    GetVentVsSettings()->cycleOffPercent = 30.0F;
+    breathSchedulerProcess();
+    near(next().cycleOffPercent, 30.0F);
+    assert(breathSchedulerStop() == BREATH_CONTROL_SUCCESS);
+    assert(breathSchedulerStart(VENT_MD_VS) == BREATH_CONTROL_SUCCESS);
+    near(next().inspiratoryPressureCmh2o, 15.0F);
+}
+
+/** Verify actual spontaneous timing, configured cycle-off and both apnea backups. */
+static void testVsTiming(void) {
+    stBreathPlan lPlan;
+    uint32_t lStart;
+    for (unsigned int lBackup = VENT_APNEA_OFF; lBackup <= VENT_APNEA_VOLUME; lBackup++) {
+        resetVs();
+        GetVentVsSettings()->apneaSwitch = (eVentApneaType)lBackup;
+        breathSchedulerProcess();
+        phaseControllerProcess(0U);
+        phaseControllerProcess(6U);
+        phaseControllerProcess(1006U);
+        assert(phaseControllerStateGet() == PHASE_EXP);
+        apneaEngineProcess(1006U);
+        phaseControllerProcess(3005U);
+        apneaEngineProcess(3005U);
+        assert(phaseControllerStateGet() == PHASE_EXP);
+        assert(apneaEngineStateGet() == APNEA_ENGINE_MONITORING);
+        apneaEngineProcess(3006U); /* VS timer, independent of the 60 s global alarm setting. */
+        if (lBackup == VENT_APNEA_OFF) {
+            assert(phaseControllerStateGet() == PHASE_EXP);
+            assert(apneaEngineStateGet() == APNEA_ENGINE_ALARM);
+            lStart = 3306U;
+        } else {
+            assert(apneaEngineStateGet() == APNEA_ENGINE_BACKUP);
+            assert(phaseControllerStateGet() == PHASE_INSP);
+            assert(phaseControllerActivePlanGet(&lPlan) == PHASE_CONTROL_SUCCESS);
+            assert(lPlan.breathType == (lBackup == VENT_APNEA_PRESSURE ? BREATH_TYPE_MANDATORY_PRESSURE : BREATH_TYPE_MANDATORY_VOLUME));
+            if (lBackup == VENT_APNEA_VOLUME) { near(lPlan.deliveryTargetMl, 400.0F); }
+            phaseControllerProcess(4006U);
+            apneaEngineProcess(4006U);
+            apneaEngineProcess(7005U);
+            assert(phaseControllerStateGet() == PHASE_EXP);
+            apneaEngineProcess(7006U);
+            assert(phaseControllerStateGet() == PHASE_INSP);
+            phaseControllerProcess(8006U);
+            apneaEngineProcess(8006U);
+            lStart = 8306U;
+        }
+        assert(phaseControllerExpirationCaptureNotify() == PHASE_CONTROL_SUCCESS);
+        assert(phaseControllerTrigger(BREATH_TRIGGER_REASON_FLOW, lStart) == PHASE_CONTROL_SUCCESS);
+        apneaEngineProcess(lStart);
+        assert(apneaEngineStateGet() == APNEA_ENGINE_MONITORING);
+        assert(phaseControllerActivePlanGet(&lPlan) == PHASE_CONTROL_SUCCESS);
+        near(lPlan.inspiratoryPressureCmh2o, 15.0F); /* Backup/prefetch did not consume the trial. */
+        gData[PAT_REAL_FLOW] = 40.0F;
+        cycleEngineProcess(lStart);
+        gData[PAT_REAL_FLOW] = 16.1F;
+        cycleEngineProcess(lStart + 300U);
+        assert(phaseControllerStateGet() == PHASE_INSP);
+        gData[PAT_REAL_FLOW] = 16.0F; /* 40% of peak, not the former fixed 25%. */
+        cycleEngineProcess(lStart + 306U);
+        cycleEngineProcess(lStart + 312U);
+        cycleEngineProcess(lStart + 318U);
+        assert(phaseControllerStateGet() == PHASE_EXP);
+        assert(phaseControllerCycleReasonGet() == BREATH_CYCLE_REASON_FLOW);
+        assert(phaseControllerExpirationCaptureNotify() == PHASE_CONTROL_SUCCESS);
+        assert(phaseControllerTrigger(BREATH_TRIGGER_REASON_FLOW, lStart + 600U) == PHASE_CONTROL_SUCCESS);
+        gData[PAT_REAL_PRS] = 12.0F;
+        GetVentLimitSettings()->pressureHigh = 17.0F;
+        phaseControllerProcess(lStart + 606U);
+        assert(phaseControllerStateGet() == PHASE_EXP);
+        assert(phaseControllerCycleReasonGet() == BREATH_CYCLE_REASON_PRESSURE_LIMIT);
+    }
+}
+
+/** Publish a real VS cycle and apply its measured VTI before the next patient breath. */
+static void testVsIntegration(void) {
+    stBreathPlan lPlan;
+    stBreathResult lResult;
+    float lExpected;
+    resetVs();
+    for (uint32_t lNow = 0U; lNow <= 2802U; lNow += 6U) {
+        phaseControllerProcess(lNow);
+        if (lNow == 1506U || lNow == 2802U) {
+            assert(phaseControllerExpirationCaptureNotify() == PHASE_CONTROL_SUCCESS);
+            assert(phaseControllerTrigger(BREATH_TRIGGER_REASON_FLOW, lNow) == PHASE_CONTROL_SUCCESS);
+        }
+        if (phaseControllerStateGet() == PHASE_INSP) {
+            gData[PAT_REAL_PRS] = 15.0F;
+            gData[PAT_REAL_FLOW] = (lNow >= 2004U && lNow < 2802U) ? 6.0F : 30.0F;
+            gData[INSP_REAL_FLOW] = gData[PAT_REAL_FLOW];
+        } else {
+            gData[PAT_REAL_PRS] = phaseControllerStateGet() == PHASE_EXP ? 5.0F : 0.0F;
+            gData[PAT_REAL_FLOW] = phaseControllerStateGet() == PHASE_EXP ? -10.0F : 0.0F;
+            gData[INSP_REAL_FLOW] = 0.0F;
+        }
+        monitorEngineProcess(lNow);
+        cycleEngineProcess(lNow);
+    }
+    assert(monitorEngineBreathResultGet(&lResult) == MONITOR_ENGINE_SUCCESS);
+    assert(lResult.cycleReason == BREATH_CYCLE_REASON_FLOW && lResult.vtiMl > 0.0F);
+    assert(phaseControllerActivePlanGet(&lPlan) == PHASE_CONTROL_SUCCESS);
+    lExpected = fminf(25.0F, 5.0F + 10.0F * 500.0F / lResult.vtiMl);
+    near(lPlan.inspiratoryPressureCmh2o, lExpected);
+    assert(lPlan.inspiratoryPressureCmh2o > 15.0F);
+}
+
 int main(void) {
     testSimv();
     testSimvBackup();
@@ -965,6 +1407,13 @@ int main(void) {
     testShortVolumeReference();
 #endif
     testBlowerLimitedFeedback();
+    testPrvc();
+    testPrvcIntegration();
+    testPrvcConvergence();
+    testPrvcSimvFeedback();
+    testVsFeedback();
+    testVsTiming();
+    testVsIntegration();
     return 0;
 }
 /**************************End of file********************************/
@@ -1002,6 +1451,8 @@ def main():
             subprocess.run(command + [f"-DBREATH_VOLUME_FLOW_COMPENSATION_ENABLE={legacy}"], check=True, env=environment)
             subprocess.run([str(executable)], check=True, env=environment)
             print(f"PASS: {'legacy flow' if legacy else 'time'} compensation")
+    print("PASS: VS cycle-off, spontaneous timing, pressure adaptation, apnea and monitor integration")
+    print("PASS: PRVC mechanics, RC convergence, first-breath integration, step limits, faults and reset")
     print("PASS: EMA, next-breath timing, once-only feedback, conversion, bounds, convergence, faults, reset")
 
 

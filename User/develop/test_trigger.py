@@ -406,7 +406,7 @@ int main(void) {
     samples(5.0F, 0.0F, 20U);
     samples(1.0F, 10.0F, 20U);
     assert(gTriggers == 0U);
-    for (unsigned int mode = VENT_MD_VAC; mode <= VENT_MD_V_SIMV; mode++) {
+    for (unsigned int mode = VENT_MD_VAC; mode <= VENT_MD_VS; mode++) {
     for (int i = 0; i < 3; i++) {
         setup(i == 0 ? VENT_TRIGGER_FLOW : i == 1 ? VENT_TRIGGER_PRESSURE : VENT_TRIGGER_OFF);
         gPlan.mode = (eVentMode)mode;
@@ -421,7 +421,7 @@ int main(void) {
     }
     }
     setup(VENT_TRIGGER_FLOW);
-    gPlan.mode = VENT_MD_PRVC;
+    gPlan.mode = VENT_MD_BAPAP;
     samples(5.0F, 0.0F, 20U);
     samples(1.0F, 10.0F, 20U);
     assert(gTriggers == 0U);

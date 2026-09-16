@@ -59,6 +59,9 @@ void repRtosExitCritical(void) {}
 eApneaEngineState apneaEngineStateGet(void) { return APNEA_ENGINE_IDLE; }
 uint8_t breathSchedulerRunningGet(void) { return 1U; }
 void breathSchedulerVolumeReset(void) {}
+void breathSchedulerPrvcFeedback(const stBreathPlan *plan, const struct stBreathResult *result) {
+    (void)plan; (void)result;
+}
 void breathSchedulerVolumeFeedback(const stBreathPlan *plan, float vtiMl, uint8_t valid) {
     (void)plan;
     (void)vtiMl;

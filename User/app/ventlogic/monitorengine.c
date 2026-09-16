@@ -152,8 +152,9 @@ static void monitorEnginePlateauPressureProcess(uint32_t nowMs)
     }
 
     lPhaseState = phaseControllerStateGet();
-    /* PAC must exclude pressure decay after the controller ends inspiration. */
-    if ((gMonitorEngine.breathPlan.mode == VENT_MD_PAC) &&
+    /* PAC/PRVC must exclude pressure decay after the controller ends inspiration. */
+    if (((gMonitorEngine.breathPlan.mode == VENT_MD_PAC) ||
+         breathPlanIsPrvc(&gMonitorEngine.breathPlan)) &&
         (lPhaseState != PHASE_INSP)) {
         return;
     }
@@ -496,6 +497,7 @@ static void monitorEngineBreathResultStore(const stBreathResult *result) {
 
 /** Pass completed inspiratory volume to scheduler compensation. */
 static void monitorEngineBreathResultVolumeFeedback(const stBreathResult *result) {
+    breathSchedulerPrvcFeedback(&gMonitorEngine.breathPlan, result);
     breathSchedulerVolumeFeedback(&gMonitorEngine.breathPlan, result->vtiMl,
         (uint8_t)(((result->validMask & BREATH_RESULT_VALID_VTI) != 0U) &&
                   (gMonitorEngine.volumeLimited == 0U) &&

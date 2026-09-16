@@ -1,5 +1,37 @@
 # Device Tool
 
+VS regressions in `test_vti_compensation.py` cover PEEP+10 startup, 10/3 pressure
+steps, duplicate/invalid/timeout feedback, live limits, settings validation,
+configurable cycle-off (40% peak equality), no timed normal breaths, pressure and
+volume apnea backups, backup disabled, patient recovery and backup isolation.
+`test_trigger.py` includes VS pressure/flow/off; `test_protocol.py` checks VS VT,
+cycleOffPercent, rise time and apnea fields. Console entry: `vt vs` / `vt mode 9`.
+
+
+PRVC-SIMV shares the PRVC feedback and SIMV scheduling regressions in
+`test_vti_compensation.py`: adult/pediatric/neonatal windows, whole-expiration
+windows, window-start equality, support without delaying the mandatory clock,
+tick wrap, first mandatory trial, support/backup isolation from pressure learning,
+10/3 step accounting, pressure/volume apnea backup and recovery, zero support,
+invalid settings, live limits and restart. `test_trigger.py` covers both triggers
+and disabled triggering; `test_protocol.py` checks SIMV frequency, support and
+backup mappings. Bench console entry: `vt prvcsimv` or `vt mode 8` / `vt run 1`.
+
+
+PRVC regression is included in `py -3 user/develop/test_vti_compensation.py`:
+first actual volume-test inspiration (10% pause), same-boundary mechanics feedback,
+RC prediction and convergence after C/R changes, 10/3 cmH2O step boundaries,
+additional configured step cap, duplicate/invalid feedback, restart/re-zero,
+settings updates and live Pmax-5 cycling. Both VAC compensation configurations run.
+`test_trigger.py` covers PRVC flow/pressure/off; `test_protocol.py` covers its host settings.
+Use `vt prvc` or `vt mode 7` followed by `vt run 1` for bench operation;
+`vt trigger` preserves PRVC. Firmware operations use Device Tool.
+
+The full `test_monitor_leak.py` currently fails its pre-existing
+`resistanceInspiratory == 30.0F` assertion; the same failure was reproduced with
+HEAD's original `monitorengine.c` during PRVC validation. The PRVC estimator uses
+its own plateau-separated resistance formula; this change does not alter HMI resistance.
+
 Circuit alarm regressions include inspiratory pressure not reached: both strict
 deficits, third-cycle confirmation, held-result deduplication, pressure-target
 snapshots, one-cycle recovery, each equality boundary, invalid pressure/target,

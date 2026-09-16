@@ -64,6 +64,10 @@ static int8_t phaseControllerInitialExpirationStart(uint32_t nowMs)
     if (phaseControllerPlanLoad(BREATH_TRIGGER_REASON_TIME) != PHASE_CONTROL_SUCCESS) {
         return PHASE_CONTROL_ERROR_STATE;
     }
+    if (breathPlanIsVolumeAdaptive(&gPhaseController.activePlan)) {
+        /* This plan only establishes PEEP; the first actual inspiration is the test breath. */
+        breathSchedulerVolumeReset();
+    }
     gPhaseController.mandatoryReferenceMs = nowMs;
     gPhaseController.mandatoryDelayMs = gPhaseController.activePlan.expiratoryTimeMs;
     gPhaseController.expirationStartedMs = nowMs;
@@ -254,6 +258,7 @@ int8_t phaseControllerTrigger(eBreathTriggerReason triggerReason, uint32_t nowMs
     if ((gPhaseController.expirationCaptureComplete == 0U) &&
         !((triggerReason == BREATH_TRIGGER_REASON_APNEA_BACKUP) &&
           ((gPhaseController.activePlan.mode == VENT_MD_PSV_ST) ||
+           (gPhaseController.activePlan.mode == VENT_MD_VS) ||
            (gPhaseController.activePlan.mandatoryIntervalMs != 0U)))) {
         return PHASE_CONTROL_ERROR_STATE;
     }
@@ -435,6 +440,20 @@ void phaseControllerProcess(uint32_t nowMs)
             break;
 
         case PHASE_INSP:
+            if (breathPlanIsVolumeAdaptive(&gPhaseController.activePlan)) {
+                float lLimit = gPhaseController.activePlan.limitSettings->pressureHigh -
+                               BREATH_PRVC_PRESSURE_MARGIN_CMH2O;
+                if (gPhaseController.activePlan.pressureLimitCmh2o < lLimit) {
+                    lLimit = gPhaseController.activePlan.pressureLimitCmh2o;
+                }
+                /* Apply live reductions immediately, including during the volume test. */
+                if (!(lLimit > gPhaseController.activePlan.peepCmh2o && lLimit <= 95.0F) ||
+                    controlDataGet(PAT_REAL_PRS) >= lLimit) {
+                    monitorEngineVolumeLimitedNotify();
+                    phaseControllerExpirationStart(BREATH_CYCLE_REASON_PRESSURE_LIMIT, nowMs);
+                    break;
+                }
+            }
             if (gPhaseController.activePlan.breathType == BREATH_TYPE_MANDATORY_VOLUME) {
                 phaseControllerVolumeInspirationProcess(nowMs);
             }

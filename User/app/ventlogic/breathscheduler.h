@@ -46,6 +46,22 @@ extern "C" {
 #endif
 #define BREATH_VOLUME_TIME_STEP_MS                  20.0F
 #define BREATH_VOLUME_TIME_LIMIT_RATIO              0.30F
+#define BREATH_PRVC_PRESSURE_MARGIN_CMH2O           5.0F
+#define BREATH_PRVC_STARTUP_STEP_CMH2O             10.0F
+#define BREATH_PRVC_NORMAL_STEP_CMH2O               3.0F
+#define BREATH_PRVC_TRIAL_PAUSE_PERCENT            10.0F
+#define BREATH_PRVC_RISE_TIME_MS                    200U
+
+typedef struct stBreathPrvcFeedback {
+    float pressureCmh2o;
+    float complianceMlPerCmh2o;
+    float resistanceCmh2oPerLps;
+    uint32_t lastSequence;
+    uint8_t breathCount; /* Saturates at four, including the initial trial breath. */
+    uint8_t consumed;
+} stBreathPrvcFeedback;
+
+struct stBreathResult;
 
 typedef enum {
     BREATH_TYPE_NONE = 0,
@@ -116,6 +132,20 @@ typedef struct stBreathPlan {
     uint8_t timeTriggerEnabled;
 } stBreathPlan;
 
+/** Identify volume-guaranteed mandatory breaths, excluding SIMV support and apnea backup. */
+static inline uint8_t breathPlanIsPrvc(const stBreathPlan *plan) {
+    return (uint8_t)((plan->mode == VENT_MD_PRVC || plan->mode == VENT_MD_PRVC_SIMV) &&
+        (plan->breathType == BREATH_TYPE_MANDATORY_VOLUME || plan->breathType == BREATH_TYPE_MANDATORY_PRESSURE) &&
+        plan->triggerReason != BREATH_TRIGGER_REASON_APNEA_BACKUP);
+}
+
+/** Identify normal volume-adaptive breaths; apnea targets remain independent. */
+static inline uint8_t breathPlanIsVolumeAdaptive(const stBreathPlan *plan) {
+    return (uint8_t)(breathPlanIsPrvc(plan) || (plan->mode == VENT_MD_VS &&
+        plan->breathType == BREATH_TYPE_SPONTANEOUS_PRESSURE_SUPPORT &&
+        plan->triggerReason != BREATH_TRIGGER_REASON_APNEA_BACKUP));
+}
+
 typedef struct stBreathVolumeFeedback {
     float filteredVtiMl;
     float filteredAppliedCorrectionMl;
@@ -126,11 +156,14 @@ typedef struct stBreathVolumeFeedback {
     uint8_t consumed;
 } stBreathVolumeFeedback;
 
-/** Clear VAC learning after stop, settings changes or sensor re-zeroing. */
+/** Clear VAC/PRVC/VS learning after stop, settings changes or sensor re-zeroing. */
 void breathSchedulerVolumeReset(void);
 
 /** Consume one completed proximal VTI in VentTask before loading the next plan. */
 void breathSchedulerVolumeFeedback(const stBreathPlan *plan, float vtiMl, uint8_t valid);
+
+/** Consume one completed PRVC/VS result in VentTask before selecting the next plan. */
+void breathSchedulerPrvcFeedback(const stBreathPlan *plan, const struct stBreathResult *result);
 
 /** Configure the scheduler and leave it idle. */
 int8_t breathSchedulerInit(void);
