@@ -1,5 +1,6 @@
 """Exercise production leak monitoring and VAC pause control with host inputs."""
 import os
+import argparse
 from pathlib import Path
 import shutil
 import subprocess
@@ -23,6 +24,8 @@ HARNESS = r'''
 #include "physalarmmanager.h"
 #include "apneaengine.h"
 #include "techalarmmanager.h"
+#include "techphys.h"
+#include "pipeflowtable.h"
 
 static float gData[CONTROL_DATA_COUNT];
 static float gOffset;
@@ -32,8 +35,10 @@ static uint8_t gPause;
 static uint8_t gExpirationReady;
 static stVentLimitSettings gLimits = {.pressureLow = 1.0F, .pressureHigh = 60.0F};
 static stBreathPlan gPlan;
+static stVentPatientSettings gPatient = {.Type = VENT_PATIENT_ADULT};
 
 stVentLimitSettings *GetVentLimitSettings(void) { return &gLimits; }
+stVentPatientSettings *GetVentPatientSettings(void) { return &gPatient; }
 float controlDataGet(ControlData_Index_EnumDef index) { return gData[index]; }
 float controlDataMdiffFlowZeroOffsetGet(void) { return gOffset; }
 ePhaseControllerState phaseControllerStateGet(void) { return gPhase; }
@@ -75,6 +80,7 @@ static void reset(void) {
     gOffset = 0.0F;
     gPause = 0U;
     gExpirationReady = 0U;
+    gPatient.Type = VENT_PATIENT_ADULT;
     gPlan = (stBreathPlan){.sequence = 1U, .mode = VENT_MD_VAC,
         .breathType = BREATH_TYPE_MANDATORY_VOLUME, .targetTidalVolumeMl = 500.0F, .peepCmh2o = 5.0F, .inspiratoryFlowLpm = 30.0F,
         .maximumInspiratoryTimeMs = 1000U, .limitSettings = &gLimits};
@@ -707,7 +713,314 @@ static void pacPlateau(void) {
     assert(monitorEngineGet(MONITOR_PLATEAU_PRS) == 0.0F);
 }
 
+/** Verify blockage signals, phase exclusion and one-cycle alarm recovery. */
+static void pipelineBlockage(void) {
+    stBreathResult lResult;
+    reset();
+    techAlarmManagerInit();
+    gPlan.mode = VENT_MD_PAC;
+    sample(PHASE_INSP, 0.1F, 5.0F);
+    sample(PHASE_INSP, -0.3F, 10.0F);
+    sample(PHASE_INSP, 0.2F, 8.0F);
+    assert(!techPhysPipelineBlockageDetect(gNow));
+    sample(PHASE_EXP, 20.0F, 30.0F);
+    monitorEngineBreathComplete(gNow);
+    assert(monitorEngineBreathResultGet(&lResult) == MONITOR_ENGINE_SUCCESS);
+    assert(lResult.inspiratoryDeltaPeakCmh2o == 5.0F);
+    assert(lResult.inspiratoryDeltaEndCmh2o == 3.0F);
+    assert(fabsf(lResult.inspiratoryAbsolutePeakFlowLpm - 0.3F) < 0.0001F);
+    assert(fabsf(lResult.inspiratorySignedVolumeMl) < 0.0001F);
+    assert(techPhysPipelineBlockageDetect(gNow));
+    techAlarmManagerProcess(gNow);
+    assert(techAlarmManagerStateGet(TECH_ALARM_PIPELINE_BLOCKAGE));
+    gPlan.sequence++;
+    sample(PHASE_INSP, 30.0F, 5.0F);
+    assert(techPhysPipelineBlockageDetect(gNow));
+    sample(PHASE_INSP, 30.0F, 6.0F);
+    sample(PHASE_EXP, -30.0F, 5.0F);
+    monitorEngineBreathComplete(gNow);
+    assert(!techPhysPipelineBlockageDetect(gNow));
+
+    /* Strict flow-ratio boundary must not trigger the end-pressure branch. */
+    reset();
+    techPhysInit();
+    sample(PHASE_INSP, 0.6F, 5.0F);
+    sample(PHASE_INSP, 0.6F, 8.0F);
+    sample(PHASE_EXP, -1.0F, 5.0F);
+    monitorEngineBreathComplete(gNow);
+    assert(!techPhysPipelineBlockageDetect(gNow));
+
+    /* An invalid inspiration must not produce a partial-cycle alarm. */
+    reset();
+    techPhysInit();
+    sample(PHASE_INSP, 0.1F, 5.0F);
+    sample(PHASE_INSP, NAN, 8.0F);
+    sample(PHASE_EXP, -1.0F, 5.0F);
+    monitorEngineBreathComplete(gNow);
+    assert(!techPhysPipelineBlockageDetect(gNow));
+
+    /* Isolate the peak-pressure/resistance branch; end pressure stays low. */
+    reset();
+    techPhysInit();
+    gPlan.mode = VENT_MD_PAC;
+    sample(PHASE_INSP, 0.6F, 5.0F);
+    sample(PHASE_INSP, 0.6F, 15.0F);
+    sample(PHASE_INSP, 0.6F, 5.0F);
+    gNow = 960U;
+    sample(PHASE_INSP, 0.6F, 5.0F);
+    sample(PHASE_EXP, -0.6F, 5.0F);
+    monitorEngineBreathComplete(gNow);
+    assert(monitorEngineBreathResultGet(&lResult) == MONITOR_ENGINE_SUCCESS);
+    assert(lResult.resistanceInspiratory > 600.0F);
+    assert(lResult.inspiratoryDeltaEndCmh2o == 0.0F);
+    assert(techPhysPipelineBlockageDetect(gNow));
+    sample(PHASE_IDLE, 0.0F, 5.0F);
+    assert(!techPhysPipelineBlockageDetect(gNow));
+}
+
+/** Publish a branch measurement before the alarm task evaluates it. */
+static bool branchSample(uint32_t nowMs, float flow, float inspPressure, float patientPressure) {
+    gData[INSP_REAL_FLOW] = flow;
+    gData[INSP_REAL_PRS] = inspPressure;
+    sample(PHASE_INSP, 0.0F, patientPressure);
+    return techPhysInspBranchBlockageDetect(nowMs);
+}
+
+/** Check table lookup, strict boundaries, uninterrupted timing and recovery. */
+static void inspBranchBlockage(void) {
+    float lFlow;
+    const float lAdult[6][2] = {{1.07F,10.4F},{5.14F,39.5F},{11.39F,60.6F},
+        {24.56F,90.5F},{38.98F,117.3F},{49.34F,133.8F}};
+    const float lNeonatal[6][2] = {{3.42F,1.1F},{5.61F,6.4F},{10.08F,14.1F},
+        {21.26F,26.2F},{51.34F,46.6F},{76.75F,56.9F}};
+    for (unsigned int lIndex = 0U; lIndex < 6U; lIndex++) {
+        assert(pipeFlowTableGet(VENT_PATIENT_ADULT, lAdult[lIndex][0], &lFlow) == 1);
+        assert(fabsf(lFlow - lAdult[lIndex][1]) < 0.0001F);
+        assert(pipeFlowTableGet(VENT_PATIENT_PEDIATRIC, lAdult[lIndex][0], &lFlow) == 1);
+        assert(fabsf(lFlow - lAdult[lIndex][1]) < 0.0001F);
+        assert(pipeFlowTableGet(VENT_PATIENT_NEONATAL, lNeonatal[lIndex][0], &lFlow) == 1);
+        assert(fabsf(lFlow - lNeonatal[lIndex][1]) < 0.0001F);
+    }
+    assert(pipeFlowTableGet(VENT_PATIENT_ADULT, (1.07F + 5.14F) / 2.0F, &lFlow) == 1);
+    assert(fabsf(lFlow - (10.4F + 39.5F) / 2.0F) < 0.0001F);
+    assert(pipeFlowTableGet(VENT_PATIENT_NEONATAL, -1.0F, &lFlow) == 1 && lFlow == 1.1F);
+    assert(pipeFlowTableGet(VENT_PATIENT_ADULT, 100.0F, &lFlow) == 1 && lFlow == 133.8F);
+    assert(pipeFlowTableGet(VENT_PATIENT_TYPE_COUNT, 10.0F, &lFlow) < 0);
+    assert(pipeFlowTableGet(VENT_PATIENT_ADULT, NAN, &lFlow) < 0);
+    assert(pipeFlowTableGet(VENT_PATIENT_ADULT, INFINITY, &lFlow) < 0);
+    assert(pipeFlowTableGet(VENT_PATIENT_ADULT, 10.0F, NULL) < 0);
+
+    reset();
+    techAlarmManagerInit();
+    assert(!branchSample(0U, 15.0F, 20.0F, 10.0F)); /* deltaP == 10 is excluded. */
+    assert(!branchSample(1000U, 15.0F, 20.0F, 10.0F));
+    assert(!branchSample(1010U, 16.5F, 21.0F, 10.0F)); /* Q equality is included. */
+    assert(!branchSample(2009U, 16.5F, 21.0F, 10.0F));
+    assert(branchSample(2010U, 16.5F, 21.0F, 10.0F));
+    techAlarmManagerProcess(2010U);
+    assert(techAlarmManagerStateGet(TECH_ALARM_INSP_BRANCH_BLOCKAGE));
+    assert(branchSample(2020U, 66.9F, 49.34F, 10.0F)); /* Recovery equality excluded. */
+    assert(branchSample(3020U, 66.9F, 49.34F, 10.0F));
+    assert(branchSample(3030U, 70.0F, 49.34F, 10.0F));
+    assert(branchSample(4029U, 70.0F, 49.34F, 10.0F));
+    assert(!branchSample(4030U, 70.0F, 49.34F, 10.0F));
+
+    reset();
+    techPhysInit();
+    gPatient.Type = VENT_PATIENT_NEONATAL;
+    assert(!branchSample(0U, 0.0F, 21.26F, 5.0F));
+    assert(!branchSample(999U, 100.0F, 21.26F, 5.0F)); /* Interrupt confirmation. */
+    assert(!branchSample(1000U, 0.0F, 21.26F, 5.0F));
+    assert(!branchSample(1999U, NAN, 21.26F, 5.0F)); /* Invalid input restarts timing. */
+    assert(!branchSample(2000U, 0.0F, 21.26F, 5.0F));
+    assert(branchSample(3000U, 0.0F, 21.26F, 5.0F));
+    assert(branchSample(3010U, 15.0F, 21.26F, 5.0F)); /* max floor is 15. */
+    assert(branchSample(4010U, 15.0F, 21.26F, 5.0F));
+    assert(branchSample(4020U, 16.0F, 21.26F, 5.0F));
+    assert(branchSample(5019U, 0.0F, 21.26F, 5.0F)); /* Interrupt recovery. */
+    assert(branchSample(5020U, 16.0F, 21.26F, 5.0F));
+    assert(branchSample(6019U, 16.0F, 21.26F, 5.0F));
+    assert(!branchSample(6020U, 16.0F, 21.26F, 5.0F));
+
+    techPhysInit();
+    assert(!branchSample(UINT32_MAX - 499U, 0.0F, 21.26F, 5.0F));
+    assert(!branchSample(499U, 0.0F, 21.26F, 5.0F));
+    assert(branchSample(500U, 0.0F, 21.26F, 5.0F));
+    sample(PHASE_IDLE, 0.0F, 5.0F);
+    assert(!techPhysInspBranchBlockageDetect(501U));
+}
+
+/** Keep K=2 while choosing a known whole-cycle leak peak. */
+static bool leakCycle(float peakLpm) {
+    stBreathResult lResult;
+    float lPressure = (peakLpm * 0.5F) * (peakLpm * 0.5F);
+
+    sample(PHASE_INSP, 2.0F, 1.0F);
+    sample(PHASE_EXP, peakLpm, lPressure); /* Peak can occur during expiration. */
+    sample(PHASE_EXP, 2.0F, 1.0F);
+    monitorEngineBreathComplete(gNow);
+    assert(monitorEngineBreathResultGet(&lResult) == MONITOR_ENGINE_SUCCESS);
+    assert((lResult.validMask & BREATH_RESULT_VALID_MINUTE_LEAK) != 0U);
+    assert(fabsf(lResult.peakLeakLpm - peakLpm) < 0.001F);
+    gPlan.sequence++;
+    return techPhysPipelineLeakDetect(gNow);
+}
+
+/** Check per-cycle leak counting, hysteresis, saturation and invalid-cycle hold. */
+static void pipelineLeak(void) {
+    reset();
+    techAlarmManagerInit();
+    assert(!techPhysPipelineLeakDetect(gNow));
+    sample(PHASE_INSP, 10.0F, 25.0F);
+    sample(PHASE_EXP, 4.0F, 4.0F);
+    monitorEngineBreathComplete(gNow); /* Establish K=2; first estimate is invalid. */
+    assert(!techPhysPipelineLeakDetect(gNow));
+    gPlan.sequence++;
+    assert(!leakCycle(6.0F));
+    for (unsigned int lIndex = 0U; lIndex < 10U; lIndex++) {
+        assert(!techPhysPipelineLeakDetect(gNow)); /* One count per result. */
+    }
+    assert(!leakCycle(5.0F)); /* Exact high boundary holds count. */
+    assert(!leakCycle(3.0F)); /* Exact low boundary holds count. */
+    assert(!leakCycle(4.0F));
+    assert(!leakCycle(6.0F));
+    assert(!leakCycle(6.0F));
+    assert(!leakCycle(6.0F)); /* Four high cycles are insufficient. */
+    sample(PHASE_INSP, 2.0F, 1.0F);
+    assert(!techPhysPipelineLeakDetect(gNow)); /* Partial cycle does not count. */
+    sample(PHASE_INSP, 6.0F, 9.0F); /* Verify an inspiratory peak as well. */
+    sample(PHASE_EXP, 2.0F, 1.0F);
+    monitorEngineBreathComplete(gNow);
+    assert(techPhysPipelineLeakDetect(gNow));
+    gPlan.sequence++;
+    techAlarmManagerProcess(gNow);
+    assert(techAlarmManagerStateGet(TECH_ALARM_PIPELINE_LEAK));
+    assert(leakCycle(3.0F));
+    assert(leakCycle(5.0F));
+    assert(leakCycle(4.0F));
+    for (unsigned int lIndex = 0U; lIndex < 260U; lIndex++) {
+        assert(leakCycle(6.0F)); /* Count never wraps and clears an active alarm. */
+    }
+    assert(!leakCycle(2.0F)); /* Recover and reset the entire count. */
+    for (unsigned int lIndex = 0U; lIndex < 4U; lIndex++) {
+        assert(!leakCycle(6.0F));
+    }
+    assert(leakCycle(6.0F));
+    sample(PHASE_INSP, 2.0F, 1.0F);
+    sample(PHASE_EXP, 2.0F, NAN);
+    monitorEngineBreathComplete(gNow);
+    assert(techPhysPipelineLeakDetect(gNow)); /* Invalid zero is not recovery. */
+    sample(PHASE_IDLE, 0.0F, 1.0F);
+    assert(!techPhysPipelineLeakDetect(gNow));
+}
+
+/** Produce exact 900 mL patient/machine inspiration with negligible expiration. */
+static bool disconnectVolumeCycle(float pressure, float endFlow) {
+    stBreathResult lResult;
+    gData[INSP_REAL_FLOW] = 100.0F;
+    gData[INSP_REAL_PRS] = 10.0F;
+    for (unsigned int lIndex = 0U; lIndex < 90U; lIndex++) {
+        sample(PHASE_INSP, 100.0F, pressure);
+    }
+    gData[INSP_REAL_FLOW] = 0.0F;
+    sample(PHASE_INSP, endFlow, pressure);
+    sample(PHASE_EXP, -1.0F, pressure);
+    monitorEngineBreathComplete(gNow);
+    assert(monitorEngineBreathResultGet(&lResult) == MONITOR_ENGINE_SUCCESS);
+    assert(lResult.machineInspiratoryVolumeMl == 900.0F);
+    assert(lResult.patientPeakFlowLpm == 100.0F);
+    assert(lResult.patientEndInspiratoryFlowLpm == endFlow);
+    assert(fabsf(lResult.patientExpiratoryVolumeMl - 0.1F) < 0.0001F);
+    gPlan.sequence++;
+    return techPhysPipelineDisconnectDetect(gNow);
+}
+
+/** Supply a completed raw leak coefficient independent of the volume path. */
+static bool disconnectLeakCycle(float coefficient) {
+    stBreathResult lResult;
+    gData[INSP_REAL_FLOW] = 0.0F;
+    gData[INSP_REAL_PRS] = 10.0F;
+    sample(PHASE_INSP, coefficient, 1.0F);
+    sample(PHASE_EXP, coefficient, 1.0F);
+    monitorEngineBreathComplete(gNow);
+    assert(monitorEngineBreathResultGet(&lResult) == MONITOR_ENGINE_SUCCESS);
+    assert(lResult.leakBalanceCoefficient == coefficient);
+    assert(monitorEngineGet(MONITOR_LEAK_COEFFICIENT) <= 50.0F);
+    gPlan.sequence++;
+    return techPhysPipelineDisconnectDetect(gNow);
+}
+
+/** Verify two-stage compliance, raw leak counting, latching and shared recovery. */
+static void pipelineDisconnect(void) {
+    reset();
+    techAlarmManagerInit();
+    assert(!disconnectVolumeCycle(2.0F, 0.0F)); /* C == 450 cannot start confirmation. */
+    assert(!disconnectVolumeCycle(1.0F, 0.0F));
+    assert(!techPhysPipelineDisconnectDetect(gNow)); /* Same result cannot confirm twice. */
+    assert(!disconnectVolumeCycle(4.5F, 0.0F)); /* C == 200 resets the first detection. */
+    assert(!disconnectVolumeCycle(3.0F, 0.0F)); /* C > 200 alone cannot restart. */
+    assert(!disconnectVolumeCycle(1.0F, 0.0F));
+    assert(disconnectVolumeCycle(3.0F, 0.0F));
+    techAlarmManagerProcess(gNow);
+    assert(techAlarmManagerStateGet(TECH_ALARM_PIPELINE_DISCONNECT));
+    assert(disconnectVolumeCycle(10.0F, 0.0F)); /* Nonmatching cycle does not recover. */
+    gData[INSP_REAL_FLOW] = 0.0F;
+    gData[INSP_REAL_PRS] = 20.0F;
+    sample(PHASE_EXP, 0.0F, 5.0F);
+    assert(techPhysPipelineDisconnectDetect(gNow)); /* Patient pressure equality excluded. */
+    gData[INSP_REAL_PRS] = 15.0F;
+    sample(PHASE_EXP, 0.0F, 6.0F);
+    assert(techPhysPipelineDisconnectDetect(gNow)); /* INSP pressure equality excluded. */
+    gData[INSP_REAL_PRS] = 20.0F;
+    sample(PHASE_EXP, 0.0F, 6.0F);
+    gData[INSP_REAL_FLOW] = 0.3F * monitorEngineGet(MONITOR_INSP_BRANCH_PIPE_FLOW);
+    sample(PHASE_EXP, 0.0F, 6.0F);
+    assert(techPhysPipelineDisconnectDetect(gNow)); /* Flow equality excluded. */
+    gData[INSP_REAL_FLOW] = 0.0F;
+    sample(PHASE_EXP, 0.0F, 6.0F);
+    assert(!techPhysPipelineDisconnectDetect(gNow));
+    gData[INSP_REAL_PRS] = 10.0F;
+    sample(PHASE_EXP, 0.0F, 1.0F);
+    assert(!techPhysPipelineDisconnectDetect(gNow)); /* Recovery consumed the old result. */
+
+    reset();
+    techPhysInit();
+    assert(!disconnectLeakCycle(60.0F));
+    assert(!disconnectLeakCycle(60.0F));
+    assert(!disconnectLeakCycle(50.0F)); /* Equality interrupts consecutive count. */
+    for (unsigned int lIndex = 0U; lIndex < 4U; lIndex++) {
+        assert(!disconnectLeakCycle(60.0F));
+        assert(!techPhysPipelineDisconnectDetect(gNow));
+    }
+    assert(disconnectLeakCycle(60.0F));
+    assert(disconnectLeakCycle(2.0F)); /* Leak normalization alone does not recover. */
+    gData[INSP_REAL_FLOW] = 0.0F;
+    gData[INSP_REAL_PRS] = 20.0F;
+    sample(PHASE_EXP, 0.0F, 6.0F);
+    assert(!techPhysPipelineDisconnectDetect(gNow));
+    sample(PHASE_IDLE, 0.0F, 1.0F);
+    assert(!techPhysPipelineDisconnectDetect(gNow));
+
+    reset();
+    techPhysInit();
+    /* (Qend/60)*R reaches the correction cap and starts detection; division would not. */
+    assert(!disconnectVolumeCycle(4.0F, 100.0F));
+    assert(disconnectVolumeCycle(3.0F, 0.0F));
+    reset();
+    techPhysInit();
+    assert(!disconnectVolumeCycle(2.0F, 100.0F)); /* Nonzero end-flow starts confirmation. */
+    assert(disconnectVolumeCycle(3.0F, 0.0F));
+    reset();
+    techPhysInit();
+    assert(!disconnectVolumeCycle(0.1F, 100.0F)); /* Correction cap and epsilon floor. */
+    assert(disconnectVolumeCycle(3.0F, 0.0F));
+}
+
 int main(void) {
+    pipelineDisconnect();
+    pipelineLeak();
+    inspBranchBlockage();
+    pipelineBlockage();
     pacPlateau();
     peakExpiratoryFlow();
     minuteVolumeBoundaries();
@@ -828,6 +1141,10 @@ int main(void) {
 
 
 def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--blockage-only", "--circuit-alarms-only", action="store_true",
+                        help="Run circuit blockage, branch blockage, leak and disconnect regressions only")
+    args = parser.parse_args()
     compiler = os.environ.get("CC") or shutil.which("gcc") or shutil.which("clang")
     if not compiler:
         compiler = next((str(path) for path in (
@@ -838,13 +1155,17 @@ def main():
         raise SystemExit("Set CC to a native GCC or Clang compiler for this host test.")
     with tempfile.TemporaryDirectory(prefix="ventcore-monitor-leak-") as directory:
         harness = Path(directory) / "monitor_leak_test.c"
-        harness.write_text(HARNESS, encoding="utf-8", newline="\n")
+        source = HARNESS
+        if args.blockage_only:
+            source = source.replace("    pipelineBlockage();", "    pipelineBlockage();\n    return 0;", 1)
+        harness.write_text(source, encoding="utf-8", newline="\n")
         executable = Path(directory) / "monitor_leak_test.exe"
         includes = ["user/app/physalarm", "user/app/techalarm", "user/app/ventlogic", "user/app/ventalgo", "user/app/databus",
                     "user/app/calibration", "user/module/rtos", "user/tools/controller"]
         command = [compiler, "-std=c11", "-Wall", "-Wextra", "-Werror",
                    *[f"-I{ROOT / path}" for path in includes], str(harness),
                    str(ROOT / "user/app/ventlogic/monitorengine.c"),
+                   str(ROOT / "user/app/ventlogic/pipeflowtable.c"),
                    str(ROOT / "user/app/physalarm/physalarmvent.c"),
                    str(ROOT / "user/app/physalarm/physalarmapnea.c"),
                    str(ROOT / "user/app/physalarm/physalarmmanager.c"),
@@ -860,7 +1181,10 @@ def main():
         environment["PATH"] = str(Path(compiler).parent) + os.pathsep + environment["PATH"]
         subprocess.run(command, check=True, env=environment)
         subprocess.run([str(executable)], check=True, env=environment)
-    print("PASS: PEEP alarms and recovery, dynamic PEEP windows, PAC latched display and PSV/ST stable live display, leak estimate, pause integration, boundaries, invalid data, restart, re-zero, limits")
+    if args.blockage_only:
+        print("PASS: circuit/branch blockage, leak, disconnect confirmation, raw coefficient, shared recovery, boundaries and timing")
+    else:
+        print("PASS: PEEP alarms and recovery, dynamic PEEP windows, PAC latched display and PSV/ST stable live display, leak estimate, pause integration, boundaries, invalid data, restart, re-zero, limits")
 
 
 if __name__ == "__main__":

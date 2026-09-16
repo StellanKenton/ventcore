@@ -1,5 +1,13 @@
 # User 层
 
+管路断开检测在完整周期采集机器吸入量 Vi（正向机器流量积分）、患者吸入量 Vpi（有符号吸气积分）、患者呼出量 Vpe（呼气负向流量积分），均为 mL；患者峰压、正向峰流量和最后一个吸气流量均按控制器吸气相采集。检测专用 `R = Ppeak * 60 / Qpeak`，`C = Vpi / max(Ppeak - min((Qend / 60) * R, 3), 0.001)`，不替换 HMI 阻力/顺应性。连续两个完整周期满足 `Vi > 50 && R < 10 && Vpe < 0.125*Vi && Vpi-Vi < 0.5*Vi`，首次 C>450、第二次 C>200 后触发；不满足或数据无效则重新开始。零/非正峰流量或 R 不参与除法判定。另一独立路径使用本周期限幅前的泄漏系数，连续 5 周期 >50 触发，<=50、无效或结果序号不连续则重计。报警保持至实时满足患者压力 >5、吸气压力 >15、机器流量 <0.3*Qpipe，立即恢复并清除检测历史；停止、调零或报警初始化时清除。
+
+管路泄漏报警使用完整呼吸周期内 `MONITOR_LEAK_FLOW` 的最大值 `stBreathResult.peakLeakLpm`（L/min），与 `BREATH_RESULT_VALID_MINUTE_LEAK` 共用估计有效性。Monitor Engine 在吸气和呼气采集最大值，每次新呼吸清零，完整周期结束发布；`techPhysPipelineLeakDetect` 每个结果序号只处理一次：峰值 >5 计数加一，<3 清零，3..5（含边界）保持，计数 >4 报警，否则恢复。计数在 5 饱和以防溢出；无效估计保持计数和报警，停止、监测复位或报警初始化时清除。
+
+吸气支路堵塞在 monitor 实时采集 `deltaP = INSP_REAL_PRS - PAT_REAL_PRS`（cmH₂O）、`Q = INSP_REAL_FLOW`（L/min）及当前吸气压力对应的 `Qpipe`。`app/ventlogic/pipeflowtable.c/.h` 固化成人/儿童和新生儿各 6 个标定点，按患者类型选择，表内线性插值，表外端点限幅。`techPhysInspBranchBlockageDetect` 在通气期间连续满足 `deltaP > 10 && Q <= 1.5 * deltaP` 1 秒触发；触发后连续满足 `Q > max(0.5 * Qpipe, 15)` 1 秒恢复。条件中断或数据无效时重新计时，停止时清除。monitor 将参数和有效位一起发布，AlarmTask 快照读取。
+
+管路堵塞参数按控制器吸气相采集：患者压力峰值及末个吸气压力减吸气开始压力、患者流量绝对峰值（L/min）、无死区有符号流量积分（mL）。完整周期发布后，`techPhysPipelineBlockageDetect` 使用既有吸气阻力 R 判断 `(deltaPpeak >= 5 && R > 600 && Qpeak/deltaPpeak < 0.2)` 或 `(deltaPend >= 3 && abs(V)/deltaPend < 1.5 && Qpeak/deltaPend < 0.2)`；一个周期满足即触发，下一个不满足即清除，周期中保持状态。无效吸气数据不触发，停止或监测复位时清除。
+
 MCM 呼吸频率 `0x10/0x11/0x12`（总频率/机控/自主）由 `60000 / 完整周期毫秒数` 计算，上传时按非负数四舍五入取整（14.49→14、14.5→15），保留现有 0..255 限幅和 scale=0 编码。
 
 呼气峰值流速复用 Monitor Engine 的呼气峰值累计：呼气监测阶段取 `PAT_REAL_FLOW` 负向最大幅值，沿用 0.5 L/min 死区，以非负 L/min 表示。完整周期结束发布至 `stBreathResult.peakExpiratoryFlowLpm` 和 `MONITOR_HMI_PEAK_EXP_FLOW`，下一周期内保持；沿用 `volumeInvalid` 周期有效性检查，无效周期置零且不置 `BREATH_RESULT_VALID_PEAK_EXP_FLOW`，有效零流量可上传零。停止、调零及无有效计划时清零。MCM 通过 `0x0F` 逐呼吸上报，无符号 16 位、数值 ×10、scale=1，沿用监测数据队列重试。
@@ -20,6 +28,7 @@ PAC 平台压取计划吸气结束前 100 ms 内的实测患者压力均值，�
 | `app/databus/` | 维护控制数据数组；SensorTask 保存当前及前一周期原始数据，VentTask 基于最新原始数据完成滤波和校准转换 |
 | `app/ventalgo/` | 实现吸气压力、吸气流量、公共 Release/PEEP 和 FiO₂ 控制器；各控制器只生成统一 `stActuatorRequest`，不直接写 BSP |
 | `app/ventlogic/` | Scheduler 为 PAC/VAC/PSV/PSV-ST/P-SIMV/V-SIMV 生成逐次 `stBreathPlan`，Phase Controller 执行计划，Trigger Engine 检测患者触发，Cycle Engine 完成 PSV 流量切换，Apnea Engine 调度 PSV 窒息后备和 PSV-ST 周期机控呼吸，Monitor Engine 发布逐次 `stBreathResult`，Actuator Controller 统一仲裁并写入 BSP |
+| `app/ventlogic/pipeflowtable.*` | 固化成人/儿童与新生儿管路压力-流量表，为 Monitor Engine 的吸气支路堵塞恢复阈值提供 Qpipe |
 | `app/physalarm/` | `physalarmmanager.*` 在 AlarmTask 注册、调度和发布 0xAD 生理报警；`physalarmvent.*` 实现检测；`alarmbits.h` 定义旧协议六组枚举及 union 位域 |
 | `app/techalarm/` | `techalarmmanager.*` 独立注册、调度、发布技术报警并生成 0xAB 快照；`techphys.*`、`techdevice.*`、`techpower.*`、`techcomm.*`、`techcal.*` 分别承接 SubId 0..4 检测 |
 | `bsp/adc/adc.*` | 使用 ADC1 规则组扫描、连续转换和 DMA1 循环模式持续采集 14 路板级模拟量 |

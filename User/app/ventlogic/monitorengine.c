@@ -11,11 +11,13 @@
 
 #include <float.h>
 #include <stddef.h>
+#include <stdbool.h>
 #include <string.h>
 
 #include "controldata.h"
 #include "databus.h"
 #include "phasecontroller.h"
+#include "pipeflowtable.h"
 #include "rtos.h"
 
 static stMonitorEngine gMonitorEngine;
@@ -124,6 +126,9 @@ static void monitorEngineLeakFlowProcess(void)
     if ((gMonitorEngine.breathActive != 0U) && (gMonitorEngine.breathCompleted == 0U)) {
         /* Fixed 6 ms samples: integral divided by duration is mean L/min. */
         gMonitorEngine.minuteLeakSumLpm += monitorEngineGet(MONITOR_LEAK_FLOW);
+        if (lLeakFlow > gMonitorEngine.peakLeakLpm) {
+            gMonitorEngine.peakLeakLpm = lLeakFlow;
+        }
         gMonitorEngine.minuteLeakSampleCount++;
         if ((monitorEngineGet(MONITOR_LEAK_VALID) == 0.0F) ||
             (monitorEngineFinite(lPressure) == 0U) || (lPressure <= 0.0F)) {
@@ -326,6 +331,7 @@ static void monitorEngineBreathResultAveragesCalculate(stBreathResult *result) {
         (monitorEngineFinite(gMonitorEngine.minuteLeakSumLpm) != 0U)) {
         result->minuteLeakLpm = gMonitorEngine.minuteLeakSumLpm /
                                (float)gMonitorEngine.minuteLeakSampleCount;
+        result->peakLeakLpm = gMonitorEngine.peakLeakLpm;
         result->validMask |= BREATH_RESULT_VALID_MINUTE_LEAK;
     }
 }
@@ -508,6 +514,34 @@ static void monitorEngineBreathResultPublish(uint32_t nowMs) {
     monitorEngineBreathResultValidate(&lResult);
     monitorEngineBreathResultMinuteVolumeCalculate(&lResult);
     monitorEngineBreathResultResistanceCalculate(&lResult);
+    lResult.inspiratoryDeltaPeakCmh2o = gMonitorEngine.inspiratoryPeakPressureCmh2o -
+                                      gMonitorEngine.inspiratoryStartPressureCmh2o;
+    lResult.inspiratoryDeltaEndCmh2o = gMonitorEngine.inspiratoryEndPressureCmh2o -
+                                     gMonitorEngine.inspiratoryStartPressureCmh2o;
+    lResult.inspiratoryAbsolutePeakFlowLpm = gMonitorEngine.inspiratoryAbsolutePeakFlowLpm;
+    lResult.inspiratorySignedVolumeMl = gMonitorEngine.inspiratorySignedVolumeMl;
+    lResult.machineInspiratoryVolumeMl = gMonitorEngine.machineInspiratoryVolumeMl;
+    lResult.patientExpiratoryVolumeMl = gMonitorEngine.patientExpiratoryVolumeMl;
+    lResult.patientPeakPressureCmh2o = gMonitorEngine.inspiratoryPeakPressureCmh2o;
+    lResult.patientPeakFlowLpm = gMonitorEngine.patientPeakFlowLpm;
+    lResult.patientEndInspiratoryFlowLpm = gMonitorEngine.patientEndInspiratoryFlowLpm;
+    if ((gMonitorEngine.disconnectSignalsInvalid == 0U) &&
+        (gMonitorEngine.blockageSignalsInvalid == 0U) &&
+        (monitorEngineFinite(lResult.machineInspiratoryVolumeMl) != 0U) &&
+        (monitorEngineFinite(lResult.patientExpiratoryVolumeMl) != 0U) &&
+        (monitorEngineFinite(lResult.inspiratorySignedVolumeMl) != 0U)) {
+        lResult.validMask |= BREATH_RESULT_VALID_DISCONNECT_SIGNALS;
+    }
+    lResult.leakBalanceCoefficient = monitorEngineGet(MONITOR_LEAK_BALANCE_COEFFICIENT);
+    if (monitorEngineGet(MONITOR_LEAK_VALID) != 0.0F) {
+        lResult.validMask |= BREATH_RESULT_VALID_LEAK_COEFFICIENT;
+    }
+    if ((gMonitorEngine.blockageSignalsInvalid == 0U) &&
+        (monitorEngineFinite(lResult.inspiratoryDeltaPeakCmh2o) != 0U) &&
+        (monitorEngineFinite(lResult.inspiratoryDeltaEndCmh2o) != 0U) &&
+        (monitorEngineFinite(lResult.inspiratorySignedVolumeMl) != 0U)) {
+        lResult.validMask |= BREATH_RESULT_VALID_BLOCKAGE_SIGNALS;
+    }
     monitorEngineBreathResultComplianceCalculate(&lResult);
     monitorEngineBreathResultStore(&lResult);
     monitorEngineBreathResultVolumeFeedback(&lResult);
@@ -562,6 +596,17 @@ static int8_t monitorEngineBreathStart(uint32_t nowMs)
     }
     lPressure = controlDataGet(PAT_REAL_PRS);
     gMonitorEngine.breathPlan = lPlan;
+    gMonitorEngine.inspiratoryStartPressureCmh2o = lPressure;
+    gMonitorEngine.inspiratoryEndPressureCmh2o = lPressure;
+    gMonitorEngine.inspiratoryPeakPressureCmh2o = lPressure;
+    gMonitorEngine.inspiratoryAbsolutePeakFlowLpm = 0.0F;
+    gMonitorEngine.inspiratorySignedVolumeMl = 0.0F;
+    gMonitorEngine.blockageSignalsInvalid = (uint8_t)(monitorEngineFinite(lPressure) == 0U);
+    gMonitorEngine.machineInspiratoryVolumeMl = 0.0F;
+    gMonitorEngine.patientExpiratoryVolumeMl = 0.0F;
+    gMonitorEngine.patientPeakFlowLpm = 0.0F;
+    gMonitorEngine.patientEndInspiratoryFlowLpm = 0.0F;
+    gMonitorEngine.disconnectSignalsInvalid = 0U;
     gMonitorEngine.breathStartedMs = nowMs;
     gMonitorEngine.peakPressureCmh2o = lPressure;
     gMonitorEngine.peakInspiratoryFlowLpm = 0.0F;
@@ -573,6 +618,7 @@ static int8_t monitorEngineBreathStart(uint32_t nowMs)
     gMonitorEngine.meanPressureInvalid = 0U;
     monitorEngineDynamicPeepReset();
     gMonitorEngine.minuteLeakSumLpm = 0.0F;
+    gMonitorEngine.peakLeakLpm = 0.0F;
     gMonitorEngine.minuteLeakSampleCount = 0U;
     gMonitorEngine.minuteLeakInvalid = 0U;
     gMonitorEngine.leakFlowSumLpm = 0.0F;
@@ -748,6 +794,43 @@ static void monitorEngineBreathProcess(uint32_t nowMs)
             gMonitorEngine.inspiratoryTimeMs = nowMs - gMonitorEngine.breathStartedMs;
             gMonitorEngine.cycleReason = phaseControllerCycleReasonGet();
         }
+        /* Use controller inspiration without the tidal-volume deadband or flow gate. */
+        if (lPhase == PHASE_EXP) {
+            float lFlow = controlDataGet(PAT_REAL_FLOW);
+            if (monitorEngineFinite(lFlow) == 0U) {
+                gMonitorEngine.disconnectSignalsInvalid = 1U;
+            } else if (lFlow < 0.0F) {
+                gMonitorEngine.patientExpiratoryVolumeMl -= lFlow * MONITOR_FLOW_SAMPLE_VOLUME_ML;
+            }
+        }
+        if (lPhase == PHASE_INSP) {
+            float lPressure = controlDataGet(PAT_REAL_PRS);
+            float lFlow = controlDataGet(PAT_REAL_FLOW);
+            float lMachineFlow = controlDataGet(INSP_REAL_FLOW);
+            if (monitorEngineFinite(lMachineFlow) == 0U) {
+                gMonitorEngine.disconnectSignalsInvalid = 1U;
+            } else if (lMachineFlow > 0.0F) {
+                gMonitorEngine.machineInspiratoryVolumeMl += lMachineFlow * MONITOR_FLOW_SAMPLE_VOLUME_ML;
+            }
+            if ((monitorEngineFinite(lPressure) == 0U) ||
+                (monitorEngineFinite(lFlow) == 0U)) {
+                gMonitorEngine.blockageSignalsInvalid = 1U;
+            } else {
+                float lAbsoluteFlow = (lFlow < 0.0F) ? -lFlow : lFlow;
+                gMonitorEngine.patientEndInspiratoryFlowLpm = lFlow;
+                if (lFlow > gMonitorEngine.patientPeakFlowLpm) {
+                    gMonitorEngine.patientPeakFlowLpm = lFlow;
+                }
+                gMonitorEngine.inspiratoryEndPressureCmh2o = lPressure;
+                if (lPressure > gMonitorEngine.inspiratoryPeakPressureCmh2o) {
+                    gMonitorEngine.inspiratoryPeakPressureCmh2o = lPressure;
+                }
+                if (lAbsoluteFlow > gMonitorEngine.inspiratoryAbsolutePeakFlowLpm) {
+                    gMonitorEngine.inspiratoryAbsolutePeakFlowLpm = lAbsoluteFlow;
+                }
+                gMonitorEngine.inspiratorySignedVolumeMl += lFlow * MONITOR_FLOW_SAMPLE_VOLUME_ML;
+            }
+        }
         monitorEngineLeakAccumulate(controlDataGet(PAT_REAL_FLOW));
         monitorEngineMeanPressureAccumulate();
     }
@@ -759,12 +842,39 @@ static void monitorEngineBreathProcess(uint32_t nowMs)
     }
 }
 
+/** Publish paired live branch measurements and the selected circuit reference. */
+static void monitorEngineInspBranchProcess(void) {
+    float lInspPressure = controlDataGet(INSP_REAL_PRS);
+    float lPatientPressure = controlDataGet(PAT_REAL_PRS);
+    float lFlow = controlDataGet(INSP_REAL_FLOW);
+    float lDeltaPressure = lInspPressure - lPatientPressure;
+    float lPipeFlow = 0.0F;
+    ePhaseControllerState lPhase = phaseControllerStateGet();
+    bool lValid = ((lPhase == PHASE_INSP) || (lPhase == PHASE_EXP)) &&
+        (monitorEngineFinite(lInspPressure) != 0U) &&
+        (monitorEngineFinite(lPatientPressure) != 0U) &&
+        (monitorEngineFinite(lDeltaPressure) != 0U) &&
+        (monitorEngineFinite(lFlow) != 0U) &&
+        (pipeFlowTableGet(GetVentPatientSettings()->Type, lInspPressure, &lPipeFlow) ==
+         PIPE_FLOW_TABLE_SUCCESS);
+
+    repRtosEnterCritical();
+    gMonitorData[MONITOR_INSP_BRANCH_DELTA_PRESSURE] = lValid ? lDeltaPressure : 0.0F;
+    gMonitorData[MONITOR_INSP_BRANCH_FLOW] = lValid ? lFlow : 0.0F;
+    gMonitorData[MONITOR_INSP_BRANCH_PIPE_FLOW] = lValid ? lPipeFlow : 0.0F;
+    gMonitorData[MONITOR_INSP_BRANCH_VALID] = lValid ? 1.0F : 0.0F;
+    gMonitorData[MONITOR_INSP_BRANCH_PAT_PRESSURE] = lValid ? lPatientPressure : 0.0F;
+    gMonitorData[MONITOR_INSP_BRANCH_INSP_PRESSURE] = lValid ? lInspPressure : 0.0F;
+    repRtosExitCritical();
+}
+
 void monitorEngineProcess(uint32_t nowMs)
 {
     monitorEngineBreathProcess(nowMs);
     monitorEngineLeakFlowProcess();
     monitorEnginePlateauPressureProcess(nowMs);
     monitorEngineTidalVolumeProcess(nowMs);
+    monitorEngineInspBranchProcess();
 }
 
 /**************************End of file********************************/

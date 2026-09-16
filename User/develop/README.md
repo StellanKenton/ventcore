@@ -1,5 +1,33 @@
 # Device Tool
 
+The circuit alarm regression also covers disconnection: production integration
+of Vi/Vpi/Vpe, two consecutive compliance stages, exact C=450/200 boundaries,
+end-flow correction (Qend/60)*R, correction cap and epsilon floor, repeated-result
+suppression, alarm latching, raw coefficient >50 for five consecutive breaths,
+coefficient equality interruption, shared immediate recovery and strict pressure/
+flow boundaries, plus prevention of reprocessing a recovered result.
+
+`py -3 user/develop/test_monitor_leak.py --circuit-alarms-only` includes pipeline
+leak detection alongside both blockage regressions (`--blockage-only` remains an
+alias). Leak cases use the production estimator to verify inspiration/expiration
+peaks, peak reset, one count per completed result, no partial-cycle counting,
+3/5 L/min equality, hysteresis hold, fifth-high-cycle activation, low-cycle
+recovery, counter saturation across 260 high cycles, invalid-cycle hold and stop
+reset.
+
+`py -3 user/develop/test_monitor_leak.py --blockage-only` runs both circuit
+blockage and inspiratory-branch blockage regressions. Branch cases cover all
+adult/pediatric and neonatal table knots, interpolation, endpoint clamps, invalid
+lookup arguments, trigger/recovery equality, 999/1000 ms boundaries, interrupted
+confirmation/recovery, invalid measurements, patient-specific recovery thresholds,
+tick wrap and stop reset. `test_vti_compensation.py` also links `pipeflowtable.c`
+as a Monitor Engine dependency.
+
+`test_monitor_leak.py` also checks patient circuit blockage: signed inspiration
+integration without a deadband, absolute peak flow, controller-phase pressure
+differences, expiration exclusion, both detection branches, strict flow-ratio
+boundary, invalid inspiration rejection and one-cycle recovery.
+
 `test_monitor_leak.py` checks PAC terminal pressure updates with residual flow,
 per-breath averaging/reset, invalid samples, expiration exclusion and early cycling,
 while preserving VAC/PSV/ST zero-flow plateau sampling.

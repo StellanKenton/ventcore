@@ -52,6 +52,9 @@ extern "C" {
 #define BREATH_RESULT_VALID_MVI                 (1UL << 17)
 #define BREATH_RESULT_VALID_MVE                 (1UL << 18)
 #define BREATH_RESULT_VALID_PEAK_EXP_FLOW       (1UL << 19)
+#define BREATH_RESULT_VALID_BLOCKAGE_SIGNALS    (1UL << 20)
+#define BREATH_RESULT_VALID_DISCONNECT_SIGNALS  (1UL << 21)
+#define BREATH_RESULT_VALID_LEAK_COEFFICIENT    (1UL << 22)
 
 typedef enum {
     MONITOR_DATA_NONE = 0,
@@ -90,6 +93,12 @@ typedef enum {
     MONITOR_HMI_PEEP_VALID,
     MONITOR_HMI_MV_INSP,
     MONITOR_HMI_PEAK_EXP_FLOW,
+    MONITOR_INSP_BRANCH_DELTA_PRESSURE, /* INSP minus PAT pressure, in cmH2O. */
+    MONITOR_INSP_BRANCH_FLOW, /* Signed INSP flow in L/min. */
+    MONITOR_INSP_BRANCH_PIPE_FLOW, /* Reference at current INSP pressure, in L/min. */
+    MONITOR_INSP_BRANCH_VALID,
+    MONITOR_INSP_BRANCH_PAT_PRESSURE,
+    MONITOR_INSP_BRANCH_INSP_PRESSURE,
     MONITOR_DATA_COUNT,
 } eMonitorDataType;
 
@@ -110,6 +119,7 @@ typedef struct stBreathResult {
     float plateauPressureCmh2o;
     float meanPressureCmh2o;
     float minuteLeakLpm;
+    float peakLeakLpm; /* Whole-cycle peak; shares VALID_MINUTE_LEAK validity. */
     float minuteTotalLpm; /* Total expiratory ventilation in L/min. */
     float minuteInspiratoryLpm;
     float leakPercent;
@@ -120,6 +130,16 @@ typedef struct stBreathResult {
     float peepCmh2o;
     float peakInspiratoryFlowLpm;
     float peakExpiratoryFlowLpm; /* Nonnegative expiratory peak magnitude in L/min. */
+    float inspiratoryDeltaPeakCmh2o;
+    float inspiratoryDeltaEndCmh2o;
+    float inspiratoryAbsolutePeakFlowLpm;
+    float inspiratorySignedVolumeMl;
+    float machineInspiratoryVolumeMl;
+    float patientExpiratoryVolumeMl;
+    float patientPeakPressureCmh2o;
+    float patientPeakFlowLpm;
+    float patientEndInspiratoryFlowLpm;
+    float leakBalanceCoefficient; /* Completed coefficient before the 50 clamp. */
     eBreathCycleReason cycleReason;
     uint32_t inspiratoryTimeMs;
     uint32_t cycleTimeMs;
@@ -133,6 +153,17 @@ typedef struct stMonitorEngine {
     float peakPressureCmh2o;
     float peakInspiratoryFlowLpm;
     float peakExpiratoryFlowLpm;
+    float inspiratoryStartPressureCmh2o;
+    float inspiratoryEndPressureCmh2o;
+    float inspiratoryPeakPressureCmh2o;
+    float inspiratoryAbsolutePeakFlowLpm;
+    float inspiratorySignedVolumeMl;
+    uint8_t blockageSignalsInvalid;
+    float machineInspiratoryVolumeMl;
+    float patientExpiratoryVolumeMl;
+    float patientPeakFlowLpm;
+    float patientEndInspiratoryFlowLpm;
+    uint8_t disconnectSignalsInvalid;
     float plateauPressureSumCmh2o;
     uint32_t plateauPressureSampleCount;
     float meanPressureSumCmh2o;
@@ -145,6 +176,7 @@ typedef struct stMonitorEngine {
     float peepStableMinimumCmh2o;
     float peepStableMaximumCmh2o;
     float minuteLeakSumLpm;
+    float peakLeakLpm;
     uint32_t minuteLeakSampleCount;
     uint8_t minuteLeakInvalid;
     float leakFlowSumLpm;

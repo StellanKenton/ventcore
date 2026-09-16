@@ -35,14 +35,14 @@ static stTechAlarmRegistration gTechAlarmRegistrations[TECH_ALARM_COUNT] = {
         .active = false,
     },
     [TECH_ALARM_PIPELINE_BLOCKAGE] = {
-        .enabled = false,
+        .enabled = true,
         .detector = techPhysPipelineBlockageDetect,
         .module = TECH_ALARM_PHYS_MODULE_ID,
         .bit = PHYSIO_FAULT_PIPELINE_BLOCKAGE,
         .active = false,
     },
     [TECH_ALARM_INSP_BRANCH_BLOCKAGE] = {
-        .enabled = false,
+        .enabled = true,
         .detector = techPhysInspBranchBlockageDetect,
         .module = TECH_ALARM_PHYS_MODULE_ID,
         .bit = PHYSIO_FAULT_INSP_BRANCH_BLOCKAGE,
@@ -56,14 +56,14 @@ static stTechAlarmRegistration gTechAlarmRegistrations[TECH_ALARM_COUNT] = {
         .active = false,
     },
     [TECH_ALARM_PIPELINE_LEAK] = {
-        .enabled = false,
+        .enabled = true,
         .detector = techPhysPipelineLeakDetect,
         .module = TECH_ALARM_PHYS_MODULE_ID,
         .bit = PHYSIO_FAULT_PIPELINE_LEAK,
         .active = false,
     },
     [TECH_ALARM_PIPELINE_DISCONNECT] = {
-        .enabled = false,
+        .enabled = true,
         .detector = techPhysPipelineDisconnectDetect,
         .module = TECH_ALARM_PHYS_MODULE_ID,
         .bit = PHYSIO_FAULT_PIPELINE_DISCONNECT,

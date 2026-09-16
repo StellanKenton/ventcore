@@ -24,6 +24,21 @@ extern "C" {
 #define TECH_PHYS_CPAP_RECOVERY_OFFSET_CMH2O       14.5F
 #define TECH_PHYS_CPAP_CONFIRM_MS                 15000U
 #define TECH_PHYS_CPAP_RECOVERY_MS                3000U
+#define TECH_PHYS_INSP_BRANCH_CONFIRM_MS          1000U
+#define TECH_PHYS_INSP_BRANCH_RECOVERY_MS         1000U
+#define TECH_PHYS_PIPELINE_LEAK_HIGH_LPM          5.0F
+#define TECH_PHYS_PIPELINE_LEAK_LOW_LPM           3.0F
+#define TECH_PHYS_PIPELINE_LEAK_CONFIRM_COUNT     5U
+#define TECH_PHYS_DISCONNECT_EPSILON              0.001F
+#define TECH_PHYS_DISCONNECT_LEAK_CONFIRM_COUNT   5U
+
+typedef struct {
+    uint32_t processedSequence;
+    uint8_t leakCount;
+    bool sequenceInitialized;
+    bool firstDetected;
+    bool active;
+} stTechPhysDisconnectRuntime;
 
 typedef struct {
     uint32_t referenceMs;

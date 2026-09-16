@@ -991,7 +991,7 @@ def main():
                    "user/app/ventlogic/triggerengine.c",
                    "user/app/ventalgo/expirationcontroller.c",
                    "user/app/ventlogic/cycleengine.c", "user/app/ventlogic/apneaengine.c",
-                   "user/app/ventlogic/monitorengine.c", "user/app/ventalgo/flowcontroller.c",
+                   "user/app/ventlogic/monitorengine.c", "user/app/ventlogic/pipeflowtable.c", "user/app/ventalgo/flowcontroller.c",
                    "user/app/databus/settingdata.c", "user/tools/controller/pid.c"]
         command = [compiler, "-std=c11", "-Wall", "-Wextra", "-Werror",
                    *[f"-I{ROOT / path}" for path in includes], str(harness),
