@@ -23,6 +23,9 @@ static stTechPhysRuntime gTechPhysInspBranchRuntime;
 static stTechPhysRuntime gTechPhysLeakRuntime;
 static uint8_t gTechPhysLeakCount;
 static stTechPhysDisconnectRuntime gTechPhysDisconnectRuntime;
+static stTechPhysRuntime gTechPhysPressureLimitRuntime;
+static stTechPhysRuntime gTechPhysVolumeLimitRuntime;
+static stTechPhysRuntime gTechPhysInspPressRuntime;
 
 /** Reset detector history at alarm manager initialization. */
 void techPhysInit(void) {
@@ -33,6 +36,9 @@ void techPhysInit(void) {
     (void)memset(&gTechPhysLeakRuntime, 0, sizeof(gTechPhysLeakRuntime));
     gTechPhysLeakCount = 0U;
     (void)memset(&gTechPhysDisconnectRuntime, 0, sizeof(gTechPhysDisconnectRuntime));
+    (void)memset(&gTechPhysPressureLimitRuntime, 0, sizeof(gTechPhysPressureLimitRuntime));
+    (void)memset(&gTechPhysVolumeLimitRuntime, 0, sizeof(gTechPhysVolumeLimitRuntime));
+    (void)memset(&gTechPhysInspPressRuntime, 0, sizeof(gTechPhysInspPressRuntime));
 }
 
 /** Check one completed PEEP per inspiration and time strict recovery each call. */
@@ -356,22 +362,103 @@ bool techPhysPipelineDisconnectDetect(uint32_t nowMs) {
     return lRuntime->active;
 }
 
-/** Placeholder: Pressure limitation - L. */
+/** Set or clear pressure limitation once per completed flow-controlled breath. */
 bool techPhysPressureLimitDetect(uint32_t nowMs) {
+    stTechPhysRuntime *lRuntime = &gTechPhysPressureLimitRuntime;
+    stBreathResult lResult;
+    ePhaseControllerState lPhase;
+    bool lAvailable;
+
     (void)nowMs;
-    return false;
+    repRtosEnterCritical();
+    lPhase = phaseControllerStateGet();
+    lAvailable = (monitorEngineBreathResultGet(&lResult) == MONITOR_ENGINE_SUCCESS);
+    repRtosExitCritical();
+    if (((lPhase != PHASE_INSP) && (lPhase != PHASE_EXP)) || !lAvailable) {
+        (void)memset(lRuntime, 0, sizeof(*lRuntime));
+        return false;
+    }
+    if (((lResult.validMask & BREATH_RESULT_VALID_COMPLETE) == 0U) ||
+        (lRuntime->sequenceInitialized && (lRuntime->processedSequence == lResult.sequence))) {
+        return lRuntime->active;
+    }
+    lRuntime->processedSequence = lResult.sequence;
+    lRuntime->sequenceInitialized = true;
+    lRuntime->active = (lResult.breathType == BREATH_TYPE_MANDATORY_VOLUME) &&
+        ((lResult.validMask & BREATH_RESULT_VALID_PRESSURE_LIMIT) != 0U) &&
+        (lResult.patientPeakPressureCmh2o >
+         (lResult.pressureLimitCmh2o - TECH_PHYS_PRESSURE_LIMIT_OFFSET_CMH2O));
+    return lRuntime->active;
 }
 
-/** Placeholder: Volume limitation - L. */
+/** Compare each completed inspiratory tidal volume with the exhaled-volume upper limit. */
 bool techPhysVolumeLimitDetect(uint32_t nowMs) {
+    stTechPhysRuntime *lRuntime = &gTechPhysVolumeLimitRuntime;
+    stBreathResult lResult;
+    ePhaseControllerState lPhase;
+    bool lAvailable;
+
     (void)nowMs;
-    return false;
+    repRtosEnterCritical();
+    lPhase = phaseControllerStateGet();
+    lAvailable = (monitorEngineBreathResultGet(&lResult) == MONITOR_ENGINE_SUCCESS);
+    repRtosExitCritical();
+    if (((lPhase != PHASE_INSP) && (lPhase != PHASE_EXP)) || !lAvailable) {
+        (void)memset(lRuntime, 0, sizeof(*lRuntime));
+        return false;
+    }
+    if (((lResult.validMask & BREATH_RESULT_VALID_COMPLETE) == 0U) ||
+        (lRuntime->sequenceInitialized && (lRuntime->processedSequence == lResult.sequence))) {
+        return lRuntime->active;
+    }
+    lRuntime->processedSequence = lResult.sequence;
+    lRuntime->sequenceInitialized = true;
+    lRuntime->active =
+        ((lResult.validMask & (BREATH_RESULT_VALID_VTI | BREATH_RESULT_VALID_VOLUME_LIMIT)) ==
+         (BREATH_RESULT_VALID_VTI | BREATH_RESULT_VALID_VOLUME_LIMIT)) &&
+        (lResult.vtiMl > (float)lResult.tidalVolumeLimitMl);
+    return lRuntime->active;
 }
 
-/** Placeholder: Inspiratory pressure not reached - L. */
+/** Confirm both inspiratory pressure deficits for three consecutive completed cycles. */
 bool techPhysInspPressNotReachedDetect(uint32_t nowMs) {
+    stTechPhysRuntime *lRuntime = &gTechPhysInspPressRuntime;
+    stBreathResult lResult;
+    ePhaseControllerState lPhase;
+    bool lAvailable;
+    bool lLow;
+
     (void)nowMs;
-    return false;
+    repRtosEnterCritical();
+    lPhase = phaseControllerStateGet();
+    lAvailable = (monitorEngineBreathResultGet(&lResult) == MONITOR_ENGINE_SUCCESS);
+    repRtosExitCritical();
+    if (((lPhase != PHASE_INSP) && (lPhase != PHASE_EXP)) || !lAvailable) {
+        (void)memset(lRuntime, 0, sizeof(*lRuntime));
+        return false;
+    }
+    if (((lResult.validMask & BREATH_RESULT_VALID_COMPLETE) == 0U) ||
+        (lRuntime->sequenceInitialized && (lRuntime->processedSequence == lResult.sequence))) {
+        return lRuntime->active;
+    }
+    if (lRuntime->sequenceInitialized &&
+        ((lResult.sequence - lRuntime->processedSequence) != 1U)) {
+        lRuntime->consecutiveBreaths = 0U;
+    }
+    lRuntime->processedSequence = lResult.sequence;
+    lRuntime->sequenceInitialized = true;
+    lLow = ((lResult.validMask & BREATH_RESULT_VALID_INSP_PRESS_TARGET) != 0U) &&
+        (lResult.patientPeakPressureCmh2o <
+         (lResult.inspiratoryTargetPressureCmh2o - TECH_PHYS_INSP_PRESS_OFFSET_CMH2O)) &&
+        (lResult.patientPeakPressureCmh2o <
+         (lResult.inspiratoryTargetPressureCmh2o * TECH_PHYS_INSP_PRESS_TARGET_RATIO));
+    if (!lLow) {
+        lRuntime->consecutiveBreaths = 0U;
+    } else if (lRuntime->consecutiveBreaths < TECH_PHYS_INSP_PRESS_CONFIRM_COUNT) {
+        lRuntime->consecutiveBreaths++;
+    }
+    lRuntime->active = (lRuntime->consecutiveBreaths >= TECH_PHYS_INSP_PRESS_CONFIRM_COUNT);
+    return lRuntime->active;
 }
 
 /** Placeholder: Tidal volume not reached - L. */

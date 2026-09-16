@@ -31,6 +31,10 @@ extern "C" {
 #define TECH_PHYS_PIPELINE_LEAK_CONFIRM_COUNT     5U
 #define TECH_PHYS_DISCONNECT_EPSILON              0.001F
 #define TECH_PHYS_DISCONNECT_LEAK_CONFIRM_COUNT   5U
+#define TECH_PHYS_PRESSURE_LIMIT_OFFSET_CMH2O     5.5F
+#define TECH_PHYS_INSP_PRESS_OFFSET_CMH2O         3.0F
+#define TECH_PHYS_INSP_PRESS_TARGET_RATIO         0.6666F
+#define TECH_PHYS_INSP_PRESS_CONFIRM_COUNT        3U
 
 typedef struct {
     uint32_t processedSequence;
@@ -43,6 +47,7 @@ typedef struct {
 typedef struct {
     uint32_t referenceMs;
     uint32_t processedSequence;
+    uint8_t consecutiveBreaths;
     bool sequenceInitialized;
     bool timing;
     bool active;

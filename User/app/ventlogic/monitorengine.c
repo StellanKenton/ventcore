@@ -523,6 +523,22 @@ static void monitorEngineBreathResultPublish(uint32_t nowMs) {
     lResult.machineInspiratoryVolumeMl = gMonitorEngine.machineInspiratoryVolumeMl;
     lResult.patientExpiratoryVolumeMl = gMonitorEngine.patientExpiratoryVolumeMl;
     lResult.patientPeakPressureCmh2o = gMonitorEngine.inspiratoryPeakPressureCmh2o;
+    lResult.inspiratoryTargetPressureCmh2o = gMonitorEngine.breathPlan.inspiratoryPressureCmh2o;
+    if ((gMonitorEngine.inspiratoryPressureInvalid == 0U) &&
+        (monitorEngineFinite(lResult.inspiratoryTargetPressureCmh2o) != 0U) &&
+        (lResult.inspiratoryTargetPressureCmh2o > 0.0F)) {
+        lResult.validMask |= BREATH_RESULT_VALID_INSP_PRESS_TARGET;
+    }
+    if (gMonitorEngine.breathPlan.limitSettings != NULL) {
+        lResult.tidalVolumeLimitMl = gMonitorEngine.breathPlan.limitSettings->tidalVolumeHigh;
+        lResult.validMask |= BREATH_RESULT_VALID_VOLUME_LIMIT;
+    }
+    if ((gMonitorEngine.breathPlan.limitSettings != NULL) &&
+        (gMonitorEngine.inspiratoryPressureInvalid == 0U) &&
+        (monitorEngineFinite(gMonitorEngine.breathPlan.limitSettings->pressureHigh) != 0U)) {
+        lResult.pressureLimitCmh2o = gMonitorEngine.breathPlan.limitSettings->pressureHigh;
+        lResult.validMask |= BREATH_RESULT_VALID_PRESSURE_LIMIT;
+    }
     lResult.patientPeakFlowLpm = gMonitorEngine.patientPeakFlowLpm;
     lResult.patientEndInspiratoryFlowLpm = gMonitorEngine.patientEndInspiratoryFlowLpm;
     if ((gMonitorEngine.disconnectSignalsInvalid == 0U) &&
@@ -602,6 +618,7 @@ static int8_t monitorEngineBreathStart(uint32_t nowMs)
     gMonitorEngine.inspiratoryAbsolutePeakFlowLpm = 0.0F;
     gMonitorEngine.inspiratorySignedVolumeMl = 0.0F;
     gMonitorEngine.blockageSignalsInvalid = (uint8_t)(monitorEngineFinite(lPressure) == 0U);
+    gMonitorEngine.inspiratoryPressureInvalid = (uint8_t)(monitorEngineFinite(lPressure) == 0U);
     gMonitorEngine.machineInspiratoryVolumeMl = 0.0F;
     gMonitorEngine.patientExpiratoryVolumeMl = 0.0F;
     gMonitorEngine.patientPeakFlowLpm = 0.0F;
@@ -807,6 +824,11 @@ static void monitorEngineBreathProcess(uint32_t nowMs)
             float lPressure = controlDataGet(PAT_REAL_PRS);
             float lFlow = controlDataGet(PAT_REAL_FLOW);
             float lMachineFlow = controlDataGet(INSP_REAL_FLOW);
+            if (monitorEngineFinite(lPressure) == 0U) {
+                gMonitorEngine.inspiratoryPressureInvalid = 1U;
+            } else if (lPressure > gMonitorEngine.inspiratoryPeakPressureCmh2o) {
+                gMonitorEngine.inspiratoryPeakPressureCmh2o = lPressure;
+            }
             if (monitorEngineFinite(lMachineFlow) == 0U) {
                 gMonitorEngine.disconnectSignalsInvalid = 1U;
             } else if (lMachineFlow > 0.0F) {
@@ -822,9 +844,6 @@ static void monitorEngineBreathProcess(uint32_t nowMs)
                     gMonitorEngine.patientPeakFlowLpm = lFlow;
                 }
                 gMonitorEngine.inspiratoryEndPressureCmh2o = lPressure;
-                if (lPressure > gMonitorEngine.inspiratoryPeakPressureCmh2o) {
-                    gMonitorEngine.inspiratoryPeakPressureCmh2o = lPressure;
-                }
                 if (lAbsoluteFlow > gMonitorEngine.inspiratoryAbsolutePeakFlowLpm) {
                     gMonitorEngine.inspiratoryAbsolutePeakFlowLpm = lAbsoluteFlow;
                 }

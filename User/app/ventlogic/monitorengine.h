@@ -55,6 +55,9 @@ extern "C" {
 #define BREATH_RESULT_VALID_BLOCKAGE_SIGNALS    (1UL << 20)
 #define BREATH_RESULT_VALID_DISCONNECT_SIGNALS  (1UL << 21)
 #define BREATH_RESULT_VALID_LEAK_COEFFICIENT    (1UL << 22)
+#define BREATH_RESULT_VALID_PRESSURE_LIMIT      (1UL << 23)
+#define BREATH_RESULT_VALID_VOLUME_LIMIT        (1UL << 24)
+#define BREATH_RESULT_VALID_INSP_PRESS_TARGET   (1UL << 25)
 
 typedef enum {
     MONITOR_DATA_NONE = 0,
@@ -137,6 +140,9 @@ typedef struct stBreathResult {
     float machineInspiratoryVolumeMl;
     float patientExpiratoryVolumeMl;
     float patientPeakPressureCmh2o;
+    float inspiratoryTargetPressureCmh2o;
+    float pressureLimitCmh2o; /* Live Pmax captured at this cycle's completion. */
+    uint16_t tidalVolumeLimitMl; /* Exhaled-volume upper alarm limit at completion. */
     float patientPeakFlowLpm;
     float patientEndInspiratoryFlowLpm;
     float leakBalanceCoefficient; /* Completed coefficient before the 50 clamp. */
@@ -159,6 +165,7 @@ typedef struct stMonitorEngine {
     float inspiratoryAbsolutePeakFlowLpm;
     float inspiratorySignedVolumeMl;
     uint8_t blockageSignalsInvalid;
+    uint8_t inspiratoryPressureInvalid;
     float machineInspiratoryVolumeMl;
     float patientExpiratoryVolumeMl;
     float patientPeakFlowLpm;

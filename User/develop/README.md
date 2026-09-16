@@ -1,5 +1,20 @@
 # Device Tool
 
+Circuit alarm regressions include inspiratory pressure not reached: both strict
+deficits, third-cycle confirmation, held-result deduplication, pressure-target
+snapshots, one-cycle recovery, each equality boundary, invalid pressure/target,
+missing-cycle interruption, expiration exclusion, sequence wrap and stop reset.
+
+Circuit alarm regressions include volume limitation: VTI rather than VTE,
+all-breath applicability, completed-cycle alarm-limit snapshots, hold before
+completion, strict upper-limit equality, invalid VTI and missing-limit suppression,
+state publication and stop reset.
+
+Circuit alarm regressions also cover pressure limitation: flow-control breath
+selection, completed-cycle Pmax snapshots, once-per-result processing, hold
+during the next breath, strict Pmax-5.5 equality, non-flow recovery, expiration
+exclusion, invalid pressure rejection and independence from invalid patient flow.
+
 The circuit alarm regression also covers disconnection: production integration
 of Vi/Vpi/Vpe, two consecutive compliance stages, exact C=450/200 boundaries,
 end-flow correction (Qend/60)*R, correction cap and epsilon floor, repeated-result

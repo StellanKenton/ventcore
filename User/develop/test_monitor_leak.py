@@ -81,6 +81,7 @@ static void reset(void) {
     gPause = 0U;
     gExpirationReady = 0U;
     gPatient.Type = VENT_PATIENT_ADULT;
+    gLimits.tidalVolumeHigh = 6000U;
     gPlan = (stBreathPlan){.sequence = 1U, .mode = VENT_MD_VAC,
         .breathType = BREATH_TYPE_MANDATORY_VOLUME, .targetTidalVolumeMl = 500.0F, .peepCmh2o = 5.0F, .inspiratoryFlowLpm = 30.0F,
         .maximumInspiratoryTimeMs = 1000U, .limitSettings = &gLimits};
@@ -1016,7 +1017,153 @@ static void pipelineDisconnect(void) {
     assert(disconnectVolumeCycle(3.0F, 0.0F));
 }
 
+/** Verify completed flow-control pressure limits use the completed plan and Pmax. */
+static void pressureLimitAlarm(void) {
+    stBreathResult lResult;
+    reset();
+    techAlarmManagerInit();
+    gLimits.pressureHigh = 60.0F;
+    sample(PHASE_INSP, 30.0F, 55.0F);
+    assert(!techPhysPressureLimitDetect(gNow));
+    sample(PHASE_EXP, -30.0F, 5.0F);
+    monitorEngineBreathComplete(gNow);
+    assert(techPhysPressureLimitDetect(gNow));
+    assert(monitorEngineBreathResultGet(&lResult) == MONITOR_ENGINE_SUCCESS);
+    assert(lResult.pressureLimitCmh2o == 60.0F);
+    techAlarmManagerProcess(gNow);
+    assert(techAlarmManagerStateGet(TECH_ALARM_PRESSURE_LIMIT));
+    gLimits.pressureHigh = 80.0F;
+    gPlan.breathType = BREATH_TYPE_MANDATORY_PRESSURE;
+    assert(techPhysPressureLimitDetect(gNow)); /* Completed snapshot survives live changes. */
+    gPlan.sequence++;
+    sample(PHASE_INSP, 30.0F, 79.0F);
+    assert(techPhysPressureLimitDetect(gNow)); /* Hold until the next completion. */
+    sample(PHASE_EXP, -30.0F, 5.0F);
+    monitorEngineBreathComplete(gNow);
+    assert(!techPhysPressureLimitDetect(gNow)); /* Non-flow breath clears. */
+    gPlan.breathType = BREATH_TYPE_MANDATORY_VOLUME;
+    gLimits.pressureHigh = 60.0F;
+    gPlan.sequence++;
+    sample(PHASE_INSP, 30.0F, 54.5F);
+    sample(PHASE_EXP, 30.0F, 90.0F); /* Positive expiratory flow must not extend pressure peak. */
+    monitorEngineBreathComplete(gNow);
+    assert(!techPhysPressureLimitDetect(gNow)); /* Exact threshold excluded. */
+    gPlan.sequence++;
+    sample(PHASE_INSP, NAN, 55.0F); /* Pressure detection does not require valid patient flow. */
+    sample(PHASE_EXP, -30.0F, 5.0F);
+    monitorEngineBreathComplete(gNow);
+    assert(techPhysPressureLimitDetect(gNow));
+    gPlan.sequence++;
+    sample(PHASE_INSP, 30.0F, NAN);
+    sample(PHASE_INSP, 30.0F, 55.0F);
+    sample(PHASE_EXP, -30.0F, 5.0F);
+    monitorEngineBreathComplete(gNow);
+    assert(!techPhysPressureLimitDetect(gNow)); /* Reject partial pressure history. */
+    sample(PHASE_IDLE, 0.0F, 5.0F);
+    assert(!techPhysPressureLimitDetect(gNow));
+}
+
+/** Verify VTI, not VTE, is compared once per cycle with the saved alarm limit. */
+static void volumeLimitAlarm(void) {
+    stBreathResult lResult;
+    reset();
+    techAlarmManagerInit();
+    gLimits.tidalVolumeHigh = 90U;
+    gPlan.breathType = BREATH_TYPE_MANDATORY_PRESSURE;
+    for (unsigned int lIndex = 0U; lIndex < 10U; lIndex++) {
+        sample(PHASE_INSP, 100.0F, 10.0F);
+    }
+    assert(!techPhysVolumeLimitDetect(gNow));
+    sample(PHASE_EXP, -100.0F, 5.0F);
+    monitorEngineBreathComplete(gNow);
+    assert(monitorEngineBreathResultGet(&lResult) == MONITOR_ENGINE_SUCCESS);
+    assert(lResult.vtiMl == 100.0F && lResult.vteMl == 10.0F);
+    assert(lResult.tidalVolumeLimitMl == 90U);
+    gLimits.tidalVolumeHigh = 200U;
+    assert(techPhysVolumeLimitDetect(gNow)); /* Uses the saved cycle limit. */
+    techAlarmManagerProcess(gNow);
+    assert(techAlarmManagerStateGet(TECH_ALARM_VOLUME_LIMIT));
+    gPlan.sequence++;
+    gLimits.tidalVolumeHigh = 100U;
+    for (unsigned int lIndex = 0U; lIndex < 10U; lIndex++) {
+        sample(PHASE_INSP, 100.0F, 10.0F);
+        assert(techPhysVolumeLimitDetect(gNow)); /* Hold throughout the next breath. */
+    }
+    sample(PHASE_EXP, -100.0F, 5.0F);
+    monitorEngineBreathComplete(gNow);
+    assert(!techPhysVolumeLimitDetect(gNow)); /* Equality clears. */
+    gPlan.sequence++;
+    sample(PHASE_INSP, NAN, 10.0F);
+    sample(PHASE_EXP, -100.0F, 5.0F);
+    monitorEngineBreathComplete(gNow);
+    assert(!techPhysVolumeLimitDetect(gNow)); /* Invalid integral is not evaluated. */
+    gPlan.sequence++;
+    gPlan.limitSettings = NULL;
+    sample(PHASE_INSP, 1000.0F, 10.0F);
+    sample(PHASE_EXP, -100.0F, 5.0F);
+    monitorEngineBreathComplete(gNow);
+    assert(!techPhysVolumeLimitDetect(gNow)); /* Missing limit cannot trigger. */
+    sample(PHASE_IDLE, 0.0F, 5.0F);
+    assert(!techPhysVolumeLimitDetect(gNow));
+}
+
+/** Complete a pressure-target cycle with an independently controlled inspiratory peak. */
+static bool inspPressureCycle(float target, float pressure) {
+    stBreathResult lResult;
+    gPlan.inspiratoryPressureCmh2o = target;
+    sample(PHASE_INSP, 30.0F, pressure);
+    sample(PHASE_EXP, 30.0F, 50.0F); /* Expiratory pressure cannot satisfy the inspiration target. */
+    monitorEngineBreathComplete(gNow);
+    assert(monitorEngineBreathResultGet(&lResult) == MONITOR_ENGINE_SUCCESS);
+    gPlan.sequence++;
+    return techPhysInspPressNotReachedDetect(gNow);
+}
+
+/** Check both strict deficits, consecutive counting, snapshots and single-cycle recovery. */
+static void inspPressureNotReached(void) {
+    reset();
+    techAlarmManagerInit();
+    assert(!inspPressureCycle(30.0F, 12.0F));
+    assert(!techPhysInspPressNotReachedDetect(gNow));
+    assert(!inspPressureCycle(30.0F, 12.0F));
+    gPlan.inspiratoryPressureCmh2o = 5.0F;
+    assert(!techPhysInspPressNotReachedDetect(gNow)); /* Held plan changes do not recount. */
+    assert(inspPressureCycle(30.0F, 12.0F));
+    techAlarmManagerProcess(gNow);
+    assert(techAlarmManagerStateGet(TECH_ALARM_INSP_PRESS_NOT_REACHED));
+    assert(inspPressureCycle(30.0F, 12.0F));
+    assert(!inspPressureCycle(30.0F, 20.0F)); /* Offset passes, ratio fails: recover. */
+    assert(!inspPressureCycle(5.0F, 2.0F)); /* Exact target-3 equality excluded. */
+    assert(!inspPressureCycle(5.0F, 2.5F)); /* Ratio passes, offset fails. */
+    assert(!inspPressureCycle(30.0F, 30.0F * 0.6666F)); /* Exact ratio equality excluded. */
+    assert(!inspPressureCycle(30.0F, 12.0F));
+    assert(!inspPressureCycle(30.0F, 12.0F));
+    assert(!inspPressureCycle(30.0F, NAN)); /* Invalid pressure breaks confirmation. */
+    assert(!inspPressureCycle(30.0F, 12.0F));
+    assert(!inspPressureCycle(30.0F, 12.0F));
+    assert(inspPressureCycle(30.0F, 12.0F));
+    assert(!inspPressureCycle(0.0F, 1.0F)); /* No positive pressure target clears. */
+    assert(!inspPressureCycle(NAN, 1.0F));
+    assert(!inspPressureCycle(30.0F, 12.0F));
+    assert(!inspPressureCycle(30.0F, 12.0F));
+    gPlan.sequence++; /* Missing completed sequence breaks consecutive history. */
+    assert(!inspPressureCycle(30.0F, 12.0F));
+    assert(!inspPressureCycle(30.0F, 12.0F));
+    assert(inspPressureCycle(30.0F, 12.0F));
+    sample(PHASE_IDLE, 0.0F, 5.0F);
+    assert(!techPhysInspPressNotReachedDetect(gNow));
+    reset();
+    techPhysInit();
+    gPlan.sequence = UINT32_MAX - 1U;
+    assert(!inspPressureCycle(30.0F, 12.0F));
+    assert(!inspPressureCycle(30.0F, 12.0F));
+    assert(inspPressureCycle(30.0F, 12.0F)); /* Sequence wrap remains consecutive. */
+}
+
 int main(void) {
+    inspPressureNotReached();
+    volumeLimitAlarm();
+    pressureLimitAlarm();
     pipelineDisconnect();
     pipelineLeak();
     inspBranchBlockage();
