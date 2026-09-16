@@ -145,11 +145,14 @@ void triggerEngineProcess(uint32_t nowMs)
     float lProximalFlow;
     float lTriggerThreshold;
     bool lCandidate;
+    bool lHigh = phaseControllerBapapHighReadyGet(nowMs) != 0U;
+
+    if (lHigh) { lPhase = PHASE_EXP; }
 
     if ((lPhase != PHASE_EXP) ||
         (phaseControllerActivePlanGet(&lPlan) != PHASE_CONTROL_SUCCESS) ||
         ((lPlan.mode != VENT_MD_PAC) &&
-         (lPlan.mode != VENT_MD_VAC) && (lPlan.mode != VENT_MD_PRVC) && (lPlan.mode != VENT_MD_PRVC_SIMV) && (lPlan.mode != VENT_MD_VS) &&
+         (lPlan.mode != VENT_MD_VAC) && (lPlan.mode != VENT_MD_PRVC) && (lPlan.mode != VENT_MD_PRVC_SIMV) && (lPlan.mode != VENT_MD_VS) && (lPlan.mode != VENT_MD_BAPAP) &&
          (lPlan.mode != VENT_MD_CPAP_PSV) &&
          (lPlan.mode != VENT_MD_PSV_ST) &&
          (lPlan.mode != VENT_MD_P_SIMV) && (lPlan.mode != VENT_MD_V_SIMV)) ||
@@ -158,6 +161,9 @@ void triggerEngineProcess(uint32_t nowMs)
         return;
     }
 
+    if (lHigh) {
+        lPlan.peepCmh2o = lPlan.inspiratoryPressureCmh2o;
+    }
     lPatientPressure = controlDataGet(PAT_REAL_PRS);
     lProximalFlow = controlDataGet(PAT_REAL_FLOW);
     if (!triggerEngineFinite(lPatientPressure) ||
@@ -223,7 +229,7 @@ void triggerEngineProcess(uint32_t nowMs)
         return;
     }
 
-    if (phaseControllerExpirationReadyGet() == 0U) {
+    if (!lHigh && phaseControllerExpirationReadyGet() == 0U) {
         gTriggerEngine.confirmSamples = 0U;
         if (lPlan.allowedTriggerType == VENT_TRIGGER_FLOW) {
             triggerEngineFlowBaselineUpdate(lProximalFlow);

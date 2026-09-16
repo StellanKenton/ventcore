@@ -1,5 +1,14 @@
 # Device Tool
 
+DuoLevel/BAPAP regression is part of `test_vti_compensation.py`: adult/child/infant
+low windows, high-window gating and fresh-flow cycling, independent low-phase
+clock after early high termination, low-level PSV, timed transitions, wraparound,
+pressure-hold valve relief, pressure/volume backup and recovery. The harness now
+also links the production pressure controller. `test_trigger.py` covers high-level
+pressure/flow efforts and the rise guard; `test_protocol.py` covers dedicated
+high/low pressure and time fields. Console: `vt bapap` / `vt mode 10`.
+
+
 VS regressions in `test_vti_compensation.py` cover PEEP+10 startup, 10/3 pressure
 steps, duplicate/invalid/timeout feedback, live limits, settings validation,
 configurable cycle-off (40% peak equality), no timed normal breaths, pressure and

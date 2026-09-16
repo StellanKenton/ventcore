@@ -93,7 +93,7 @@ static bool ventTestUnsignedParse(const char **arguments, uint16_t *value)
 /** Show the supported ventilation test commands. */
 static void ventTestUsageShow(void)
 {
-    LOG_I(gVentTestTag, "usage: vt mode <x> | run <0|1> | pac | vac | prvc | prvcsimv | vs | psv | psvst | psimv | vsimv | stop | set <peep> <delta> [ti_ms rate rise_ms] | support <peep> <delta> | volume <peep> <ml> [pause_pct [ti_ms rate]] | trigger off | trigger pressure <cmh2o100> | trigger flow <lpm100> | peep | status");
+    LOG_I(gVentTestTag, "usage: vt mode <x> | run <0|1> | pac | vac | prvc | prvcsimv | vs | bapap | psv | psvst | psimv | vsimv | stop | set <peep> <delta> [ti_ms rate rise_ms] | support <peep> <delta> | volume <peep> <ml> [pause_pct [ti_ms rate]] | trigger off | trigger pressure <cmh2o100> | trigger flow <lpm100> | peep | status");
 }
 
 /** Report selected settings and the active breath separately. */
@@ -329,6 +329,10 @@ static eConsoleCommandResult ventTestConsoleCommand(const char *arguments)
                (*ventTestSkipSpaces(arguments) == '\0')) {
         lStatus = breathSchedulerStart(VENT_MD_VS);
         LOG_I(gVentTestTag, "VS start status=%d", (int)lStatus);
+    } else if (ventTestTokenMatch(&arguments, "bapap") &&
+               (*ventTestSkipSpaces(arguments) == '\0')) {
+        lStatus = breathSchedulerStart(VENT_MD_BAPAP);
+        LOG_I(gVentTestTag, "BAPAP start status=%d", (int)lStatus);
     } else if (ventTestTokenMatch(&arguments, "psimv") &&
                (*ventTestSkipSpaces(arguments) == '\0')) {
         lStatus = breathSchedulerStart(VENT_MD_P_SIMV);
@@ -542,6 +546,19 @@ static eConsoleCommandResult ventTestConsoleCommand(const char *arguments)
         } else if (lConfiguredMode == VENT_MD_VS) {
             stVentVsSettings *lSettings = GetVentVsSettings();
             stVentVsSettings lPrevious = *lSettings;
+            lSettings->triggerType = lTriggerType;
+            if (lTriggerType == VENT_TRIGGER_PRESSURE) {
+                lSettings->pressureTriggerCmh2o = -(float)lTriggerThreshold / 100.0F;
+            } else if (lTriggerType == VENT_TRIGGER_FLOW) {
+                lSettings->flowTriggerLpm = (float)lTriggerThreshold / 100.0F;
+            }
+            lStatus = breathSchedulerSettingsUpdate(lConfiguredMode);
+            if (lStatus != BREATH_CONTROL_SUCCESS) {
+                *lSettings = lPrevious;
+            }
+        } else if (lConfiguredMode == VENT_MD_BAPAP) {
+            stVentBapapSettings *lSettings = GetVentBapapSettings();
+            stVentBapapSettings lPrevious = *lSettings;
             lSettings->triggerType = lTriggerType;
             if (lTriggerType == VENT_TRIGGER_PRESSURE) {
                 lSettings->pressureTriggerCmh2o = -(float)lTriggerThreshold / 100.0F;

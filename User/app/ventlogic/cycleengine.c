@@ -49,8 +49,9 @@ void cycleEngineProcess(uint32_t nowMs)
 
     if ((lPhase != PHASE_INSP) ||
         (phaseControllerActivePlanGet(&lPlan) != PHASE_CONTROL_SUCCESS) ||
-        (lPlan.breathType != BREATH_TYPE_SPONTANEOUS_PRESSURE_SUPPORT) ||
-        (lPlan.cycleType != BREATH_CYCLE_TYPE_FLOW)) {
+        (!breathPlanIsBapapHigh(&lPlan) &&
+         ((lPlan.breathType != BREATH_TYPE_SPONTANEOUS_PRESSURE_SUPPORT) ||
+          (lPlan.cycleType != BREATH_CYCLE_TYPE_FLOW)))) {
         cycleEngineIdleEnter(lPhase);
         return;
     }
@@ -75,6 +76,12 @@ void cycleEngineProcess(uint32_t nowMs)
     }
     lFlow = controlDataGet(PAT_REAL_FLOW);
     if (cycleEngineFlowValid(lFlow) == 0U) {
+        gCycleEngine.confirmSamples = 0U;
+        return;
+    }
+    if (breathPlanIsBapapHigh(&lPlan) && lInspiratoryElapsedMs < lPlan.minimumInspiratoryTimeMs) {
+        /* Ignore the initial machine filling tail; require a new flow peak in the high window. */
+        gCycleEngine.peakInspiratoryFlowLpm = 0.0F;
         gCycleEngine.confirmSamples = 0U;
         return;
     }

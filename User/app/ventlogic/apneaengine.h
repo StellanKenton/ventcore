@@ -36,6 +36,9 @@ void apneaEngineInit(void);
 /** Detect apnea and request a timed PSV/PSV-ST backup breath when configured. */
 void apneaEngineProcess(uint32_t nowMs);
 
+/** Record a confirmed patient effort that does not change the DuoLevel pressure level. */
+void apneaEnginePatientTriggerNotify(uint32_t nowMs);
+
 /** Return the current apnea monitoring state. */
 eApneaEngineState apneaEngineStateGet(void);
 

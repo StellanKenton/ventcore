@@ -13,6 +13,7 @@
 #include <string.h>
 
 #include "controldata.h"
+#include "apneaengine.h"
 #include "databus.h"
 #include "log.h"
 #include "monitorengine.h"
@@ -223,6 +224,12 @@ ePhaseControllerState phaseControllerStateGet(void)
     return gPhaseController.runState;
 }
 
+uint8_t phaseControllerBapapHighReadyGet(uint32_t nowMs) {
+    return (uint8_t)(gPhaseController.planValid && gPhaseController.runState == PHASE_INSP &&
+        breathPlanIsBapapHigh(&gPhaseController.activePlan) &&
+        nowMs - gPhaseController.inspirationStartedMs >= gPhaseController.activePlan.riseTimeMs + BREATH_PEEP_LOCK_TIME_MS);
+}
+
 uint8_t phaseControllerVolumePauseActiveGet(void) {
     return (uint8_t)((gPhaseController.runState == PHASE_INSP) &&
                      (gPhaseController.volumePauseActive != 0U));
@@ -248,6 +255,12 @@ int8_t phaseControllerTrigger(eBreathTriggerReason triggerReason, uint32_t nowMs
         (triggerReason != BREATH_TRIGGER_REASON_FLOW) &&
         (triggerReason != BREATH_TRIGGER_REASON_APNEA_BACKUP)) {
         return PHASE_CONTROL_ERROR_PARAM;
+    }
+    if (gPhaseController.runState == PHASE_INSP && phaseControllerBapapHighReadyGet(nowMs) &&
+        ((triggerReason == BREATH_TRIGGER_REASON_PRESSURE && gPhaseController.activePlan.allowedTriggerType == VENT_TRIGGER_PRESSURE) ||
+         (triggerReason == BREATH_TRIGGER_REASON_FLOW && gPhaseController.activePlan.allowedTriggerType == VENT_TRIGGER_FLOW))) {
+        apneaEnginePatientTriggerNotify(nowMs);
+        return PHASE_CONTROL_SUCCESS;
     }
     if ((gPhaseController.planValid == 0U) ||
         (gPhaseController.runState != PHASE_EXP)) {
@@ -284,6 +297,11 @@ static void phaseControllerExpirationStart(eBreathCycleReason cycleReason,
     if (lPeakPressure < gPhaseController.activePlan.peepCmh2o) {
         lPeakPressure = gPhaseController.activePlan.peepCmh2o;
     }
+    if (breathPlanIsBapapHigh(&gPhaseController.activePlan)) {
+        /* A complete low-level interval begins at the actual high-to-low transition. */
+        gPhaseController.mandatoryReferenceMs = nowMs;
+        gPhaseController.mandatoryDelayMs = gPhaseController.activePlan.expiratoryTimeMs;
+    }
     gPhaseController.cycleReason = cycleReason;
     gPhaseController.expirationStartedMs = nowMs;
     gPhaseController.expirationCaptureComplete = 0U;
@@ -314,9 +332,9 @@ int8_t phaseControllerCycle(eBreathCycleReason cycleReason, uint32_t nowMs)
         return PHASE_CONTROL_ERROR_PARAM;
     }
     if ((gPhaseController.planValid == 0U) ||
-        (gPhaseController.activePlan.cycleType != BREATH_CYCLE_TYPE_FLOW) ||
-        (gPhaseController.activePlan.breathType !=
-         BREATH_TYPE_SPONTANEOUS_PRESSURE_SUPPORT) ||
+        (!breathPlanIsBapapHigh(&gPhaseController.activePlan) &&
+         ((gPhaseController.activePlan.cycleType != BREATH_CYCLE_TYPE_FLOW) ||
+          (gPhaseController.activePlan.breathType != BREATH_TYPE_SPONTANEOUS_PRESSURE_SUPPORT))) ||
         (gPhaseController.runState != PHASE_INSP)) {
         return PHASE_CONTROL_ERROR_STATE;
     }
@@ -440,6 +458,13 @@ void phaseControllerProcess(uint32_t nowMs)
             break;
 
         case PHASE_INSP:
+            if (gPhaseController.activePlan.mode == VENT_MD_BAPAP &&
+                (!(gPhaseController.activePlan.limitSettings->pressureHigh > gPhaseController.activePlan.peepCmh2o &&
+                   gPhaseController.activePlan.limitSettings->pressureHigh <= 100.0F) ||
+                 controlDataGet(PAT_REAL_PRS) >= gPhaseController.activePlan.limitSettings->pressureHigh)) {
+                phaseControllerExpirationStart(BREATH_CYCLE_REASON_PRESSURE_LIMIT, nowMs);
+                break;
+            }
             if (breathPlanIsVolumeAdaptive(&gPhaseController.activePlan)) {
                 float lLimit = gPhaseController.activePlan.limitSettings->pressureHigh -
                                BREATH_PRVC_PRESSURE_MARGIN_CMH2O;

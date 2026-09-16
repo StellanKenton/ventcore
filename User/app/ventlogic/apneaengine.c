@@ -30,6 +30,11 @@ eApneaEngineState apneaEngineStateGet(void)
     return gApneaEngine.state;
 }
 
+void apneaEnginePatientTriggerNotify(uint32_t nowMs) {
+    gApneaEngine.state = APNEA_ENGINE_MONITORING;
+    gApneaEngine.referenceMs = nowMs;
+}
+
 void apneaEngineProcess(uint32_t nowMs)
 {
     stBreathPlan lPlan;
@@ -38,7 +43,7 @@ void apneaEngineProcess(uint32_t nowMs)
     uint32_t lDeadlineMs;
 
     if ((breathSchedulerRunningGet() == 0U) ||
-        ((lMode != VENT_MD_VS) && (lMode != VENT_MD_CPAP_PSV) && (lMode != VENT_MD_PSV_ST) &&
+        ((lMode != VENT_MD_BAPAP) && (lMode != VENT_MD_VS) && (lMode != VENT_MD_CPAP_PSV) && (lMode != VENT_MD_PSV_ST) &&
          (lMode != VENT_MD_P_SIMV) && (lMode != VENT_MD_V_SIMV) && (lMode != VENT_MD_PRVC_SIMV)) ||
         ((lPhase != PHASE_INSP) && (lPhase != PHASE_EXP)) ||
         (phaseControllerActivePlanGet(&lPlan) != PHASE_CONTROL_SUCCESS)) {

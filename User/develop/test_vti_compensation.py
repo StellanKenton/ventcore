@@ -23,6 +23,7 @@ HARNESS = r'''
 #include "expirationcontroller.h"
 #include "monitorengine.h"
 #include "flowcontroller.h"
+#include "pressurecontroller.h"
 #include "controldata.h"
 #include "databus.h"
 #include "calibration.h"
@@ -877,13 +878,14 @@ static void testSimvBackupSelection(void) {
 static void testSimvBackup(void) {
     stBreathPlan lPlan;
     for (unsigned int lBackup = VENT_APNEA_PRESSURE; lBackup <= VENT_APNEA_VOLUME; lBackup++) {
-    for (unsigned int lMode = VENT_MD_P_SIMV; lMode <= VENT_MD_PRVC_SIMV; lMode++) {
-        if (lMode == VENT_MD_PRVC) { continue; }
+    for (unsigned int lMode = VENT_MD_P_SIMV; lMode <= VENT_MD_BAPAP; lMode++) {
+        if (lMode == VENT_MD_PRVC || lMode == VENT_MD_VS) { continue; }
         reset();
         GetVentLimitSettings()->apneaTimeAlarm = 7U;
         GetVentPSimvSettings()->apneaSwitch = (eVentApneaType)lBackup;
         GetVentVSimvSettings()->apneaSwitch = (eVentApneaType)lBackup;
         GetVentPrvcSimvSettings()->apneaSwitch = (eVentApneaType)lBackup;
+        GetVentBapapSettings()->apneaSwitch = (eVentApneaType)lBackup;
         assert(breathSchedulerStart((eVentMode)lMode) == BREATH_CONTROL_SUCCESS);
         phaseControllerInit();
         apneaEngineInit();
@@ -914,6 +916,7 @@ static void testSimvBackup(void) {
         GetVentPSimvSettings()->apneaSwitch = VENT_APNEA_OFF;
         GetVentVSimvSettings()->apneaSwitch = VENT_APNEA_OFF;
         GetVentPrvcSimvSettings()->apneaSwitch = VENT_APNEA_OFF;
+        GetVentBapapSettings()->apneaSwitch = VENT_APNEA_OFF;
         breathSchedulerProcess();
         assert(breathSchedulerNextPlanGet(BREATH_TRIGGER_REASON_APNEA_BACKUP, &lPlan) == BREATH_CONTROL_SUCCESS);
         assert(lPlan.triggerReason == BREATH_TRIGGER_REASON_TIME && lPlan.apneaTimeMs == 0U);
@@ -1383,6 +1386,111 @@ static void testVsIntegration(void) {
     assert(lPlan.inspiratoryPressureCmh2o > 15.0F);
 }
 
+/** Restore DuoLevel with long levels so both synchronization windows can be tested. */
+static void resetBapap(void) {
+    reset();
+    *GetVentBapapSettings() = (stVentBapapSettings){.oxygenPercent = 21.0F,
+        .pressureHighCmh2o = 20.0F, .pressureLowCmh2o = 5.0F,
+        .timeHighMs = 4000U, .timeLowMs = 8000U, .triggerType = VENT_TRIGGER_FLOW,
+        .flowTriggerLpm = 3.0F, .pressureSupportCmh2o = 7.0F, .riseTimeMs = 200U,
+        .cycleOffPercent = 25.0F, .maxInspiratoryTimeMs = 1000U,
+        .apneaSwitch = VENT_APNEA_OFF, .apneaPressureCmh2o = 20.0F,
+        .apneaVolumeTidalMl = 400.0F, .apneaRateBpm = 15.0F, .apneaInspTimeMs = 1000U};
+    assert(breathSchedulerStart(VENT_MD_BAPAP) == BREATH_CONTROL_SUCCESS);
+    gData[PAT_REAL_PRS] = 0.0F; gData[PAT_REAL_FLOW] = 0.0F; gData[INSP_REAL_FLOW] = 0.0F;
+    phaseControllerInit(); cycleEngineInit(); apneaEngineInit();
+}
+
+/** Check both synchronization windows, independent low timing and spontaneous high efforts. */
+static void testBapap(void) {
+    stBreathPlan lPlan;
+    stActuatorRequest lRequest;
+    for (unsigned int lPatient = 0U; lPatient < VENT_PATIENT_TYPE_COUNT; lPatient++) {
+        uint32_t lBase = UINT32_MAX - 500U;
+        uint32_t lHigh = lBase + 1006U + 8000U;
+        uint32_t lWindow = lPatient == VENT_PATIENT_ADULT ? 5000U : 1500U;
+        uint32_t lSupport;
+        uint32_t lLow;
+        resetBapap();
+        GetVentPatientSettings()->Type = (eVentPatientType)lPatient;
+        breathSchedulerProcess();
+        phaseControllerProcess(lBase);
+        phaseControllerProcess(lBase + 6U);
+        phaseControllerProcess(lBase + 1006U);
+        assert(phaseControllerStateGet() == PHASE_EXP);
+        phaseControllerProcess(lHigh - 1U);
+        assert(phaseControllerStateGet() == PHASE_EXP);
+        phaseControllerProcess(lHigh);
+        assert(phaseControllerActivePlanGet(&lPlan) == PHASE_CONTROL_SUCCESS);
+        assert(breathPlanIsBapapHigh(&lPlan));
+        assert(lPlan.minimumInspiratoryTimeMs == 3000U && lPlan.syncWindowMs == lWindow);
+        near(lPlan.inspiratoryPressureCmh2o, 20.0F);
+        gData[PAT_REAL_FLOW] = 40.0F;
+        cycleEngineProcess(lHigh);
+        gData[PAT_REAL_FLOW] = 0.0F;
+        cycleEngineProcess(lHigh + 2999U);
+        assert(phaseControllerStateGet() == PHASE_INSP);
+        assert(phaseControllerCycle(BREATH_CYCLE_REASON_FLOW, lHigh + 2999U) == PHASE_CONTROL_ERROR_STATE);
+        assert(!phaseControllerBapapHighReadyGet(lHigh + 200U));
+        assert(phaseControllerBapapHighReadyGet(lHigh + 400U));
+        apneaEngineProcess(lHigh + 400U);
+        assert(phaseControllerTrigger(BREATH_TRIGGER_REASON_FLOW, lHigh + 500U) == PHASE_CONTROL_SUCCESS);
+        assert(phaseControllerActivePlanGet(&lPlan) == PHASE_CONTROL_SUCCESS);
+        assert(breathPlanIsBapapHigh(&lPlan));
+        /* Exhalation without a new inspiratory peak in the high window must not cycle. */
+        for (uint32_t lIndex = 0U; lIndex < 4U; lIndex++) { cycleEngineProcess(lHigh + 3000U + lIndex * 6U); }
+        assert(phaseControllerStateGet() == PHASE_INSP);
+        gData[PAT_REAL_FLOW] = 40.0F;
+        cycleEngineProcess(lHigh + 3030U);
+        gData[PAT_REAL_FLOW] = 10.0F;
+        cycleEngineProcess(lHigh + 3036U); cycleEngineProcess(lHigh + 3042U); cycleEngineProcess(lHigh + 3048U);
+        assert(phaseControllerStateGet() == PHASE_EXP);
+        assert(phaseControllerCycleReasonGet() == BREATH_CYCLE_REASON_FLOW);
+        lLow = lHigh + 3048U;
+        assert(phaseControllerExpirationCaptureNotify() == PHASE_CONTROL_SUCCESS);
+        lSupport = lLow + 8000U - lWindow - 1U;
+        assert(phaseControllerTrigger(BREATH_TRIGGER_REASON_FLOW, lSupport) == PHASE_CONTROL_SUCCESS);
+        assert(phaseControllerActivePlanGet(&lPlan) == PHASE_CONTROL_SUCCESS);
+        assert(lPlan.breathType == BREATH_TYPE_SPONTANEOUS_PRESSURE_SUPPORT);
+        near(lPlan.inspiratoryPressureCmh2o, 12.0F);
+        cycleEngineProcess(lSupport);
+        cycleEngineProcess(lSupport + 1000U);
+        phaseControllerProcess(lLow + 7999U);
+        assert(phaseControllerStateGet() == PHASE_EXP);
+        phaseControllerProcess(lLow + 8000U);
+        assert(phaseControllerStateGet() == PHASE_INSP);
+        assert(phaseControllerActivePlanGet(&lPlan) == PHASE_CONTROL_SUCCESS);
+        assert(breathPlanIsBapapHigh(&lPlan));
+        lHigh = lLow + 8000U;
+        phaseControllerProcess(lHigh + 3999U);
+        assert(phaseControllerStateGet() == PHASE_INSP);
+        phaseControllerProcess(lHigh + 4000U);
+        assert(phaseControllerStateGet() == PHASE_EXP); /* No high-window trigger: full high duration. */
+        lLow = lHigh + 4000U;
+        assert(phaseControllerExpirationCaptureNotify() == PHASE_CONTROL_SUCCESS);
+        assert(phaseControllerTrigger(BREATH_TRIGGER_REASON_FLOW, lLow + 8000U - lWindow) == PHASE_CONTROL_SUCCESS);
+        assert(phaseControllerActivePlanGet(&lPlan) == PHASE_CONTROL_SUCCESS && breathPlanIsBapapHigh(&lPlan));
+        /* Actual high-pressure control must permit exhalation against the held level. */
+        pressureControllerInit();
+        gData[PAT_REAL_PRS] = 24.0F; gData[INSP_REAL_PRS] = 24.0F;
+        gData[PAT_REAL_FLOW] = -10.0F;
+        for (unsigned int lIndex = 0U; lIndex < 60U; lIndex++) {
+            assert(pressureControllerProcess(&lPlan, &lRequest) == ACTUATOR_REQUEST_SUCCESS);
+        }
+        assert(lRequest.expiratoryValveDuty < 100U);
+    }
+    GetVentPatientSettings()->Type = VENT_PATIENT_ADULT;
+    resetBapap();
+    GetVentBapapSettings()->timeLowMs = 1000U;
+    breathSchedulerProcess();
+    assert(next().syncWindowMs == 1000U);
+    GetVentBapapSettings()->pressureHighCmh2o = 5.0F;
+    assert(breathSchedulerSettingsUpdate(VENT_MD_BAPAP) == BREATH_CONTROL_ERROR_SETTINGS);
+    GetVentBapapSettings()->pressureHighCmh2o = 20.0F;
+    GetVentBapapSettings()->timeLowMs = 0U;
+    assert(breathSchedulerSettingsUpdate(VENT_MD_BAPAP) == BREATH_CONTROL_ERROR_SETTINGS);
+}
+
 int main(void) {
     testSimv();
     testSimvBackup();
@@ -1414,6 +1522,7 @@ int main(void) {
     testVsFeedback();
     testVsTiming();
     testVsIntegration();
+    testBapap();
     return 0;
 }
 /**************************End of file********************************/
@@ -1438,7 +1547,7 @@ def main():
                     "user/tools/filter/numfilter", "user/module/log", "user/tools/ringbuffer"]
         sources = ["user/app/physalarm/physalarmapnea.c", "user/app/ventlogic/breathscheduler.c", "user/app/ventlogic/phasecontroller.c",
                    "user/app/ventlogic/triggerengine.c",
-                   "user/app/ventalgo/expirationcontroller.c",
+                   "user/app/ventalgo/expirationcontroller.c", "user/app/ventalgo/pressurecontroller.c",
                    "user/app/ventlogic/cycleengine.c", "user/app/ventlogic/apneaengine.c",
                    "user/app/ventlogic/monitorengine.c", "user/app/ventlogic/pipeflowtable.c", "user/app/ventalgo/flowcontroller.c",
                    "user/app/databus/settingdata.c", "user/tools/controller/pid.c"]
@@ -1451,6 +1560,7 @@ def main():
             subprocess.run(command + [f"-DBREATH_VOLUME_FLOW_COMPENSATION_ENABLE={legacy}"], check=True, env=environment)
             subprocess.run([str(executable)], check=True, env=environment)
             print(f"PASS: {'legacy flow' if legacy else 'time'} compensation")
+    print("PASS: BAPAP level windows, low-phase clock, high-phase cycling/relief and apnea backup")
     print("PASS: VS cycle-off, spontaneous timing, pressure adaptation, apnea and monitor integration")
     print("PASS: PRVC mechanics, RC convergence, first-breath integration, step limits, faults and reset")
     print("PASS: EMA, next-breath timing, once-only feedback, conversion, bounds, convergence, faults, reset")

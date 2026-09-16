@@ -1,5 +1,22 @@
 # User 层
 
+BAPAP（DuoLevel，`VENT_MD_BAPAP`）按高/低压力及持续时间交替通气，`GetVentBapapSettings()` 支持本地/主机来源，控制台 `vt bapap` 或 `vt mode 10` / `vt run 1` 启动。设置移除独立 `pressureLimitCmh2o`，统一读取报警压力高限，并增加压力/容量窒息后备参数。
+
+| DuoLevel 项目 | 当前约定 |
+|---|---|
+| 时间输入 | 以 `timeHighMs`、`timeLowMs` 为直接控制量；界面如采用频率、I:E 等替代输入，应先换算为高低持续时间。高压 200..30000 ms，低压 192..30000 ms |
+| 低压吸气同步窗 | 成人低压末 5000 ms，儿童/婴幼儿末 1500 ms；小于该长度时覆盖整个低压阶段，仍遵守最小呼气和稳定捕获保护。窗内触发立即转高压，窗末未触发则定时转高压 |
+| 低压 PSV | 窗外患者触发按 `pressureLowCmh2o+pressureSupportCmh2o` 支持，支持压 0 表示无附加支持；按 `cycleOffPercent` 流量切换，并受 `maxInspiratoryTimeMs` 限制。PSV 不重置低压时钟，必要时缩短以保留高压前的最小呼气时间 |
+| 高压同步窗 | 高压最后 1/4 内，检测到新的正向流量峰后下降到峰值×cycleOffPercent，经 3 个采样确认可提前转低压；此前的机器充气峰不用于此窗口，避免陈旧流量下降误触发。未触发则保持完整 timeHighMs |
+| 高压自主呼吸 | 压力控制与既有超压呼气阀调节维持高水平，不对每次自主吸气重新升压。升压及稳定保护后，吸气触发按高压基线检测，仅更新窒息计时，不重启高压计时 |
+| 级间计时 | 从实际高→低切换开始计完整低压时间，包含提前呼气切换；高压时钟从实际低→高切换开始，支持 32 位 tick 回绕 |
+| 窒息后备 | 使用全局 `apneaTimeAlarm`，定时高低压交替不作为患者努力。按 `apneaSwitch` 选择压力/容量后备，使用独立目标、频率及 Ti；进入低压并满足最小呼气保护后可启动后备，患者吸气触发恢复同步控制。OFF 沿用 SIMV 的关闭后备语义 |
+| 压力与验证 | 高压必须大于低压且小于报警高限，支持目标也须低于报警高限。实时下调报警高限裁剪新目标；达到高限提前切换低压。主机测试覆盖窗口、级间计时、PSV、阀门泄压和后备，尚未做测试肺验证 |
+| 监测边界 | 沿用现有计划周期发布监测结果；高压平台内的自主努力用于同步/窒息检测，不单独产生新的呼吸计划序号 |
+
+BAPAP MCM 参数映射：`0x06` 氧浓度，`0x0A/0x0B` 高/低压力，`0x1B/0x1C` 高/低时间（秒换算毫秒），`0x09` 支持压力，`0x11/0x12` 吸气触发阈值，`0x13` 呼气切换比例，`0x18` PSV 最大吸气时间，`0x1A` 上升时间，`0x24/0x25` 触发选择；后备沿用 `0x0C/0x0F/0x16/0x19` 和后备开关。模式下发值为 `0x07`（本地枚举值为 10）。
+
+
 VS（`VENT_MD_VS`）采用患者触发、流量切换的容量支持；`GetVentVsSettings()` 支持本地/主机来源，控制台 `vt vs` 或 `vt mode 9` / `vt run 1` 启动。`cycleOffPercent` 直接决定流量切换阈值，校验为严格大于 0、小于 100 的有限值；默认 25%，支持主机 `0x13` 下发。
 
 | VS 项目 | 当前约定 |
@@ -75,7 +92,7 @@ PAC 平台压取计划吸气结束前 100 ms 内的实测患者压力均值，�
 | `bsp/uart/uart.*` | USART0 PA9 TX / PA10 RX，115200、8N1；中断收发，2048 字节 RX 缓存；公开 API 仅供任务调用 |
 | `app/databus/` | 维护控制数据数组；SensorTask 保存当前及前一周期原始数据，VentTask 基于最新原始数据完成滤波和校准转换 |
 | `app/ventalgo/` | 实现吸气压力、吸气流量、公共 Release/PEEP 和 FiO₂ 控制器；各控制器只生成统一 `stActuatorRequest`，不直接写 BSP |
-| `app/ventlogic/` | Scheduler 为 PAC/VAC/PSV/PSV-ST/P-SIMV/V-SIMV/PRVC/PRVC-SIMV/VS 生成逐次 `stBreathPlan`，Phase Controller 执行计划，Trigger Engine 检测患者触发，Cycle Engine 完成 PSV 流量切换，Apnea Engine 调度 PSV 窒息后备和 PSV-ST 周期机控呼吸，Monitor Engine 发布逐次 `stBreathResult`，Actuator Controller 统一仲裁并写入 BSP |
+| `app/ventlogic/` | Scheduler 为 PAC/VAC/PSV/PSV-ST/P-SIMV/V-SIMV/PRVC/PRVC-SIMV/VS/BAPAP 生成逐次 `stBreathPlan`，Phase Controller 执行计划，Trigger Engine 检测患者触发，Cycle Engine 完成 PSV 流量切换，Apnea Engine 调度 PSV 窒息后备和 PSV-ST 周期机控呼吸，Monitor Engine 发布逐次 `stBreathResult`，Actuator Controller 统一仲裁并写入 BSP |
 | `app/ventlogic/pipeflowtable.*` | 固化成人/儿童与新生儿管路压力-流量表，为 Monitor Engine 的吸气支路堵塞恢复阈值提供 Qpipe |
 | `app/physalarm/` | `physalarmmanager.*` 在 AlarmTask 注册、调度和发布 0xAD 生理报警；`physalarmvent.*` 实现检测；`alarmbits.h` 定义旧协议六组枚举及 union 位域 |
 | `app/techalarm/` | `techalarmmanager.*` 独立注册、调度、发布技术报警并生成 0xAB 快照；`techphys.*`、`techdevice.*`、`techpower.*`、`techcomm.*`、`techcal.*` 分别承接 SubId 0..4 检测 |

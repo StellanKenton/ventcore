@@ -256,7 +256,6 @@ typedef struct stVentVsSettings {
 /* Biphasic airway pressure with spontaneous breathing. */
 typedef struct stVentBapapSettings {
     float oxygenPercent;
-    float pressureLimitCmh2o;
     float pressureHighCmh2o;
     float pressureLowCmh2o;
     uint32_t timeHighMs;
@@ -268,6 +267,11 @@ typedef struct stVentBapapSettings {
     uint32_t riseTimeMs;
     float cycleOffPercent;
     uint32_t maxInspiratoryTimeMs;
+    eVentApneaType apneaSwitch;
+    float apneaPressureCmh2o; /* Backup pressure above the low level. */
+    float apneaVolumeTidalMl;
+    float apneaRateBpm;
+    uint32_t apneaInspTimeMs;
 } stVentBapapSettings;
 
 /* Airway pressure release ventilation. */
@@ -420,6 +424,7 @@ stVentVSimvSettings *GetVentVSimvSettings(void);
 stVentPrvcSettings *GetVentPrvcSettings(void);
 stVentPrvcSimvSettings *GetVentPrvcSimvSettings(void);
 stVentVsSettings *GetVentVsSettings(void);
+stVentBapapSettings *GetVentBapapSettings(void);
 
 #ifdef __cplusplus
 }
